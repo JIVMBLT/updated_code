@@ -1,0 +1,191 @@
+(function(){
+  const API = () => window.ManttoAuth;
+  const state = { ready:false, me:null, usuarios:[], selected:null, tab:'perfil', questions:[], notificationPreferences:[] };
+  function $(id){ return document.getElementById(id); }
+  function esc(v){ return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function initials(user){ return (user && user.iniciales) || String((user && user.nombre) || '--').split(/\s+/).map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
+  function parseJsonArray(value){ if(Array.isArray(value)) return value.filter(Boolean); if(!value) return []; try{ const v=JSON.parse(value); return Array.isArray(v)?v.filter(Boolean):[]; }catch(e){ return []; } }
+  function rolesText(user){ const roles=parseJsonArray(user && user.roles_detalle).map(r=>r.rol).filter(Boolean); const base=(user && user.rol) ? [user.rol] : []; return Array.from(new Set(base.concat(roles))); }
+  function zonesText(user){ const zs=parseJsonArray(user && user.zonas_detalle).map(z=>z.zona || z.nombre).filter(Boolean); return zs.length ? zs.join(', ') : 'Sin zonas asociadas'; }
+  function message(id,text,type){ const el=$(id); if(!el) return; el.textContent=text||''; el.className='usr-msg '+(type||''); }
+  function avatarHtml(user, cls){ return `<span class="usr-avatar ${cls||''}">${esc(initials(user))}</span>`; }
+  const permissionLabels={gps:'GPS',camara:'Cámara',microfono:'Micrófono',push:'Notificaciones push'};
+  const permissionStateText={PERMITIDO:'Permitido',DENEGADO:'Bloqueado',NO_DISPONIBLE:'No disponible',PENDIENTE:'Pendiente'};
+  async function renderDevicePermissions(){
+    const box=$('usr-device-permissions'); if(!box) return;
+    if(!window.ManttoDevicePermissions){ box.innerHTML='<span class="usr-device-summary unavailable">No disponible</span>'; return; }
+    try{
+      const permisos=await window.ManttoDevicePermissions.inspectAll();
+      const all=Object.values(permisos).every(v=>v==='PERMITIDO');
+      box.innerHTML=`<button class="usr-device-card" id="usr-device-revalidate" type="button"><span class="usr-device-icon">${all?'✅':'⚠️'}</span><span><b>Permisos del dispositivo</b><small>${all?'GPS, cámara, micrófono y Push activos':'Toca para validar o solicitar permisos pendientes'}</small></span><span class="usr-device-arrow">›</span></button><div class="usr-device-states">${Object.entries(permissionLabels).map(([key,label])=>`<span data-state="${esc(permisos[key]||'PENDIENTE')}">${esc(label)}: ${esc(permissionStateText[permisos[key]]||'Pendiente')}</span>`).join('')}</div>`;
+      $('usr-device-revalidate')?.addEventListener('click',async()=>{
+        const button=$('usr-device-revalidate'); if(button) button.disabled=true;
+        try{
+          if(typeof window.ManttoDevicePermissions.revalidateFromProfile !== 'function') throw new Error('La validación de permisos no está disponible. Recarga la aplicación.');
+          await window.ManttoDevicePermissions.revalidateFromProfile();
+        }
+        catch(error){ console.error('[Usuarios] No fue posible abrir permisos:', error); }
+        finally{ if(button) button.disabled=false; await renderDevicePermissions(); }
+      });
+    }catch(error){ box.innerHTML='<button class="usr-device-card" id="usr-device-revalidate" type="button"><span class="usr-device-icon">⚠️</span><span><b>Permisos del dispositivo</b><small>No fue posible consultar el estado. Toca para volver a validar.</small></span><span class="usr-device-arrow">›</span></button>'; $('usr-device-revalidate')?.addEventListener('click',()=>window.ManttoDevicePermissions?.revalidateFromProfile?.()); }
+  }
+  function renderProfile(){
+    const box=$('usr-profile-body'); if(!box) return; const me=state.me || {};
+    const roles=rolesText(me); const chips=roles.length ? roles.map(r=>`<span class="usr-chip">${esc(r)}</span>`).join('') : '<span class="usr-chip">Sin roles asociados</span>';
+    box.innerHTML=`
+      <div class="usr-profile-top">${avatarHtml(me)}<div><h3 class="usr-name">${esc(me.nombre || 'Usuario')}</h3><p class="usr-role">${esc(me.rol || 'Sin rol principal')}</p><div class="usr-chip-row">${chips}</div></div></div>
+      <div class="usr-info-grid">
+        <div class="usr-info"><small>Correo</small><b>${esc(me.correo || '—')}</b></div>
+        <div class="usr-info"><small>Área</small><b>${esc(me.area || '—')}</b></div>
+        <div class="usr-info"><small>Puesto</small><b>${esc(me.puesto || '—')}</b></div>
+        <div class="usr-info"><small>Empresa</small><b>${esc(me.empresa || '—')}</b></div>
+        <div class="usr-info"><small>Reporta a</small><b>${esc(me.reporta_a_nombre || '—')}</b></div>
+        <div class="usr-info"><small>Zonas</small><b>${esc(zonesText(me))}</b></div>
+        <div class="usr-info"><small>Último acceso</small><b>${esc(me.ultimo_acceso || '—')}</b></div>
+        <div class="usr-info"><small>Pregunta de seguridad</small><b>${esc(me.pregunta_seguridad || 'No configurada')}</b></div>
+      </div>
+      <div class="usr-device-section"><div class="usr-section-title"><b>Permisos y notificaciones</b><small>Configuración del navegador y dispositivo actual.</small></div><div id="usr-device-permissions"><div class="usr-loading">Validando permisos...</div></div></div>
+      <div class="usr-actions"><button class="usr-btn" id="usr-open-notifications" type="button">Personalizar notificaciones</button><button class="usr-btn" id="usr-open-pass" type="button">Cambiar contraseña</button><button class="usr-btn secondary" id="usr-open-secret" type="button">Cambiar pregunta/respuesta secreta</button><button class="usr-btn danger" id="usr-profile-logout" type="button">Cerrar sesión</button></div>
+      <form class="usr-form usr-notification-form" id="usr-notifications-form"><div class="usr-section-title"><b>Notificaciones personalizadas</b><small>Las notificaciones obligatorias permanecen activas.</small></div><div id="usr-notification-preferences"><div class="usr-loading">Cargando preferencias...</div></div><button class="usr-btn" type="submit">Guardar preferencias</button><div id="usr-notification-msg" class="usr-msg"></div></form><form class="usr-form" id="usr-pass-form"><label>Contraseña actual<input id="usr-current-pass" type="password" autocomplete="current-password" required></label><label>Contraseña nueva<input id="usr-new-pass" type="password" autocomplete="new-password" required placeholder="Mínimo 10 caracteres"></label><label>Confirmar contraseña nueva<input id="usr-new-pass-confirm" type="password" autocomplete="new-password" required></label><button class="usr-btn" type="submit">Guardar contraseña</button><div id="usr-pass-msg" class="usr-msg"></div></form>
+      <form class="usr-form" id="usr-secret-form"><label>Contraseña actual<input id="usr-secret-current-pass" type="password" autocomplete="current-password" required></label><label>Respuesta actual<input id="usr-current-answer" type="text" required></label><label>Nueva pregunta<select id="usr-new-question" required></select></label><label>Nueva respuesta<input id="usr-new-answer" type="text" required></label><button class="usr-btn" type="submit">Guardar pregunta</button><div id="usr-secret-msg" class="usr-msg"></div></form>`;
+    bindProfileForms();
+    $('usr-profile-logout')?.addEventListener('click',()=>window.ManttoAuth?.logout?.());
+    renderDevicePermissions();
+  }
+  function bindProfileForms(){
+    $('usr-open-notifications')?.addEventListener('click',async()=>{ $('usr-notifications-form')?.classList.toggle('open'); $('usr-pass-form')?.classList.remove('open'); $('usr-secret-form')?.classList.remove('open'); if($('usr-notifications-form')?.classList.contains('open')) await loadNotificationPreferences(); });
+    $('usr-open-pass')?.addEventListener('click',()=>{$('usr-pass-form')?.classList.toggle('open'); $('usr-secret-form')?.classList.remove('open'); $('usr-notifications-form')?.classList.remove('open');});
+    $('usr-open-secret')?.addEventListener('click',async()=>{ $('usr-secret-form')?.classList.toggle('open'); $('usr-pass-form')?.classList.remove('open'); $('usr-notifications-form')?.classList.remove('open'); await loadQuestions(); });
+    $('usr-pass-form')?.addEventListener('submit',async ev=>{ ev.preventDefault(); message('usr-pass-msg','Validando datos actuales...','info'); const np=$('usr-new-pass').value, cp=$('usr-new-pass-confirm').value; if(np!==cp){ message('usr-pass-msg','La contraseña nueva y su confirmación no coinciden.','error'); return; } try{ await API().apiPost('/api/auth/me/password',{ current_password:$('usr-current-pass').value, new_password:np, confirm_password:cp }); message('usr-pass-msg','Contraseña actualizada correctamente.','ok'); ev.target.reset(); }catch(err){ message('usr-pass-msg',(err.message || 'No fue posible actualizar.') + ' Contacta a soporte si tus datos actuales no coinciden.','error'); }});
+    $('usr-secret-form')?.addEventListener('submit',async ev=>{ ev.preventDefault(); message('usr-secret-msg','Validando datos actuales...','info'); try{ await API().apiPost('/api/auth/me/security-question',{ current_password:$('usr-secret-current-pass').value, current_answer:$('usr-current-answer').value, id_pregunta:$('usr-new-question').value, new_answer:$('usr-new-answer').value }); message('usr-secret-msg','Pregunta de seguridad actualizada correctamente.','ok'); ev.target.reset(); await loadMe(); renderProfile(); }catch(err){ message('usr-secret-msg',(err.message || 'No fue posible actualizar.') + ' Contacta a soporte si tus datos actuales no coinciden.','error'); }});
+    $('usr-notifications-form')?.addEventListener('submit', saveNotificationPreferences);
+  }
+  async function loadNotificationPreferences(){
+    const box=$('usr-notification-preferences'); if(!box) return;
+    box.innerHTML='<div class="usr-loading">Cargando preferencias...</div>';
+    try{
+      const json=await API().apiGet('/api/notificaciones/preferencias');
+      state.notificationPreferences=json.data||[];
+      renderNotificationPreferences();
+    }catch(error){ box.innerHTML='<div class="usr-empty">'+esc(error.message||'No fue posible cargar las preferencias.')+'</div>'; }
+  }
+  function renderNotificationPreferences(){
+    const box=$('usr-notification-preferences'); if(!box) return;
+    const groups=new Map();
+    state.notificationPreferences.forEach(item=>{
+      const key=item.agrupacion||'General';
+      if(!groups.has(key)) groups.set(key,[]);
+      groups.get(key).push(item);
+    });
+    box.innerHTML=[...groups.entries()].map(([group,items])=>`<section class="usr-notification-group"><h4>${esc(group)}</h4>${items.map(item=>{
+      const locked=Number(item.obligatoria)===1 || Number(item.configurable)!==1;
+      return `<label class="usr-notification-row ${locked?'locked':''}"><span><b>${esc(item.nombre_evento)}</b><small>${esc(item.descripcion||item.modulo||'')}</small></span><span class="usr-notification-switches"><label><input type="checkbox" data-notification-code="${esc(item.codigo_evento)}" data-channel="campana" ${Number(item.campana)?'checked':''} ${locked?'disabled':''}>Campana</label><label><input type="checkbox" data-notification-code="${esc(item.codigo_evento)}" data-channel="push" ${Number(item.push)?'checked':''} ${locked?'disabled':''}>Push</label><label><input type="checkbox" data-notification-code="${esc(item.codigo_evento)}" data-channel="silenciada" ${Number(item.silenciada)?'checked':''} ${locked?'disabled':''}>Silenciar</label></span>${locked?'<em>Obligatoria</em>':''}</label>`;
+    }).join('')}</section>`).join('') || '<div class="usr-empty">No hay tipos de notificación configurados.</div>';
+  }
+  async function saveNotificationPreferences(event){
+    event.preventDefault();
+    const editable=state.notificationPreferences.filter(item=>Number(item.configurable)===1 && Number(item.obligatoria)!==1);
+    const preferences=editable.map(item=>{
+      const code=String(item.codigo_evento);
+      const get=channel=>Boolean(document.querySelector(`[data-notification-code="${CSS.escape(code)}"][data-channel="${channel}"]`)?.checked);
+      return { codigo_evento:code, campana:get('campana'), push:get('push'), correo:false, silenciada:get('silenciada') };
+    });
+    message('usr-notification-msg','Guardando preferencias...','info');
+    try{
+      const json=await API().api('/api/notificaciones/preferencias',{method:'PUT',body:JSON.stringify({preferencias:preferences})});
+      state.notificationPreferences=json.data||state.notificationPreferences;
+      renderNotificationPreferences();
+      message('usr-notification-msg','Preferencias actualizadas correctamente.','ok');
+    }catch(error){ message('usr-notification-msg',error.message||'No fue posible guardar las preferencias.','error'); }
+  }
+  async function loadQuestions(){ const sel=$('usr-new-question'); if(!sel) return; if(state.questions.length){ renderQuestions(); return; } sel.innerHTML='<option>Cargando...</option>'; const json=await API().apiGet('/api/auth/security-questions'); state.questions=json.data||[]; renderQuestions(); }
+  function renderQuestions(){ const sel=$('usr-new-question'); if(sel) sel.innerHTML='<option value="">Selecciona una pregunta</option>'+state.questions.map(q=>`<option value="${esc(q.id_pregunta)}">${esc(q.pregunta)}</option>`).join(''); }
+  function directoryDetailHtml(u){
+    const roles=rolesText(u);
+    return `
+      <div class="usr-contact-detail" data-detail-id="${esc(u.id_SB)}">
+        <div class="usr-detail-head">
+          <div class="usr-profile-top usr-directory-profile">
+            ${avatarHtml(u)}
+            <div>
+              <h3 class="usr-name">${esc(u.nombre)}</h3>
+              <p class="usr-role">${esc(u.puesto || 'Sin puesto')}</p>
+              <div class="usr-chip-row">${roles.length ? roles.map(r=>`<span class="usr-chip">${esc(r)}</span>`).join('') : '<span class="usr-chip">Sin roles asociados</span>'}</div>
+            </div>
+          </div>
+          <button class="usr-close-detail" data-close-user="${esc(u.id_SB)}" type="button">Cerrar</button>
+        </div>
+        <div class="usr-info-grid">
+          <div class="usr-info"><small>Correo</small><b>${esc(u.correo || '—')}</b></div>
+          <div class="usr-info"><small>Área</small><b>${esc(u.area || '—')}</b></div>
+          <div class="usr-info"><small>Puesto</small><b>${esc(u.puesto || '—')}</b></div>
+          <div class="usr-info"><small>Empresa</small><b>${esc(u.empresa || '—')}</b></div>
+          <div class="usr-info"><small>Reporta a</small><b>${esc(u.reporta_a_nombre || '—')}</b></div>
+          <div class="usr-info"><small>Zonas operativas</small><b>${esc(zonesText(u))}</b></div>
+        </div>
+        <div class="usr-task-actions">
+          <button class="usr-btn" data-user-task="ASSIGNED_BY" data-user-id="${esc(u.id_SB)}" type="button">Tareas que me asignó</button>
+          <button class="usr-btn secondary" data-user-task="SHARED_RESPONSIBILITY" data-user-id="${esc(u.id_SB)}" type="button">Tareas en las que compartimos responsabilidad</button>
+        </div>
+      </div>`;
+  }
+  function renderDirectory(){
+    const list=$('usr-list');
+    if(!list) return;
+    const q=String($('usr-search')?.value||'').toLowerCase().trim();
+    const rows=state.usuarios.filter(u=>!q || [u.nombre,u.correo,u.area,u.puesto,u.empresa,u.rol].some(v=>String(v||'').toLowerCase().includes(q)));
+    if(!rows.length){ list.innerHTML='<div class="usr-empty">No se encontraron usuarios.</div>'; return; }
+    list.innerHTML=rows.map(u=>{
+      const selected=state.selected && String(state.selected.id_SB)===String(u.id_SB);
+      return `<article class="usr-contact-card ${selected?'active':''}">
+        <button class="usr-contact" type="button" data-id="${esc(u.id_SB)}" aria-expanded="${selected?'true':'false'}">
+          ${avatarHtml(u)}
+          <span class="usr-contact-main"><span class="usr-contact-name">${esc(u.nombre)}</span><span class="usr-contact-meta">${esc(u.area || 'Sin área')} · ${esc(u.correo || 'Sin correo')}</span></span>
+          <span class="usr-contact-chevron" aria-hidden="true">⌄</span>
+        </button>
+        ${selected ? directoryDetailHtml(u) : ''}
+      </article>`;
+    }).join('');
+    list.querySelectorAll('.usr-contact[data-id]').forEach(btn=>btn.addEventListener('click',()=>selectUser(btn.dataset.id)));
+    list.querySelectorAll('[data-close-user]').forEach(btn=>btn.addEventListener('click',ev=>{ ev.stopPropagation(); state.selected=null; renderDirectory(); }));
+    list.querySelectorAll('[data-user-task]').forEach(btn=>btn.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      const user=state.usuarios.find(u=>String(u.id_SB)===String(btn.dataset.userId));
+      openUserTasks(btn.dataset.userTask,user);
+    }));
+  }
+  function selectUser(id){
+    const next=state.usuarios.find(u=>String(u.id_SB)===String(id)) || null;
+    state.selected=state.selected && next && String(state.selected.id_SB)===String(next.id_SB) ? null : next;
+    renderDirectory();
+    if(state.selected){
+      requestAnimationFrame(()=>document.querySelector(`[data-detail-id="${CSS.escape(String(state.selected.id_SB))}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+    }
+  }
+  function openUserTasks(mode, user){
+    if(!user || !window.ManttoRouter) return;
+    window.ManttoRouter.openTarget({
+      module:'tareas',
+      taskContext:{
+        mode,
+        userId:user.id_SB,
+        name:user.nombre || 'Usuario',
+        initials:user.iniciales || '',
+        email:user.correo || ''
+      },
+      source:'directorio-usuarios'
+    });
+  }
+  function renderDetail(){
+    const box=$('usr-detail');
+    if(box){ box.hidden=true; box.innerHTML=''; }
+  }
+  async function loadMe(){ const json=await API().apiGet('/api/auth/me'); state.me=json.data||json.user||{}; }
+  async function loadUsers(){ const json=await API().apiGet('/api/usuarios'); state.usuarios=json.data||[]; }
+  function setTab(tab){ state.tab=tab; document.querySelectorAll('.usr-tab').forEach(b=>b.classList.toggle('active', b.dataset.usrTab===tab)); document.querySelectorAll('.usr-panel').forEach(p=>p.classList.toggle('active', p.dataset.usrPanel===tab)); }
+  function renderShell(){ const view=$('view-usuarios'); if(!view) return; view.innerHTML=`<div class="usr-page"><div class="usr-tabs"><button class="usr-tab active" data-usr-tab="perfil" type="button">MI PERFIL</button><button class="usr-tab" data-usr-tab="directorio" type="button">DIRECTORIO</button></div><div class="usr-shell"><section class="usr-card usr-panel active" data-usr-panel="perfil"><div class="usr-card-head"><div><h2>Mi perfil</h2><p>Información de tu cuenta y seguridad.</p></div></div><div class="usr-body" id="usr-profile-body"><div class="usr-loading">Cargando perfil...</div></div></section><section class="usr-card usr-panel" data-usr-panel="directorio"><div class="usr-card-head"><div><h2>Directorio de usuarios</h2><p>Consulta interna tipo contactos.</p></div></div><div class="usr-body"><input class="usr-search" id="usr-search" type="search" placeholder="Buscar por nombre, área, correo o rol"></div><div class="usr-list" id="usr-list"><div class="usr-loading">Cargando usuarios...</div></div><div class="usr-detail" id="usr-detail" hidden></div></section></div></div>`; document.querySelectorAll('.usr-tab').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.usrTab))); $('usr-search')?.addEventListener('input', renderDirectory); }
+  async function init(){ const view=$('view-usuarios'); if(!view) return; renderShell(); setTab(state.tab); try{ await Promise.all([loadMe(), loadUsers()]); renderProfile(); renderDirectory(); }catch(err){ view.innerHTML=`<div class="usr-page"><div class="usr-card"><div class="usr-empty">No se pudo cargar Usuarios. ${esc(err.message||'')}</div></div></div>`; } }
+  document.addEventListener('mantto:device-permissions-updated',()=>{ if(state.tab==='perfil') renderDevicePermissions(); });
+  document.addEventListener('mantto:push-state',()=>{ if(state.tab==='perfil') renderDevicePermissions(); });
+  window.ManttoUsuarios={ init };
+})();

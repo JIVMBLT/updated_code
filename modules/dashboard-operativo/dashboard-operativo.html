@@ -1,0 +1,45 @@
+<div class="op-page">
+  <section class="op-card op-head">
+    <div>
+      <p class="op-eyebrow">Dashboard Operativo</p>
+      <h1>Cumplimiento operativo</h1>
+      <p>Seguimiento mensual de servicio preventivo, Vo.Bo. y avance por zona, supervisor y tipo de equipo.</p>
+    </div>
+    <div class="op-status" id="op-status"><span class="op-dot loading"></span><span>Cargando Aiven...</span></div>
+  </section>
+
+  <section class="op-card op-filters">
+    <label>Mes<select id="op-mes"></select></label>
+    <label>Zona<select id="op-zona"><option value="">Todas</option></select></label>
+    <label>Supervisor<select id="op-supervisor"><option value="">Todos</option></select></label>
+    <label>Tipo equipo<select id="op-tipo"><option value="">Todos</option></select></label>
+    <button class="op-btn primary" id="op-refresh" type="button">↻ Actualizar</button>
+    <span class="op-updated" id="op-updated">—</span>
+  </section>
+
+  <section class="op-grid op-kpi-grid">
+    <article class="op-kpi g-cyan"><div class="ico">🛠️</div><div class="val" id="op-total-eq">0</div><div class="lbl">Total de equipos</div><div class="sub">En portafolio activo</div></article>
+    <article class="op-kpi g-green clickable" data-detail="con_servicio"><div class="ico">✓</div><div class="val" id="op-con-serv">0</div><div class="lbl">Con servicio</div><div class="sub" id="op-pct-serv">0% del total</div></article>
+    <article class="op-kpi g-orange clickable" data-detail="sin_servicio"><div class="ico">⏱️</div><div class="val" id="op-sin-serv">0</div><div class="lbl">Pendientes</div><div class="sub">Servicio preventivo</div></article>
+    <article class="op-kpi g-purple clickable" data-detail="tickets_total"><div class="ico">🎫</div><div class="val" id="op-total-tickets">0</div><div class="lbl">Total tickets</div><div class="sub">Tickets del período</div></article>
+    <article class="op-kpi g-indigo clickable" data-detail="vobo"><div class="ico">☆</div><div class="val" id="op-vobo-valid">0</div><div class="lbl">Validados</div><div class="sub">Vo.Bo. del período</div></article>
+    <article class="op-kpi g-slate clickable" data-detail="vobo_pendiente"><div class="ico">⌛</div><div class="val" id="op-vobo-pend">0</div><div class="lbl">Pend. validar</div><div class="sub">Vo.Bo. pendiente</div></article>
+  </section>
+
+  <section class="op-bars-grid">
+    <article class="op-card op-section"><h2>📍 % Servicio preventivo por zona</h2><div class="op-bars" id="op-bar-zona"></div></article>
+    <article class="op-card op-section"><h2>👤 % Servicio preventivo por supervisor</h2><div class="op-bars" id="op-bar-vobo-sup"></div></article>
+  </section>
+
+  <section class="op-bars-grid">
+    <article class="op-card op-section"><h2>🛡️ % Vo.Bo. validados por zona</h2><div class="op-bars" id="op-bar-vobo-zona"></div></article>
+    <article class="op-card op-section"><h2>👤 % Vo.Bo. validados por supervisor</h2><div class="op-bars" id="op-bar-vobo-supervisor"></div></article>
+  </section>
+
+  <section class="op-modal" id="op-detail-modal" hidden>
+    <div class="op-modal-panel">
+      <div class="op-modal-head"><div><h2 id="op-modal-title">Detalle</h2><p id="op-modal-subtitle">—</p></div><button class="op-modal-close" id="op-modal-close" type="button">×</button></div>
+      <div class="op-table-wrap op-modal-table"><table class="op-table"><thead id="op-modal-thead"></thead><tbody id="op-modal-tbody"></tbody></table></div>
+    </div>
+  </section>
+</div>

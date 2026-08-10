@@ -1,0 +1,82 @@
+<div id="py-page">
+  <section class="py-card-shell py-module-head">
+    <div>
+      <p class="py-eyebrow">Aiven · Instalaciones</p>
+      <h1 class="py-title">Proyectos de Instalación</h1>
+      <p class="py-subtitle">Gestión integral de proyectos, equipos, avance, ajuste y supervisión.</p>
+    </div>
+    <div class="py-head-actions">
+      <span id="py-aiven-status" class="py-connection-status"><span class="py-connection-dot"></span><span>Datos desde Aiven</span></span>
+      <button class="py-refresh-btn" type="button" onclick="window.ManttoInstalacionesProyectos && window.ManttoInstalacionesProyectos.reload()">↻ Actualizar</button>
+    </div>
+  </section>
+
+  <section class="py-card-shell py-nav-card">
+  <div class="py-tabs">
+    <button class="py-tab active" data-tab="activos" type="button">Proyectos Activos</button>
+    <button class="py-tab" data-tab="cerrados" type="button">Proyectos Cerrados</button>
+    <button class="py-tab" data-tab="fotografias" type="button">Fotografías</button>
+  </div>
+  </section>
+
+  <div class="py-source-note-wrap">
+    <div class="py-note">
+      La información operativa se consulta desde <b>Aiven</b>. Un proyecto se considera
+      <b>Cerrado</b> cuando el 100% de sus equipos está en estatus <b>08-T</b>; su consulta completa
+      vive en el módulo <b>Proyectos Cerrados</b>. Los demás proyectos permanecen en <b>Activos</b>.
+    </div>
+  </div>
+
+  <!-- ===================== PROYECTOS ACTIVOS ===================== -->
+  <section id="py-tab-activos" class="py-section active">
+    <div class="py-grid" id="py-kpis-activos"></div>
+
+    <div class="py-filters">
+      <input type="text" id="py-f-buscar" placeholder="Buscar proyecto, ID o cliente..." oninput="pyRenderProyectos()">
+      <select id="py-f-estado" onchange="pyRenderProyectos()"><option value="">Todos los estados</option></select>
+      <select id="py-f-asesor" onchange="pyRenderProyectos()"><option value="">Todo asesor</option></select>
+      <select id="py-f-supervisor" onchange="pyRenderProyectos()"><option value="">Todo supervisor</option></select>
+      <select id="py-f-activo" onchange="pyRenderProyectos()"><option value="">Activo/Inactivo</option></select>
+    </div>
+
+    <div class="py-table-wrap">
+      <table class="py-table">
+        <thead>
+          <tr>
+            <th>Proyecto</th><th>ID Proyecto</th><th>Ciudad</th><th>Estado</th><th># Equipos</th>
+            <th>Asesor</th><th>Supervisor</th><th>Cliente</th><th>Activo</th>
+          </tr>
+        </thead>
+        <tbody id="py-proyectos-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+
+</div>
+
+<!-- ===================== PAGINA COMPLETA: PROYECTO ===================== -->
+<div id="py-detail-page">
+  <div class="py-detail-header">
+    <button class="py-modal-back" onclick="document.getElementById('py-detail-page').classList.remove('open')">&larr; Regresar</button>
+  </div>
+  <div class="py-detail-body" id="py-detail-body"></div>
+</div>
+
+<!-- ===================== PAGINA COMPLETA: EQUIPO ===================== -->
+<div id="py-detail-page-2">
+  <div class="py-detail-header">
+    <button class="py-modal-back" id="py-equipo-back">&larr; Regresar</button>
+  </div>
+  <div class="py-detail-body" id="py-detail-body-2"></div>
+</div>
+
+<!-- ===================== LIGHTBOX DE IMAGENES ===================== -->
+<div id="py-lightbox" onclick="if(event.target===this) pyCerrarLightbox()">
+  <button id="py-lightbox-close" onclick="pyCerrarLightbox()">&times;</button>
+  <a id="py-lightbox-proyecto" href="#" style="display:none"></a>
+  <button id="py-lightbox-prev" class="py-lightbox-nav" onclick="pyLightboxNav(-1)" style="display:none">&#8249;</button>
+  <img id="py-lightbox-img" src="" alt="Foto ampliada">
+  <button id="py-lightbox-next" class="py-lightbox-nav" onclick="pyLightboxNav(1)" style="display:none">&#8250;</button>
+  <div id="py-lightbox-contador" style="display:none"></div>
+</div>
