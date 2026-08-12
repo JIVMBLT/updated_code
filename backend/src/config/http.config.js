@@ -1,12 +1,3 @@
-// [Aster | 2026-08-12 | ASTER-MG | PATCH: FIX_CORS_LOCAL_DEV_V001]
-
-const LOCAL_HOSTNAMES = new Set([
-  'localhost',
-  '127.0.0.1',
-  '::1',
-  '0.0.0.0'
-]);
-
 function parseAllowedOrigins() {
   const raw = process.env.CORS_ORIGINS || '*';
 
@@ -23,39 +14,47 @@ function parseAllowedOrigins() {
 function isPrivateIpv4(hostname) {
   const parts = String(hostname || '')
     .split('.')
-    .map((part) => Number(part));
+    .map(Number);
 
   if (
     parts.length !== 4 ||
-    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+    parts.some((part) =>
+      !Number.isInteger(part) ||
+      part < 0 ||
+      part > 255
+    )
   ) {
     return false;
   }
 
-  const [a, b] = parts;
-
-  if (a === 10) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-
-  return false;
+  return (
+    parts[0] === 10 ||
+    (parts[0] === 172 &&
+      parts[1] >= 16 &&
+      parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168)
+  );
 }
 
-function isLocalDevelopmentOrigin(origin) {
+function isDevelopmentOrigin(origin) {
   if (process.env.NODE_ENV === 'production') {
     return false;
   }
 
   try {
-    const url = new URL(origin);
-    const hostname = String(url.hostname || '').toLowerCase();
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname;
 
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return false;
-    }
-
-    return LOCAL_HOSTNAMES.has(hostname) || isPrivateIpv4(hostname);
-  } catch (_error) {
+    return (
+      parsed.protocol === 'http:' &&
+      (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '::1' ||
+        isPrivateIpv4(hostname)
+      )
+    );
+  } catch (error) {
     return false;
   }
 }
@@ -63,32 +62,24 @@ function isLocalDevelopmentOrigin(origin) {
 function getCorsOptions() {
   const allowedOrigins = parseAllowedOrigins();
 
+  if (allowedOrigins === '*') {
+    return { origin: true, credentials: false };
+  }
+
   return {
     credentials: true,
     origin(origin, callback) {
-      // Requests server-to-server, health checks and tools without Origin.
-      if (!origin) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        isDevelopmentOrigin(origin)
+      ) {
         return callback(null, true);
       }
 
-      // Development only: allow localhost and RFC1918 LAN origins regardless
-      // of the frontend port. This supports Live Server / local PWA testing
-      // without opening production CORS.
-      if (isLocalDevelopmentOrigin(origin)) {
-        return callback(null, true);
-      }
-
-      // With credentials enabled, "*" is never reflected for arbitrary
-      // browser origins. Production must use an explicit allowlist.
-      if (allowedOrigins !== '*' && allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      const message = allowedOrigins === '*'
-        ? 'Configura CORS_ORIGINS con el origen exacto para este entorno.'
-        : `Origen no permitido por CORS: ${origin}`;
-
-      const error = new Error(message);
+      const error = new Error(
+        `Origen no permitido por CORS: ${origin}`
+      );
       error.statusCode = 403;
       return callback(error);
     }
