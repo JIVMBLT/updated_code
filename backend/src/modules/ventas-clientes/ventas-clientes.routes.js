@@ -1,11 +1,15 @@
+// [Aster | 2026-08-12 | ASTER-MG | PATCH: FASE_2_BACKEND_M2M_GUARDS_V001]
 const express = require('express');
 const controller = require('./ventas-clientes.controller');
 const { requireAuth } = require('../../middleware/auth.middleware');
-const { requireHistoricalSyncEnabled } = require('../../middleware/historical-sync.middleware');
+const { requireIntegrationAuthFor } = require('../../middleware/integration-auth.middleware');
+
+const requireVentasIntegration = requireIntegrationAuthFor('INTEGRATION_VENTAS_ID');
 
 const router = express.Router();
 
-router.post('/clientes/sync', requireAuth, requireHistoricalSyncEnabled, controller.syncClientes);
+// Carga manual desde Google Sheets. Con HMAC activo, solo acepta la identidad M2M de Ventas.
+router.post('/clientes/sync', requireVentasIntegration, controller.syncClientes);
 
 router.get('/clientes/catalogos', requireAuth, controller.getCatalogos);
 router.get('/clientes/asesores-asignables', requireAuth, controller.getAssignableAdvisors);
