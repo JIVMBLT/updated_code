@@ -1,4 +1,5 @@
 // [Aster | 2026-08-12 | ASTER-MG | PATCH: FASE_4_BACKEND_FLEXIBLE_REGISTRO_V001]
+// [Aster | 2026-08-12 | ASTER-MG | PATCH: FIX_PREPRUEBA_BACKEND_M2M_V001]
 const repository = require('./instalaciones-proyecto-drive.repository');
 const logger = require('../../shared/logger');
 
@@ -418,7 +419,7 @@ async function processBatch(records, batchNumber, totalBatches) {
     logger.info('Bloque de proyectos Drive procesado.', {
       bloque: batchNumber,
       total_bloques: totalBatches,
-      proyectos: sourceRecords.length,
+      proyectos: records.length,
       ...result
     });
 
