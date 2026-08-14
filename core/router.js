@@ -21,7 +21,7 @@
     'experimental-atencion-prioritaria':'Atención Prioritaria', 'experimental-resumen-dia':'Resumen del Día',
     'experimental-entregas-recientes':'Entregas Recientes', 'experimental-equipos-criticos':'Equipos Críticos',
     'experimental-dashboard-call-center':'Dashboard Call Center', 'experimental-proyectos-criticos':'Proyectos Críticos',
-    'cobranza-uni-dashboard':'Dashboard Cobranza', 'cobranza-uni-estados-cuenta':'Estados de Cuenta', 'cobranza-uni-aditivas':'Aditivas'
+    'cobranza-uni-dashboard':'Dashboard Cobranza', 'cobranza-uni-estados-cuenta':'Gestión de Crédito', 'cobranza-uni-mp-pro':'Mantenimiento Preventivo', 'cobranza-uni-aditivas':'Venta Adicional'
   };
 
   const EXPERIMENTAL_ROUTES_EXP = new Set([
@@ -35,6 +35,7 @@
   const COBRANZA_ROUTES_UNI = new Set([
     'cobranza-uni-dashboard',
     'cobranza-uni-estados-cuenta',
+    'cobranza-uni-mp-pro',
     'cobranza-uni-aditivas'
   ]);
 

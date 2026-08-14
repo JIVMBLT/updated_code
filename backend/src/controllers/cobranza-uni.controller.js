@@ -253,7 +253,7 @@ async function getGestionCreditoDetalle(req, res) {
   const conn = await db.getConnection();
   try {
     const [gestionRows] = await conn.query(
-      `SELECT ${KEY_FIELD}, ${DB_FIELDS.join(', ')}
+      `SELECT ${KEY_FIELD}, id_proyecto_cobranza, ${DB_FIELDS.join(', ')}
        FROM ${TABLE_NAME}
        WHERE ${KEY_FIELD} = ?
        LIMIT 1`,
@@ -265,11 +265,24 @@ async function getGestionCreditoDetalle(req, res) {
     }
 
     const gestion = gestionRows[0];
+    const projectId = gestion.id_proyecto_cobranza;
     const idns = String(gestion.idns || '').trim();
     const proyecto = String(gestion.proyecto || '').trim();
 
     let mantenimientoPreventivo = [];
-    if (idns || proyecto) {
+    if (projectId) {
+      const [mpRows] = await conn.query(
+        `SELECT
+           id_dmp, zona_adm, proyecto, id_proyecto_cobranza, idns, cliente, periodicidad,
+           momento_facturacion, estado, z_oper, forma_pago, iguala, condiciones_pago,
+           monto_anual, pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
+         FROM detalle_mp_2026
+         WHERE id_proyecto_cobranza = ?
+         ORDER BY id_dmp ASC`,
+        [projectId]
+      );
+      mantenimientoPreventivo = mpRows;
+    } else if (idns || proyecto) {
       const conditions = [];
       const params = [];
       if (idns) {
@@ -282,9 +295,9 @@ async function getGestionCreditoDetalle(req, res) {
       }
       const [mpRows] = await conn.query(
         `SELECT
-           id_dmp, zona_adm, proyecto, idns, cliente, periodicidad, momento_facturacion,
-           estado, z_oper, forma_pago, iguala, condiciones_pago, monto_anual,
-           pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
+           id_dmp, zona_adm, proyecto, id_proyecto_cobranza, idns, cliente, periodicidad,
+           momento_facturacion, estado, z_oper, forma_pago, iguala, condiciones_pago,
+           monto_anual, pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
          FROM detalle_mp_2026
          WHERE ${conditions.join(' OR ')}
          ORDER BY id_dmp ASC`,
@@ -294,10 +307,25 @@ async function getGestionCreditoDetalle(req, res) {
     }
 
     let ventaAdicional = [];
-    if (proyecto) {
+    if (projectId) {
       const [pcRows] = await conn.query(
         `SELECT
-           id_pc, zona_adm, proyecto, cliente, ov, fecha_ov, mes_ov, concepto,
+           id_pc, zona_adm, proyecto, id_proyecto_cobranza, cliente, ov, fecha_ov, mes_ov, concepto,
+           precio_venta, pagado_iva, no_pagado_iva, venta_total, facturas_pendientes_pago,
+           adeudo, tipo_pago, no_factura, fecha_factura, mes_factura, terminos,
+           fecha_vencimiento, dias_vencimiento, estatus, estatus_administrativo,
+           estatus_operativo, fecha_pago, refacturacion_sustitucion, zona_operativa,
+           estado, comentarios_cobranza
+         FROM pc
+         WHERE id_proyecto_cobranza = ?
+         ORDER BY id_pc ASC`,
+        [projectId]
+      );
+      ventaAdicional = pcRows;
+    } else if (proyecto) {
+      const [pcRows] = await conn.query(
+        `SELECT
+           id_pc, zona_adm, proyecto, id_proyecto_cobranza, cliente, ov, fecha_ov, mes_ov, concepto,
            precio_venta, pagado_iva, no_pagado_iva, venta_total, facturas_pendientes_pago,
            adeudo, tipo_pago, no_factura, fecha_factura, mes_factura, terminos,
            fecha_vencimiento, dias_vencimiento, estatus, estatus_administrativo,

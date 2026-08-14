@@ -7,7 +7,8 @@
   const MODULES_UNI = Object.freeze({
     'cobranza-uni-dashboard':{title:'Dashboard Cobranza',icon:'📊'},
     'cobranza-uni-estados-cuenta':{title:'Gestión de Crédito',icon:'🛡️'},
-    'cobranza-uni-aditivas':{title:'Aditivas',icon:'➕'}
+    'cobranza-uni-aditivas':{title:'Venta Adicional',icon:'➕'},
+    'cobranza-uni-mp-pro':{title:'Mantenimiento Preventivo',icon:'🛠️'}
   });
 
   const state_uni = {
@@ -21,7 +22,31 @@
     detailId:null,
     detailCache:{},
     detailLoading:false,
-    detailError:null
+    detailError:null,
+    relatedTables:{
+      mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},
+      va:{search:'',estatus:'',page:1,pageSize:30}
+    }
+  };
+
+  const mpState_uni = {
+    loaded:false,
+    loading:false,
+    rows:[],
+    catalogs:{estado:[],periodicidad:[],momento_facturacion:[],z_oper:[],zona_adm:[],forma_pago:[]},
+    kpis:{},
+    generatedAt:null,
+    filters:{search:'',estado:'',periodicidad:'',momento_facturacion:'',z_oper:'',zona_adm:'',forma_pago:''},
+    page:1,
+    pageSize:30,
+    detailId:null,
+    detailCache:{},
+    detailLoading:false,
+    detailError:null,
+    detailTables:{
+      mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},
+      va:{search:'',estatus:'',page:1,pageSize:30}
+    }
   };
 
   function escapeHtml_uni(value){
@@ -80,8 +105,12 @@
     return 'sin-clasificar';
   }
 
+  function projectName_uni(value){
+    return window.ManttoFormat&&typeof window.ManttoFormat.projectName==='function' ? window.ManttoFormat.projectName(value) : String(value||'—');
+  }
+
   function projectLabel_uni(row){
-    return row.proyecto || row.idns || ('Registro ' + row.id_gc);
+    return row.proyecto ? projectName_uni(row.proyecto) : (row.idns || ('Registro ' + row.id_gc));
   }
 
   function syncSidebarLabel_uni(){
@@ -331,12 +360,38 @@
     return '<button type="button" class="gc-uni-relation-btn gc-uni-record-open" disabled title="La navegación al detalle se habilitará en una fase posterior.">↗ '+escapeHtml_uni(label||'Abrir')+'</button>';
   }
 
+  function relationFilteredRows_uni(kind, rows, tableState){
+    const needle=normalize_uni(tableState.search);
+    return rows.filter(function(row){
+      if(needle && !normalize_uni(Object.keys(row||{}).map(function(key){ return row[key]; }).join(' ')).includes(needle)) return false;
+      if(kind==='mp' && tableState.estado && normalize_uni(row.estado)!==normalize_uni(tableState.estado)) return false;
+      if(kind==='mp' && tableState.periodicidad && normalize_uni(row.periodicidad)!==normalize_uni(tableState.periodicidad)) return false;
+      if(kind==='va' && tableState.estatus && normalize_uni(row.estatus)!==normalize_uni(tableState.estatus)) return false;
+      return true;
+    });
+  }
+
+  function relationPagination_uni(kind, rows, tableState, scope){
+    const filtered=relationFilteredRows_uni(kind,rows,tableState);
+    const pages=Math.max(1,Math.ceil(filtered.length/tableState.pageSize));
+    if(tableState.page>pages) tableState.page=pages;
+    const start=(tableState.page-1)*tableState.pageSize;
+    const visible=filtered.slice(start,start+tableState.pageSize);
+    const buttons=[];
+    const from=Math.max(1,tableState.page-2),to=Math.min(pages,tableState.page+2);
+    for(let page=from;page<=to;page+=1){
+      buttons.push('<button type="button" data-rel-page="'+page+'" data-rel-kind="'+kind+'" data-rel-scope="'+scope+'" class="'+(page===tableState.page?'active':'')+'">'+page+'</button>');
+    }
+    const pagination=pages>1?'<div class="gc-uni-record-pagination"><button type="button" data-rel-page="'+Math.max(1,tableState.page-1)+'" data-rel-kind="'+kind+'" data-rel-scope="'+scope+'"'+(tableState.page===1?' disabled':'')+'>‹ Anterior</button>'+buttons.join('')+'<button type="button" data-rel-page="'+Math.min(pages,tableState.page+1)+'" data-rel-kind="'+kind+'" data-rel-scope="'+scope+'"'+(tableState.page===pages?' disabled':'')+'>Siguiente ›</button></div>':'';
+    return {filtered:filtered,visible:visible,start:start,pagination:pagination};
+  }
+
   function renderMpRows_uni(rows){
     if(!rows.length) return '<tr><td colspan="17" class="gc-uni-record-empty">No hay registros de Mantenimiento Preventivo relacionados con este proyecto.</td></tr>';
     return rows.map(function(item){
       return '<tr>'+
         '<td>'+tableCell_uni(item.id_dmp)+'</td>'+
-        '<td><strong>'+tableCell_uni(item.proyecto)+'</strong></td>'+
+        '<td><strong>'+tableCell_uni(projectName_uni(item.proyecto))+'</strong></td>'+
         '<td>'+tableCell_uni(item.idns)+'</td>'+
         '<td>'+tableCell_uni(item.cliente)+'</td>'+
         '<td>'+tableCell_uni(item.periodicidad)+'</td>'+
@@ -351,7 +406,7 @@
         '<td>'+tableCell_uni(item.pendiente_corriente,money_uni)+'</td>'+
         '<td>'+tableCell_uni(item.pendiente_vencido,money_uni)+'</td>'+
         '<td>'+tableCell_uni(item.facturas_pendientes,integer_uni)+'</td>'+
-        '<td class="gc-uni-relation-table-action">'+disabledOpenButton_uni('Abrir')+'</td>'+
+        '<td class="gc-uni-relation-table-action"><button type="button" class="gc-uni-relation-btn gc-uni-record-open" data-open-mp-id="'+escapeHtml_uni(item.id_dmp)+'">↗ Abrir</button></td>'+
       '</tr>';
     }).join('');
   }
@@ -361,7 +416,7 @@
     return rows.map(function(item){
       return '<tr>'+
         '<td>'+tableCell_uni(item.id_pc)+'</td>'+
-        '<td><strong>'+tableCell_uni(item.proyecto)+'</strong></td>'+
+        '<td><strong>'+tableCell_uni(projectName_uni(item.proyecto))+'</strong></td>'+
         '<td>'+tableCell_uni(item.cliente)+'</td>'+
         '<td>'+tableCell_uni(item.ov)+'</td>'+
         '<td>'+tableCell_uni(item.fecha_ov,date_uni)+'</td>'+
@@ -383,6 +438,25 @@
     }).join('');
   }
 
+  function uniqueValues_uni(rows,field){
+    return Array.from(new Set((rows||[]).map(function(row){ return String(row&&row[field]||'').trim(); }).filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,'es',{sensitivity:'base'}); });
+  }
+
+  function renderRelatedTable_uni(kind,title,kicker,description,rows,tableState,scope){
+    const pageData=relationPagination_uni(kind,rows,tableState,scope);
+    const isMp=kind==='mp';
+    const headers=isMp
+      ? '<th>ID</th><th>Proyecto</th><th>IDNS</th><th>Cliente</th><th>Periodicidad</th><th>Momento facturación</th><th>Estado</th><th>Z. Operativa</th><th>Z. Administrativa</th><th>Forma pago</th><th>Iguala</th><th>Condiciones pago</th><th>Monto anual</th><th>Pendiente corriente</th><th>Pendiente vencido</th><th>Facturas pendientes</th><th>Acción</th>'
+      : '<th>ID</th><th>Proyecto</th><th>Cliente</th><th>OV</th><th>Fecha OV</th><th>Concepto</th><th>Precio venta</th><th>Venta total</th><th>Facturas pendientes</th><th>Adeudo</th><th>Tipo pago</th><th>No. Factura</th><th>Fecha factura</th><th>Vencimiento</th><th>Días vencimiento</th><th>Estatus</th><th>Estatus administrativo</th><th>Estatus operativo</th><th>Acción</th>';
+    const body=isMp?renderMpRows_uni(pageData.visible):renderVaRows_uni(pageData.visible);
+    return '<section class="gc-uni-record-section">'+
+      '<header class="gc-uni-record-header"><div><p class="gc-uni-record-kicker">'+kicker+'</p><h2>'+escapeHtml_uni(title)+'</h2><p>'+description+'</p></div><span>'+escapeHtml_uni(integer_uni(pageData.filtered.length))+' registro(s)</span></header>'+
+      '<div class="gc-uni-record-tools"><label class="gc-uni-record-search"><span>Buscar en tabla</span><input type="search" data-rel-search="'+kind+'" data-rel-scope="'+scope+'" value="'+escapeHtml_uni(tableState.search)+'" placeholder="Buscar en los registros..."></label>'+      (isMp?'<label><span>Estado</span><select data-rel-filter="estado" data-rel-kind="'+kind+'" data-rel-scope="'+scope+'">'+optionList_uni(uniqueValues_uni(rows,'estado'),tableState.estado,'Todos')+'</select></label><label><span>Periodicidad</span><select data-rel-filter="periodicidad" data-rel-kind="'+kind+'" data-rel-scope="'+scope+'">'+optionList_uni(uniqueValues_uni(rows,'periodicidad'),tableState.periodicidad,'Todas')+'</select></label>':'<label><span>Estatus</span><select data-rel-filter="estatus" data-rel-kind="'+kind+'" data-rel-scope="'+scope+'">'+optionList_uni(uniqueValues_uni(rows,'estatus'),tableState.estatus,'Todos')+'</select></label>')+      '<b>30 por página</b></div>'+
+      '<div class="gc-uni-table-wrap gc-uni-record-table-wrap"><table class="gc-uni-record-table '+(isMp?'gc-uni-record-table-mp':'gc-uni-record-table-va')+'"><thead><tr>'+headers+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
+      '<div class="gc-uni-record-footer"><span>Mostrando '+(pageData.filtered.length?integer_uni(pageData.start+1):'0')+'–'+integer_uni(Math.min(pageData.start+pageData.visible.length,pageData.filtered.length))+' de '+integer_uni(pageData.filtered.length)+'</span>'+pageData.pagination+'</div>'+
+    '</section>';
+  }
+
   function renderRelatedRecords_uni(){
     if(state_uni.detailLoading){
       return '<section class="gc-uni-related-loading"><span class="gc-uni-loader"></span><div><h2>Cargando relaciones</h2><p>Consultando Mantenimiento Preventivo y Venta Adicional en una sola solicitud.</p></div></section>';
@@ -396,18 +470,8 @@
     }
     const mp=Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
     const va=Array.isArray(detail.venta_adicional)?detail.venta_adicional:[];
-    return '<section class="gc-uni-record-section">'+
-      '<header class="gc-uni-record-header"><div><p class="gc-uni-record-kicker">🧾 Relación operativa</p><h2>Mantenimiento Preventivo</h2><p>Todos los registros de <code>detalle_mp_2026</code> relacionados con el proyecto actual.</p></div><span>'+escapeHtml_uni(integer_uni(mp.length))+' registro(s)</span></header>'+
-      '<div class="gc-uni-table-wrap gc-uni-record-table-wrap"><table class="gc-uni-record-table gc-uni-record-table-mp"><thead><tr>'+
-        '<th>ID</th><th>Proyecto</th><th>IDNS</th><th>Cliente</th><th>Periodicidad</th><th>Momento facturación</th><th>Estado</th><th>Z. Operativa</th><th>Z. Administrativa</th><th>Forma pago</th><th>Iguala</th><th>Condiciones pago</th><th>Monto anual</th><th>Pendiente corriente</th><th>Pendiente vencido</th><th>Facturas pendientes</th><th>Acción</th>'+
-      '</tr></thead><tbody>'+renderMpRows_uni(mp)+'</tbody></table></div>'+
-    '</section>'+
-    '<section class="gc-uni-record-section">'+
-      '<header class="gc-uni-record-header"><div><p class="gc-uni-record-kicker">➕ Relación comercial</p><h2>Venta Adicional</h2><p>Todos los registros de <code>pc</code> relacionados con el proyecto actual.</p></div><span>'+escapeHtml_uni(integer_uni(va.length))+' registro(s)</span></header>'+
-      '<div class="gc-uni-table-wrap gc-uni-record-table-wrap"><table class="gc-uni-record-table gc-uni-record-table-va"><thead><tr>'+
-        '<th>ID</th><th>Proyecto</th><th>Cliente</th><th>OV</th><th>Fecha OV</th><th>Concepto</th><th>Precio venta</th><th>Venta total</th><th>Facturas pendientes</th><th>Adeudo</th><th>Tipo pago</th><th>No. Factura</th><th>Fecha factura</th><th>Vencimiento</th><th>Días vencimiento</th><th>Estatus</th><th>Estatus administrativo</th><th>Estatus operativo</th><th>Acción</th>'+
-      '</tr></thead><tbody>'+renderVaRows_uni(va)+'</tbody></table></div>'+
-    '</section>';
+    return renderRelatedTable_uni('mp','Mantenimiento Preventivo','🧾 Relación operativa','Todos los registros de <code>detalle_mp_2026</code> relacionados con el proyecto actual.',mp,state_uni.relatedTables.mp,'gc')+
+      renderRelatedTable_uni('va','Venta Adicional','➕ Relación comercial','Todos los registros de <code>pc</code> relacionados con el proyecto actual.',va,state_uni.relatedTables.va,'gc');
   }
 
   async function loadDetailRelations_uni(id,force){
@@ -447,7 +511,11 @@
     }
     const risk = riskKey_uni(row.nivel_riesgo_credito);
     const projectReady = Boolean(row.proyecto && window.ManttoRouter && typeof window.ManttoRouter.go === 'function');
-    const mpReason = 'Navegación a Mantenimiento Preventivo pendiente de habilitar.';
+    const detailCurrent = state_uni.detailCache[String(state_uni.detailId)] || null;
+    const relatedMp = detailCurrent && Array.isArray(detailCurrent.mantenimiento_preventivo) ? detailCurrent.mantenimiento_preventivo : [];
+    const firstMp = relatedMp.find(function(item){ return Number(item&&item.id_dmp)>0; }) || null;
+    const mpReady = Boolean(firstMp && routeReady_uni(ROUTE_MP_UNI));
+    const mpReason = relatedMp.length ? 'No fue posible resolver el detalle de Mantenimiento Preventivo.' : 'Este proyecto no tiene Mantenimiento Preventivo relacionado.';
     const vaReason = 'Navegación a Venta Adicional pendiente de habilitar.';
 
     root.innerHTML = '<section class="gc-uni-titlebar gc-uni-detail-titlebar">' +
@@ -458,7 +526,7 @@
       '<div><span>Relaciones</span><p>Navegación contextual del mismo proyecto.</p></div>' +
       '<div class="gc-uni-relation-actions">' +
         relationButton_uni('proyecto','Ir a Proyecto','🏢',projectReady,projectReady?'':'Proyecto no disponible para navegación.') +
-        relationButton_uni('mp','Ir a MP','🧾',false,mpReason) +
+        relationButton_uni('mp','Ir a MP','🧾',mpReady,mpReady?'':mpReason) +
         relationButton_uni('venta-adicional','Ir a Venta Adicional','➕',false,vaReason) +
       '</div>' +
     '</section>' +
@@ -470,7 +538,7 @@
     '</section>' +
     '<section class="gc-uni-detail-grid">' +
       '<article class="gc-uni-detail-panel"><header><h2>Detalle del Proyecto</h2><p>Datos del registro seleccionado en <code>gestion_credito</code>.</p></header><div class="gc-uni-detail-items">' +
-        detailItem_uni('ID Gestión',row.id_gc) + detailItem_uni('IDNS',row.idns) + detailItem_uni('Proyecto',row.proyecto) + detailItem_uni('Cliente',row.cliente) +
+        detailItem_uni('ID Gestión',row.id_gc) + detailItem_uni('IDNS',row.idns) + detailItem_uni('Proyecto',projectName_uni(row.proyecto)) + detailItem_uni('Cliente',row.cliente) +
         detailItem_uni('Subsidiaria',row.subsidiaria) + detailItem_uni('Región',row.region) + detailItem_uni('Estado',row.estado) + detailItem_uni('Zona Operativa',row.z_oper) +
         detailItem_uni('Zona Administrativa',row.z_adm) + detailItem_uni('Categoría',row.categoria) + detailItem_uni('Prioridad',row.prioridad) + detailItem_uni('Suministro',row.suministro) +
         detailItem_uni('Anticipo',row.anticipo) + detailItem_uni('No. Equipos',row.recuento_no_equipos,integer_uni) + detailItem_uni('Valor Unitario',row.suma_valor_unitario,money_uni) +
@@ -491,6 +559,7 @@
     if(!exists) return;
     state_uni.detailId = Number(id);
     state_uni.detailError = null;
+    state_uni.relatedTables={mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},va:{search:'',estatus:'',page:1,pageSize:30}};
     renderDetailContent_uni();
     loadDetailRelations_uni(state_uni.detailId,false);
   }
@@ -503,7 +572,16 @@
       return;
     }
     if(type === 'mp' && routeReady_uni(ROUTE_MP_UNI)){
-      window.ManttoRouter.go(ROUTE_MP_UNI,{id:row.idns||row.proyecto,idns:row.idns||null,proyecto:row.proyecto||null,source:'gestion_credito'});
+      const detail=state_uni.detailCache[String(state_uni.detailId)]||null;
+      const list=detail&&Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
+      const target=list.find(function(item){ return Number(item&&item.id_dmp)>0; });
+      if(!target) return;
+      const exists=mpState_uni.rows.some(function(item){ return Number(item.id_dmp)===Number(target.id_dmp); });
+      if(!exists) mpState_uni.rows.push(Object.assign({},target));
+      mpState_uni.detailId=Number(target.id_dmp);
+      mpState_uni.detailError=null;
+      mpState_uni.detailTables={mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},va:{search:'',estatus:'',page:1,pageSize:30}};
+      window.ManttoRouter.go(ROUTE_MP_UNI,{id:String(target.id_dmp),id_dmp:Number(target.id_dmp),idns:target.idns||row.idns||null,proyecto:row.proyecto||null,source:'gestion_credito'});
       return;
     }
     if(type === 'venta-adicional' && routeReady_uni(ROUTE_VENTA_ADICIONAL_UNI)){
@@ -581,6 +659,48 @@
         }
       });
     });
+    root.querySelectorAll('[data-rel-search][data-rel-scope="gc"]').forEach(function(control){
+      const kind=control.getAttribute('data-rel-search');
+      let timer=null;
+      control.addEventListener('input',function(){
+        clearTimeout(timer);
+        timer=setTimeout(function(){
+          if(!state_uni.relatedTables[kind]) return;
+          state_uni.relatedTables[kind].search=control.value||'';
+          state_uni.relatedTables[kind].page=1;
+          renderDetailContent_uni();
+          const fresh=document.querySelector('[data-rel-search="'+kind+'"][data-rel-scope="gc"]');
+          if(fresh){ fresh.focus(); fresh.setSelectionRange(fresh.value.length,fresh.value.length); }
+        },180);
+      });
+    });
+    root.querySelectorAll('[data-rel-filter][data-rel-scope="gc"]').forEach(function(control){
+      control.addEventListener('change',function(){
+        const kind=control.getAttribute('data-rel-kind');
+        const field=control.getAttribute('data-rel-filter');
+        if(!state_uni.relatedTables[kind]) return;
+        state_uni.relatedTables[kind][field]=control.value||'';
+        state_uni.relatedTables[kind].page=1;
+        renderDetailContent_uni();
+      });
+    });
+    root.querySelectorAll('[data-rel-page][data-rel-scope="gc"]').forEach(function(button){
+      button.addEventListener('click',function(){
+        const kind=button.getAttribute('data-rel-kind');
+        if(!state_uni.relatedTables[kind]) return;
+        state_uni.relatedTables[kind].page=Number(button.getAttribute('data-rel-page'))||1;
+        renderDetailContent_uni();
+      });
+    });
+    root.querySelectorAll('[data-open-mp-id]').forEach(function(button){
+      button.addEventListener('click',function(){
+        const id=Number(button.getAttribute('data-open-mp-id'));
+        if(!id) return;
+        mpState_uni.detailId=id;
+        mpState_uni.detailError=null;
+        if(window.ManttoRouter&&typeof window.ManttoRouter.go==='function') window.ManttoRouter.go(ROUTE_MP_UNI);
+      });
+    });
     root.querySelectorAll('[data-gc-risk-tab]').forEach(function(button){
       button.addEventListener('click',function(){
         state_uni.mobileRisk = button.getAttribute('data-gc-risk-tab') || 'alto';
@@ -623,10 +743,315 @@
     }
   }
 
+  function mpFilteredRows_uni(){
+    const f = mpState_uni.filters;
+    const search = normalize_uni(f.search);
+    return mpState_uni.rows.filter(function(row){
+      if(search){
+        const haystack = normalize_uni([row.proyecto,row.idns,row.cliente,row.condiciones_pago].join(' '));
+        if(!haystack.includes(search)) return false;
+      }
+      if(f.estado && normalize_uni(row.estado) !== normalize_uni(f.estado)) return false;
+      if(f.periodicidad && normalize_uni(row.periodicidad) !== normalize_uni(f.periodicidad)) return false;
+      if(f.momento_facturacion && normalize_uni(row.momento_facturacion) !== normalize_uni(f.momento_facturacion)) return false;
+      if(f.z_oper && normalize_uni(row.z_oper) !== normalize_uni(f.z_oper)) return false;
+      if(f.zona_adm && normalize_uni(row.zona_adm) !== normalize_uni(f.zona_adm)) return false;
+      if(f.forma_pago && normalize_uni(row.forma_pago) !== normalize_uni(f.forma_pago)) return false;
+      return true;
+    });
+  }
+
+  function mpKpi_uni(icon,title,value,meta,tone){
+    return '<article class="mp-uni-kpi mp-tone-' + tone + '"><div class="mp-uni-kpi-icon">' + icon + '</div><div><span>' + escapeHtml_uni(title) + '</span><strong>' + escapeHtml_uni(value) + '</strong><small>' + escapeHtml_uni(meta) + '</small></div></article>';
+  }
+
+  function renderMpKpis_uni(rows){
+    let monto=0,corriente=0,vencido=0,pendiente=0,facturas=0,conPendiente=0;
+    rows.forEach(function(row){
+      monto += number_uni(row.monto_anual);
+      corriente += number_uni(row.pendiente_corriente);
+      vencido += number_uni(row.pendiente_vencido);
+      pendiente += number_uni(row.pendiente);
+      facturas += number_uni(row.facturas_pendientes);
+      if(number_uni(row.pendiente)>0 || number_uni(row.facturas_pendientes)>0) conPendiente += 1;
+    });
+    return '<section class="mp-uni-kpis" aria-label="Indicadores de Mantenimiento Preventivo">' +
+      mpKpi_uni('📋','Total registros',integer_uni(rows.length),'Registros del filtro','blue') +
+      mpKpi_uni('🧾','Con pendiente',integer_uni(conPendiente),'Con saldo o facturas pendientes','warning') +
+      mpKpi_uni('📈','Monto anual',money_uni(monto),'Monto anual del filtro','violet') +
+      mpKpi_uni('🟦','Pendiente corriente',money_uni(corriente),'Saldo corriente','blue') +
+      mpKpi_uni('🔴','Pendiente vencido',money_uni(vencido),'Saldo vencido','danger') +
+      mpKpi_uni('📄','Facturas pendientes',integer_uni(facturas),'Facturas del filtro','warning') +
+    '</section>';
+  }
+
+  function renderMpFilters_uni(){
+    const f=mpState_uni.filters;
+    return '<section class="mp-uni-filter-card"><div class="mp-uni-filter-head"><div><h2>Filtros de búsqueda</h2><p>Filtra la tabla sin generar nuevas consultas a Aiven.</p></div><button type="button" class="mp-uni-btn mp-uni-btn-light" data-mp-action="clear">Limpiar filtros</button></div><div class="mp-uni-filters">' +
+      '<label class="mp-uni-search"><span>Proyecto, cliente o IDNS</span><input type="search" data-mp-filter="search" value="' + escapeHtml_uni(f.search) + '" placeholder="Buscar..."></label>' +
+      '<label><span>Estado</span><select data-mp-filter="estado">' + optionList_uni(mpState_uni.catalogs.estado,f.estado,'Todos') + '</select></label>' +
+      '<label><span>Periodicidad</span><select data-mp-filter="periodicidad">' + optionList_uni(mpState_uni.catalogs.periodicidad,f.periodicidad,'Todas') + '</select></label>' +
+      '<label><span>Momento facturación</span><select data-mp-filter="momento_facturacion">' + optionList_uni(mpState_uni.catalogs.momento_facturacion,f.momento_facturacion,'Todos') + '</select></label>' +
+      '<label><span>Zona Operativa</span><select data-mp-filter="z_oper">' + optionList_uni(mpState_uni.catalogs.z_oper,f.z_oper,'Todas') + '</select></label>' +
+      '<label><span>Zona Administrativa</span><select data-mp-filter="zona_adm">' + optionList_uni(mpState_uni.catalogs.zona_adm,f.zona_adm,'Todas') + '</select></label>' +
+      '<label><span>Forma de pago</span><select data-mp-filter="forma_pago">' + optionList_uni(mpState_uni.catalogs.forma_pago,f.forma_pago,'Todas') + '</select></label>' +
+    '</div></section>';
+  }
+
+  function renderMpTable_uni(rows){
+    const pages=Math.max(1,Math.ceil(rows.length/mpState_uni.pageSize));
+    if(mpState_uni.page>pages) mpState_uni.page=pages;
+    const start=(mpState_uni.page-1)*mpState_uni.pageSize;
+    const visible=rows.slice(start,start+mpState_uni.pageSize);
+    const body=visible.length ? visible.map(function(row){
+      return '<tr class="mp-uni-row-open" data-mp-detail-id="' + escapeHtml_uni(row.id_dmp) + '" tabindex="0" role="button" aria-label="Abrir detalle de Mantenimiento Preventivo">' +
+        '<td><strong>' + escapeHtml_uni(projectName_uni(row.proyecto)) + '</strong></td>' +
+        '<td>' + escapeHtml_uni(row.idns || '—') + '</td>' +
+        '<td>' + escapeHtml_uni(row.cliente || '—') + '</td>' +
+        '<td>' + escapeHtml_uni(row.periodicidad || '—') + '</td>' +
+        '<td>' + escapeHtml_uni(row.momento_facturacion || '—') + '</td>' +
+        '<td><span class="mp-uni-status">' + escapeHtml_uni(row.estado || '—') + '</span></td>' +
+        '<td>' + escapeHtml_uni(row.z_oper || '—') + '</td>' +
+        '<td>' + escapeHtml_uni(row.zona_adm || '—') + '</td>' +
+        '<td>' + escapeHtml_uni(row.forma_pago || '—') + '</td>' +
+        '<td class="mp-uni-num">' + money_uni(row.iguala) + '</td>' +
+        '<td>' + escapeHtml_uni(row.condiciones_pago || '—') + '</td>' +
+        '<td class="mp-uni-num"><strong>' + money_uni(row.monto_anual) + '</strong></td>' +
+        '<td class="mp-uni-num">' + money_uni(row.pendiente_corriente) + '</td>' +
+        '<td class="mp-uni-num ' + (number_uni(row.pendiente_vencido)>0?'is-overdue':'') + '">' + money_uni(row.pendiente_vencido) + '</td>' +
+        '<td class="mp-uni-num ' + (number_uni(row.pendiente)>0?'is-pending':'') + '">' + money_uni(row.pendiente) + '</td>' +
+        '<td class="mp-uni-center">' + integer_uni(row.facturas_pendientes) + '</td>' +
+      '</tr>';
+    }).join('') : '<tr><td colspan="16" class="mp-uni-empty">No hay registros para los filtros seleccionados.</td></tr>';
+
+    let pagination='';
+    if(pages>1){
+      const buttons=[];
+      const from=Math.max(1,mpState_uni.page-2), to=Math.min(pages,mpState_uni.page+2);
+      for(let i=from;i<=to;i+=1) buttons.push('<button type="button" data-mp-page="' + i + '" class="' + (i===mpState_uni.page?'active':'') + '">' + i + '</button>');
+      pagination='<div class="mp-uni-pagination"><button type="button" data-mp-page="' + Math.max(1,mpState_uni.page-1) + '"' + (mpState_uni.page===1?' disabled':'') + '>‹ Anterior</button>' + buttons.join('') + '<button type="button" data-mp-page="' + Math.min(pages,mpState_uni.page+1) + '"' + (mpState_uni.page===pages?' disabled':'') + '>Siguiente ›</button></div>';
+    }
+
+    return '<section class="mp-uni-table-card"><div class="mp-uni-table-head"><div><h2>Registros de Mantenimiento Preventivo 2026</h2><p>Fuente Aiven · tabla <code>detalle_mp_2026</code>.</p></div><span>' + integer_uni(rows.length) + ' registros</span></div>' +
+      '<div class="mp-uni-table-wrap"><table class="mp-uni-table"><thead><tr>' +
+      '<th>Proyecto</th><th>IDNS</th><th>Cliente</th><th>Periodicidad</th><th>Momento facturación</th><th>Estado</th><th>Zona Operativa</th><th>Zona Administrativa</th><th>Forma pago</th><th>Iguala</th><th>Condiciones pago</th><th>Monto anual</th><th>Pendiente corriente</th><th>Pendiente vencido</th><th>Pendiente total</th><th>Facturas pendientes</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="mp-uni-table-footer"><span>Mostrando ' + (rows.length ? integer_uni(start+1) : '0') + '–' + integer_uni(Math.min(start+visible.length,rows.length)) + ' de ' + integer_uni(rows.length) + '</span><b>30 por página</b>' + pagination + '</div></section>';
+  }
+
+  function renderMpMain_uni(){
+    const root=document.querySelector('[data-mp-uni-root]');
+    if(!root) return;
+    const rows=mpFilteredRows_uni();
+    if(mpState_uni.detailId){ renderMpDetail_uni(); return; }
+    root.innerHTML='<section class="mp-uni-titlebar"><div><p class="mp-uni-eyebrow">🛠️ Cobranza United</p><h1>Mantenimiento Preventivo 2026</h1><p>Administración y control del mantenimiento preventivo por proyecto.</p></div><div class="mp-uni-title-actions"><span class="mp-uni-source"><i></i>Aiven</span><button type="button" class="mp-uni-btn" data-mp-action="refresh">↻ Actualizar</button></div></section>' + renderMpKpis_uni(rows) + renderMpFilters_uni() + renderMpTable_uni(rows) + '<footer class="mp-uni-footer"><span>Vista MAIN · 30 registros por página</span><span>Última consulta: ' + escapeHtml_uni(formatDateTime_uni(mpState_uni.generatedAt)) + '</span></footer>';
+    bindMpMain_uni(root);
+  }
+
+  function renderMpBase_uni(view){
+    view.innerHTML='<div class="mp-uni-page" data-mp-uni-root><section class="mp-uni-titlebar"><div><p class="mp-uni-eyebrow">🛠️ Cobranza United</p><h1>Mantenimiento Preventivo 2026</h1><p>Administración y control del mantenimiento preventivo por proyecto.</p></div></section><div class="mp-uni-loading"><span class="gc-uni-spinner"></span><b>Consultando detalle_mp_2026...</b></div></div>';
+  }
+
+  function bindMpMain_uni(root){
+    root.querySelectorAll('[data-mp-filter]').forEach(function(control){
+      const field=control.getAttribute('data-mp-filter');
+      const eventName=control.tagName==='INPUT'?'input':'change';
+      let timer=null;
+      control.addEventListener(eventName,function(){
+        const apply=function(){
+          mpState_uni.filters[field]=control.value||'';
+          mpState_uni.page=1;
+          renderMpMain_uni();
+          if(field==='search'){
+            const fresh=document.querySelector('[data-mp-filter="search"]');
+            if(fresh){ fresh.focus(); fresh.setSelectionRange(fresh.value.length,fresh.value.length); }
+          }
+        };
+        if(field==='search'){ clearTimeout(timer); timer=setTimeout(apply,180); } else apply();
+      });
+    });
+    root.querySelectorAll('[data-mp-action]').forEach(function(button){
+      button.addEventListener('click',function(){
+        const action=button.getAttribute('data-mp-action');
+        if(action==='refresh') loadMpMain_uni(true);
+        if(action==='clear'){
+          mpState_uni.filters={search:'',estado:'',periodicidad:'',momento_facturacion:'',z_oper:'',zona_adm:'',forma_pago:''};
+          mpState_uni.page=1;
+          renderMpMain_uni();
+        }
+      });
+    });
+    root.querySelectorAll('[data-mp-page]').forEach(function(button){
+      button.addEventListener('click',function(){ mpState_uni.page=Number(button.getAttribute('data-mp-page'))||1; renderMpMain_uni(); });
+    });
+    root.querySelectorAll('[data-mp-detail-id]').forEach(function(row){
+      const activate=function(){ openMpDetail_uni(row.getAttribute('data-mp-detail-id')); };
+      row.addEventListener('click',activate);
+      row.addEventListener('keydown',function(event){ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); activate(); } });
+    });
+  }
+
+  function mpCurrentDetail_uni(){
+    return mpState_uni.rows.find(function(row){ return Number(row.id_dmp)===Number(mpState_uni.detailId); })||null;
+  }
+
+  function mpDetailKpis_uni(row){
+    return '<section class="mp-uni-detail-kpis">'+
+      mpKpi_uni('📈','Monto anual',money_uni(row.monto_anual),'Monto anual contratado','violet')+
+      mpKpi_uni('🟦','Pendiente corriente',money_uni(row.pendiente_corriente),'Saldo corriente','blue')+
+      mpKpi_uni('🔴','Pendiente vencido',money_uni(row.pendiente_vencido),'Saldo vencido','danger')+
+      mpKpi_uni('💰','Pendiente total',money_uni(row.pendiente),'Saldo total','warning')+
+      mpKpi_uni('📄','Facturas pendientes',integer_uni(row.facturas_pendientes),'Facturas pendientes','warning')+
+    '</section>';
+  }
+
+  function renderMpCreditSummary_uni(detail){
+    const gc=detail&&detail.gestion_credito?detail.gestion_credito:null;
+    if(!gc) return '<section class="mp-uni-detail-panel"><header><div><p class="mp-uni-detail-kicker">🛡️ Relación</p><h2>Gestión de Crédito</h2></div></header><div class="mp-uni-detail-empty">No existe registro relacionado en Gestión de Crédito para este proyecto.</div></section>';
+    return '<section class="mp-uni-detail-panel"><header><div><p class="mp-uni-detail-kicker">🛡️ Relación</p><h2>Gestión de Crédito</h2></div></header><div class="mp-uni-detail-grid-items">'+
+      detailItem_uni('Nivel de riesgo',gc.nivel_riesgo_credito)+detailItem_uni('Adeudo',gc.adeudo,money_uni)+detailItem_uni('Facturas adeudadas',gc.facts_adeudadas,integer_uni)+detailItem_uni('Crédito disponible',gc.credito_disponible_venta,money_uni)+detailItem_uni('Crédito para VA',gc.credito_para_va,money_uni)+detailItem_uni('Prioridad',gc.prioridad)+
+    '</div></section>';
+  }
+
+  function renderMpDetailTables_uni(detail){
+    const mp=detail&&Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
+    const va=detail&&Array.isArray(detail.venta_adicional)?detail.venta_adicional:[];
+    return renderRelatedTable_uni('mp','Mantenimientos del Proyecto','🛠️ Mantenimiento Preventivo','Registros de <code>detalle_mp_2026</code> vinculados mediante <code>id_proyecto_cobranza</code>.',mp,mpState_uni.detailTables.mp,'mp')+
+      renderRelatedTable_uni('va','Venta Adicional','➕ Relación comercial','Registros de <code>pc</code> vinculados al mismo proyecto.',va,mpState_uni.detailTables.va,'mp');
+  }
+
+  function renderMpDetail_uni(){
+    const root=document.querySelector('[data-mp-uni-root]');
+    if(!root) return;
+    const row=mpCurrentDetail_uni();
+    if(!row){ mpState_uni.detailId=null; renderMpMain_uni(); return; }
+    const detail=mpState_uni.detailCache[String(mpState_uni.detailId)]||null;
+    root.innerHTML='<section class="mp-uni-detail-head">'+
+      '<div><button type="button" class="mp-uni-back" data-mp-detail-action="back">← Volver a Mantenimiento Preventivo</button><p class="mp-uni-eyebrow">🛠️ Cobranza United · Detalle</p><h1>'+escapeHtml_uni(row.proyecto?projectName_uni(row.proyecto):('MP '+row.id_dmp))+'</h1><p>'+escapeHtml_uni(row.cliente||'—')+' · '+escapeHtml_uni(row.idns||'Sin IDNS')+'</p></div>'+
+      '<div class="mp-uni-title-actions"><span class="mp-uni-source"><i></i>Aiven</span><button type="button" class="mp-uni-btn" data-mp-detail-action="refresh">↻ Actualizar detalle</button></div></section>'+
+      '<section class="mp-uni-detail-panel mp-uni-detail-info"><header><div><p class="mp-uni-detail-kicker">📋 Información</p><h2>Información del Mantenimiento Preventivo</h2></div><span>ID '+escapeHtml_uni(row.id_dmp)+'</span></header><div class="mp-uni-detail-grid-items">'+
+        detailItem_uni('Proyecto',projectName_uni(row.proyecto))+detailItem_uni('IDNS',row.idns)+detailItem_uni('Cliente',row.cliente)+detailItem_uni('Periodicidad',row.periodicidad)+detailItem_uni('Momento de facturación',row.momento_facturacion)+detailItem_uni('Estado',row.estado)+detailItem_uni('Zona Operativa',row.z_oper)+detailItem_uni('Zona Administrativa',row.zona_adm)+detailItem_uni('Forma de pago',row.forma_pago)+detailItem_uni('Iguala',row.iguala,money_uni)+detailItem_uni('Condiciones de pago',row.condiciones_pago)+detailItem_uni('ID Proyecto Cobranza',row.id_proyecto_cobranza)+
+      '</div></section>'+mpDetailKpis_uni(row)+
+      (mpState_uni.detailLoading?'<section class="gc-uni-related-loading"><span class="gc-uni-loader"></span><div><h2>Cargando relaciones</h2><p>Consultando información relacionada del proyecto.</p></div></section>':(mpState_uni.detailError?'<section class="gc-uni-related-error"><span>⚠️</span><div><h2>No fue posible cargar el detalle</h2><p>'+escapeHtml_uni(mpState_uni.detailError)+'</p><button type="button" class="mp-uni-btn" data-mp-detail-action="refresh">Reintentar</button></div></section>':(detail?renderMpCreditSummary_uni(detail)+renderMpDetailTables_uni(detail):'')))+
+      '<footer class="mp-uni-footer"><span>Detalle por proyecto · tablas de 30 registros por página</span><span>Última consulta: '+escapeHtml_uni(formatDateTime_uni(detail&&detail.generated_at?detail.generated_at:mpState_uni.generatedAt))+'</span></footer>';
+    bindMpDetail_uni(root);
+  }
+
+  function bindMpDetail_uni(root){
+    root.querySelectorAll('[data-mp-detail-action]').forEach(function(button){
+      button.addEventListener('click',function(){
+        const action=button.getAttribute('data-mp-detail-action');
+        if(action==='back'){ mpState_uni.detailId=null; mpState_uni.detailError=null; renderMpMain_uni(); }
+        if(action==='refresh') loadMpDetail_uni(mpState_uni.detailId,true);
+      });
+    });
+    root.querySelectorAll('[data-open-mp-id]').forEach(function(button){
+      button.addEventListener('click',function(){
+        const id=Number(button.getAttribute('data-open-mp-id'));
+        if(!id||id===Number(mpState_uni.detailId)) return;
+        openMpDetail_uni(id);
+      });
+    });
+    root.querySelectorAll('[data-rel-search][data-rel-scope="mp"]').forEach(function(control){
+      const kind=control.getAttribute('data-rel-search');
+      let timer=null;
+      control.addEventListener('input',function(){
+        clearTimeout(timer);
+        timer=setTimeout(function(){
+          if(!mpState_uni.detailTables[kind]) return;
+          mpState_uni.detailTables[kind].search=control.value||'';
+          mpState_uni.detailTables[kind].page=1;
+          renderMpDetail_uni();
+          const fresh=document.querySelector('[data-rel-search="'+kind+'"][data-rel-scope="mp"]');
+          if(fresh){ fresh.focus(); fresh.setSelectionRange(fresh.value.length,fresh.value.length); }
+        },180);
+      });
+    });
+    root.querySelectorAll('[data-rel-filter][data-rel-scope="mp"]').forEach(function(control){
+      control.addEventListener('change',function(){
+        const kind=control.getAttribute('data-rel-kind');
+        const field=control.getAttribute('data-rel-filter');
+        if(!mpState_uni.detailTables[kind]) return;
+        mpState_uni.detailTables[kind][field]=control.value||'';
+        mpState_uni.detailTables[kind].page=1;
+        renderMpDetail_uni();
+      });
+    });
+    root.querySelectorAll('[data-rel-page][data-rel-scope="mp"]').forEach(function(button){
+      button.addEventListener('click',function(){
+        const kind=button.getAttribute('data-rel-kind');
+        if(!mpState_uni.detailTables[kind]) return;
+        mpState_uni.detailTables[kind].page=Number(button.getAttribute('data-rel-page'))||1;
+        renderMpDetail_uni();
+      });
+    });
+  }
+
+  function openMpDetail_uni(id){
+    const exists=mpState_uni.rows.some(function(row){ return Number(row.id_dmp)===Number(id); });
+    if(!exists) return;
+    mpState_uni.detailId=Number(id);
+    mpState_uni.detailError=null;
+    mpState_uni.detailTables={mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},va:{search:'',estatus:'',page:1,pageSize:30}};
+    renderMpDetail_uni();
+    loadMpDetail_uni(mpState_uni.detailId,false);
+  }
+
+  async function loadMpDetail_uni(id,force){
+    const key=String(id||'');
+    if(!key||mpState_uni.detailLoading) return;
+    if(mpState_uni.detailCache[key]&&!force){ renderMpDetail_uni(); return; }
+    mpState_uni.detailLoading=true;
+    mpState_uni.detailError=null;
+    renderMpDetail_uni();
+    try{
+      const response=await fetch(apiBase_uni()+'/api/cobranza-uni/detalle-mp-2026/'+encodeURIComponent(key),{method:'GET',headers:authHeaders_uni(),cache:'no-store'});
+      const payload=await response.json().catch(function(){return {};});
+      if(!response.ok||!payload.ok) throw new Error(payload.message||('HTTP '+response.status));
+      mpState_uni.detailCache[key]=payload;
+      if(payload.mantenimiento){
+        const index=mpState_uni.rows.findIndex(function(item){ return Number(item.id_dmp)===Number(id); });
+        if(index>=0) mpState_uni.rows[index]=Object.assign({},mpState_uni.rows[index],payload.mantenimiento);
+      }
+    }catch(error){
+      mpState_uni.detailError=error.message||'Error de conexión';
+    }finally{
+      mpState_uni.detailLoading=false;
+      renderMpDetail_uni();
+    }
+  }
+
+  async function loadMpMain_uni(force){
+    if(mpState_uni.loading) return;
+    if(mpState_uni.loaded && !force){ renderMpMain_uni(); return; }
+    const view=document.getElementById('view-' + ROUTE_MP_UNI);
+    if(!view) return;
+    mpState_uni.loading=true;
+    renderMpBase_uni(view);
+    try{
+      const response=await fetch(apiBase_uni() + '/api/cobranza-uni/detalle-mp-2026',{method:'GET',headers:authHeaders_uni(),cache:'no-store'});
+      const payload=await response.json().catch(function(){return {};});
+      if(!response.ok || !payload.ok) throw new Error(payload.message || ('HTTP ' + response.status));
+      mpState_uni.rows=Array.isArray(payload.rows)?payload.rows:[];
+      mpState_uni.catalogs=payload.catalogs||mpState_uni.catalogs;
+      mpState_uni.kpis=payload.kpis||{};
+      mpState_uni.generatedAt=payload.generated_at||new Date().toISOString();
+      mpState_uni.loaded=true;
+      renderMpMain_uni();
+    }catch(error){
+      const root=document.querySelector('[data-mp-uni-root]');
+      if(root){ root.innerHTML='<section class="gc-uni-error"><span>⚠️</span><div><h2>No fue posible cargar Mantenimiento Preventivo</h2><p>' + escapeHtml_uni(error.message||'Error de conexión') + '</p><button type="button" class="mp-uni-btn" data-mp-action="refresh">Reintentar</button></div></section>'; bindMpMain_uni(root); }
+    }finally{ mpState_uni.loading=false; }
+  }
+
   function init_uni(route){
     syncSidebarLabel_uni();
     if(route === ROUTE_GESTION_CREDITO_UNI){
       loadGestionCredito_uni(false);
+      return true;
+    }
+    if(route === ROUTE_MP_UNI){
+      loadMpMain_uni(false);
       return true;
     }
     return shell_uni(route);
@@ -637,6 +1062,7 @@
 
   window.ManttoCobranza_uni = {
     init:init_uni,
-    reloadGestionCredito:function(){ return loadGestionCredito_uni(true); }
+    reloadGestionCredito:function(){ return loadGestionCredito_uni(true); },
+    reloadMantenimientoPreventivo:function(){ return loadMpMain_uni(true); }
   };
 })();
