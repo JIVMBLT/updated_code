@@ -18,7 +18,10 @@
     generatedAt:null,
     filters:{search:'',estado:'',z_oper:'',z_adm:'',riesgo:''},
     mobileRisk:'alto',
-    detailId:null
+    detailId:null,
+    detailCache:{},
+    detailLoading:false,
+    detailError:null
   };
 
   function escapeHtml_uni(value){
@@ -51,6 +54,16 @@
 
   function integer_uni(value){
     return new Intl.NumberFormat('es-MX',{maximumFractionDigits:0}).format(number_uni(value));
+  }
+
+  function date_uni(value){
+    if(!value) return '—';
+    const raw=String(value).trim();
+    const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(iso) return iso[3]+'/'+iso[2]+'/'+iso[1];
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime())) return raw;
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
   }
 
   function normalize_uni(value){
@@ -309,32 +322,118 @@
     return state_uni.rows.find(function(row){ return Number(row.id_gc) === Number(state_uni.detailId); }) || null;
   }
 
-  function relationTableRow_uni(label,periodo,cantidad,monto,credito,relationType,enabled,reason){
-    const action = relationButton_uni(relationType,'Ir','↗',enabled,reason);
-    return '<tr>' +
-      '<td><strong>' + escapeHtml_uni(label) + '</strong></td>' +
-      '<td>' + escapeHtml_uni(periodo || '—') + '</td>' +
-      '<td>' + escapeHtml_uni(integer_uni(cantidad)) + '</td>' +
-      '<td>' + escapeHtml_uni(money_uni(monto)) + '</td>' +
-      '<td>' + escapeHtml_uni(credito === null || credito === undefined || credito === '' ? '—' : money_uni(credito)) + '</td>' +
-      '<td class="gc-uni-relation-table-action">' + action + '</td>' +
-    '</tr>';
+  function tableCell_uni(value,formatter){
+    const empty=value===null||value===undefined||value==='';
+    return escapeHtml_uni(empty?'—':(formatter?formatter(value):String(value)));
   }
 
-  function renderRelationsTable_uni(row,mpRouteReady,vaRouteReady,mpReason,vaReason){
-    return '<section class="gc-uni-relations-table-panel">' +
-      '<header><div><h2>Relaciones del Proyecto</h2><p>Resumen de Mantenimiento Preventivo y Venta Adicional asociado al proyecto seleccionado.</p></div></header>' +
-      '<div class="gc-uni-table-wrap"><table class="gc-uni-relations-table">' +
-        '<thead><tr><th>Relación</th><th>Periodo</th><th>Cantidad / Facturas</th><th>Monto</th><th>Crédito</th><th>Acción</th></tr></thead>' +
-        '<tbody>' +
-          relationTableRow_uni('Mantenimiento Preventivo','2025',row.mp_2025,row.monto_mp_2025,null,'mp',mpRouteReady,mpReason) +
-          relationTableRow_uni('Mantenimiento Preventivo','2026',row.mp_2026,row.monto_mp_2026,null,'mp',mpRouteReady,mpReason) +
-          relationTableRow_uni('Mantenimiento Preventivo','Pendiente',row.facturas_mp,row.montp_mp,null,'mp',mpRouteReady,mpReason) +
-          relationTableRow_uni('Venta Adicional','Actual',row.facturas_va,row.monto_va,row.credito_para_va,'venta-adicional',vaRouteReady,vaReason) +
-        '</tbody>' +
-      '</table></div>' +
-      '<div class="gc-uni-relations-table-note"><span>Crédito disponible para Venta Adicional</span><b>' + escapeHtml_uni(money_uni(row.credito_disponible_venta)) + '</b></div>' +
+  function disabledOpenButton_uni(label){
+    return '<button type="button" class="gc-uni-relation-btn gc-uni-record-open" disabled title="La navegación al detalle se habilitará en una fase posterior.">↗ '+escapeHtml_uni(label||'Abrir')+'</button>';
+  }
+
+  function renderMpRows_uni(rows){
+    if(!rows.length) return '<tr><td colspan="17" class="gc-uni-record-empty">No hay registros de Mantenimiento Preventivo relacionados con este proyecto.</td></tr>';
+    return rows.map(function(item){
+      return '<tr>'+
+        '<td>'+tableCell_uni(item.id_dmp)+'</td>'+
+        '<td><strong>'+tableCell_uni(item.proyecto)+'</strong></td>'+
+        '<td>'+tableCell_uni(item.idns)+'</td>'+
+        '<td>'+tableCell_uni(item.cliente)+'</td>'+
+        '<td>'+tableCell_uni(item.periodicidad)+'</td>'+
+        '<td>'+tableCell_uni(item.momento_facturacion)+'</td>'+
+        '<td>'+tableCell_uni(item.estado)+'</td>'+
+        '<td>'+tableCell_uni(item.z_oper)+'</td>'+
+        '<td>'+tableCell_uni(item.zona_adm)+'</td>'+
+        '<td>'+tableCell_uni(item.forma_pago)+'</td>'+
+        '<td>'+tableCell_uni(item.iguala,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.condiciones_pago)+'</td>'+
+        '<td>'+tableCell_uni(item.monto_anual,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.pendiente_corriente,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.pendiente_vencido,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.facturas_pendientes,integer_uni)+'</td>'+
+        '<td class="gc-uni-relation-table-action">'+disabledOpenButton_uni('Abrir')+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  function renderVaRows_uni(rows){
+    if(!rows.length) return '<tr><td colspan="19" class="gc-uni-record-empty">No hay registros de Venta Adicional relacionados con este proyecto.</td></tr>';
+    return rows.map(function(item){
+      return '<tr>'+
+        '<td>'+tableCell_uni(item.id_pc)+'</td>'+
+        '<td><strong>'+tableCell_uni(item.proyecto)+'</strong></td>'+
+        '<td>'+tableCell_uni(item.cliente)+'</td>'+
+        '<td>'+tableCell_uni(item.ov)+'</td>'+
+        '<td>'+tableCell_uni(item.fecha_ov,date_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.concepto)+'</td>'+
+        '<td>'+tableCell_uni(item.precio_venta,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.venta_total,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.facturas_pendientes_pago,integer_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.adeudo,money_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.tipo_pago)+'</td>'+
+        '<td>'+tableCell_uni(item.no_factura)+'</td>'+
+        '<td>'+tableCell_uni(item.fecha_factura,date_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.fecha_vencimiento,date_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.dias_vencimiento,integer_uni)+'</td>'+
+        '<td>'+tableCell_uni(item.estatus)+'</td>'+
+        '<td>'+tableCell_uni(item.estatus_administrativo)+'</td>'+
+        '<td>'+tableCell_uni(item.estatus_operativo)+'</td>'+
+        '<td class="gc-uni-relation-table-action">'+disabledOpenButton_uni('Abrir')+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  function renderRelatedRecords_uni(){
+    if(state_uni.detailLoading){
+      return '<section class="gc-uni-related-loading"><span class="gc-uni-loader"></span><div><h2>Cargando relaciones</h2><p>Consultando Mantenimiento Preventivo y Venta Adicional en una sola solicitud.</p></div></section>';
+    }
+    if(state_uni.detailError){
+      return '<section class="gc-uni-related-error"><span>⚠️</span><div><h2>No fue posible cargar las relaciones</h2><p>'+escapeHtml_uni(state_uni.detailError)+'</p><button type="button" class="gc-uni-btn" data-gc-detail-action="relations-refresh">Reintentar</button></div></section>';
+    }
+    const detail=state_uni.detailCache[String(state_uni.detailId)]||null;
+    if(!detail){
+      return '<section class="gc-uni-related-loading"><div><h2>Relaciones del proyecto</h2><p>Preparando registros relacionados.</p></div></section>';
+    }
+    const mp=Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
+    const va=Array.isArray(detail.venta_adicional)?detail.venta_adicional:[];
+    return '<section class="gc-uni-record-section">'+
+      '<header class="gc-uni-record-header"><div><p class="gc-uni-record-kicker">🧾 Relación operativa</p><h2>Mantenimiento Preventivo</h2><p>Todos los registros de <code>detalle_mp_2026</code> relacionados con el proyecto actual.</p></div><span>'+escapeHtml_uni(integer_uni(mp.length))+' registro(s)</span></header>'+
+      '<div class="gc-uni-table-wrap gc-uni-record-table-wrap"><table class="gc-uni-record-table gc-uni-record-table-mp"><thead><tr>'+
+        '<th>ID</th><th>Proyecto</th><th>IDNS</th><th>Cliente</th><th>Periodicidad</th><th>Momento facturación</th><th>Estado</th><th>Z. Operativa</th><th>Z. Administrativa</th><th>Forma pago</th><th>Iguala</th><th>Condiciones pago</th><th>Monto anual</th><th>Pendiente corriente</th><th>Pendiente vencido</th><th>Facturas pendientes</th><th>Acción</th>'+
+      '</tr></thead><tbody>'+renderMpRows_uni(mp)+'</tbody></table></div>'+
+    '</section>'+
+    '<section class="gc-uni-record-section">'+
+      '<header class="gc-uni-record-header"><div><p class="gc-uni-record-kicker">➕ Relación comercial</p><h2>Venta Adicional</h2><p>Todos los registros de <code>pc</code> relacionados con el proyecto actual.</p></div><span>'+escapeHtml_uni(integer_uni(va.length))+' registro(s)</span></header>'+
+      '<div class="gc-uni-table-wrap gc-uni-record-table-wrap"><table class="gc-uni-record-table gc-uni-record-table-va"><thead><tr>'+
+        '<th>ID</th><th>Proyecto</th><th>Cliente</th><th>OV</th><th>Fecha OV</th><th>Concepto</th><th>Precio venta</th><th>Venta total</th><th>Facturas pendientes</th><th>Adeudo</th><th>Tipo pago</th><th>No. Factura</th><th>Fecha factura</th><th>Vencimiento</th><th>Días vencimiento</th><th>Estatus</th><th>Estatus administrativo</th><th>Estatus operativo</th><th>Acción</th>'+
+      '</tr></thead><tbody>'+renderVaRows_uni(va)+'</tbody></table></div>'+
     '</section>';
+  }
+
+  async function loadDetailRelations_uni(id,force){
+    const key=String(id||'');
+    if(!key||state_uni.detailLoading) return;
+    if(state_uni.detailCache[key]&&!force){ renderDetailContent_uni(); return; }
+    state_uni.detailLoading=true;
+    state_uni.detailError=null;
+    renderDetailContent_uni();
+    try{
+      const response=await fetch(apiBase_uni()+'/api/cobranza-uni/gestion-credito/'+encodeURIComponent(key)+'/detalle',{
+        method:'GET',headers:authHeaders_uni(),cache:'no-store'
+      });
+      const payload=await response.json().catch(function(){return {};});
+      if(!response.ok||!payload.ok) throw new Error(payload.message||('HTTP '+response.status));
+      state_uni.detailCache[key]=payload;
+      if(payload.gestion_credito){
+        const index=state_uni.rows.findIndex(function(item){return Number(item.id_gc)===Number(id);});
+        if(index>=0) state_uni.rows[index]=Object.assign({},state_uni.rows[index],payload.gestion_credito);
+      }
+    }catch(error){
+      state_uni.detailError=error.message||'Error de conexión';
+    }finally{
+      state_uni.detailLoading=false;
+      renderDetailContent_uni();
+    }
   }
 
   function renderDetailContent_uni(){
@@ -347,11 +446,9 @@
       return;
     }
     const risk = riskKey_uni(row.nivel_riesgo_credito);
-    const mpRouteReady = routeReady_uni(ROUTE_MP_UNI);
-    const vaRouteReady = routeReady_uni(ROUTE_VENTA_ADICIONAL_UNI);
     const projectReady = Boolean(row.proyecto && window.ManttoRouter && typeof window.ManttoRouter.go === 'function');
-    const mpReason = mpRouteReady ? '' : 'MP PRO se habilitará automáticamente cuando su vista esté registrada.';
-    const vaReason = vaRouteReady ? '' : 'Venta Adicional se habilitará automáticamente cuando su vista esté registrada.';
+    const mpReason = 'Navegación a Mantenimiento Preventivo pendiente de habilitar.';
+    const vaReason = 'Navegación a Venta Adicional pendiente de habilitar.';
 
     root.innerHTML = '<section class="gc-uni-titlebar gc-uni-detail-titlebar">' +
       '<div><p class="gc-uni-eyebrow">💰 Cobranza United · Gestión de Crédito</p><div class="gc-uni-detail-heading"><button type="button" class="gc-uni-btn gc-uni-back-main" data-gc-detail-action="back">← Volver</button><div><h1>' + escapeHtml_uni(projectLabel_uni(row)) + '</h1><p>' + escapeHtml_uni(row.cliente || 'Cliente no registrado') + (row.idns ? ' · IDNS ' + escapeHtml_uni(row.idns) : '') + '</p></div></div></div>' +
@@ -361,8 +458,8 @@
       '<div><span>Relaciones</span><p>Navegación contextual del mismo proyecto.</p></div>' +
       '<div class="gc-uni-relation-actions">' +
         relationButton_uni('proyecto','Ir a Proyecto','🏢',projectReady,projectReady?'':'Proyecto no disponible para navegación.') +
-        relationButton_uni('mp','Ir a MP','🧾',mpRouteReady,mpReason) +
-        relationButton_uni('venta-adicional','Ir a Venta Adicional','➕',vaRouteReady,vaReason) +
+        relationButton_uni('mp','Ir a MP','🧾',false,mpReason) +
+        relationButton_uni('venta-adicional','Ir a Venta Adicional','➕',false,vaReason) +
       '</div>' +
     '</section>' +
     '<section class="gc-uni-kpis gc-uni-detail-kpis" aria-label="Indicadores del proyecto">' +
@@ -384,8 +481,8 @@
         detailItem_uni('Crédito para VA',row.credito_para_va,money_uni) + detailItem_uni('Crédito Disponible Venta',row.credito_disponible_venta,money_uni) + detailItem_uni('Adeudo',row.adeudo,money_uni) + detailItem_uni('Facturas Adeudadas',row.facts_adeudadas,integer_uni) +
       '</div></article>' +
     '</section>' +
-    renderRelationsTable_uni(row,mpRouteReady,vaRouteReady,mpReason,vaReason) +
-    '<footer class="gc-uni-footer"><span>Detalle cargado desde el snapshot de Gestión de Crédito · sin consulta adicional</span><span>Última consulta: ' + escapeHtml_uni(formatDateTime_uni(state_uni.generatedAt)) + '</span></footer>';
+    renderRelatedRecords_uni() +
+    '<footer class="gc-uni-footer"><span>Detalle base desde snapshot · relaciones cargadas en una sola consulta selectiva</span><span>Última consulta: ' + escapeHtml_uni(formatDateTime_uni(state_uni.generatedAt)) + '</span></footer>';
     bindGestionCredito_uni(root);
   }
 
@@ -393,7 +490,9 @@
     const exists = state_uni.rows.some(function(row){ return Number(row.id_gc) === Number(id); });
     if(!exists) return;
     state_uni.detailId = Number(id);
+    state_uni.detailError = null;
     renderDetailContent_uni();
+    loadDetailRelations_uni(state_uni.detailId,false);
   }
 
   function navigateRelation_uni(type){
@@ -445,8 +544,8 @@
     root.querySelectorAll('[data-gc-detail-action]').forEach(function(button){
       button.addEventListener('click',function(){
         const action = button.getAttribute('data-gc-detail-action');
-        if(action === 'back'){ state_uni.detailId = null; renderContent_uni(); }
-        if(action === 'refresh') loadGestionCredito_uni(true);
+        if(action === 'back'){ state_uni.detailId = null; state_uni.detailError=null; renderContent_uni(); }
+        if(action === 'refresh' || action === 'relations-refresh') loadDetailRelations_uni(state_uni.detailId,true);
       });
     });
     root.querySelectorAll('[data-gc-relation]').forEach(function(button){

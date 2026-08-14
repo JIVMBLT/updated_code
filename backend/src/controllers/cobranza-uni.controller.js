@@ -243,6 +243,93 @@ async function getGestionCredito(req, res) {
   }
 }
 
+
+async function getGestionCreditoDetalle(req, res) {
+  const id = normalizeId(req.params.id);
+  if (!id) {
+    return res.status(400).json({ ok: false, message: 'id_gc inválido.' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    const [gestionRows] = await conn.query(
+      `SELECT ${KEY_FIELD}, ${DB_FIELDS.join(', ')}
+       FROM ${TABLE_NAME}
+       WHERE ${KEY_FIELD} = ?
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!gestionRows.length) {
+      return res.status(404).json({ ok: false, message: 'No se encontró el registro de Gestión de Crédito.' });
+    }
+
+    const gestion = gestionRows[0];
+    const idns = String(gestion.idns || '').trim();
+    const proyecto = String(gestion.proyecto || '').trim();
+
+    let mantenimientoPreventivo = [];
+    if (idns || proyecto) {
+      const conditions = [];
+      const params = [];
+      if (idns) {
+        conditions.push(`TRIM(COALESCE(idns, '')) = ?`);
+        params.push(idns);
+      }
+      if (proyecto) {
+        conditions.push(`LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)`);
+        params.push(proyecto);
+      }
+      const [mpRows] = await conn.query(
+        `SELECT
+           id_dmp, zona_adm, proyecto, idns, cliente, periodicidad, momento_facturacion,
+           estado, z_oper, forma_pago, iguala, condiciones_pago, monto_anual,
+           pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
+         FROM detalle_mp_2026
+         WHERE ${conditions.join(' OR ')}
+         ORDER BY id_dmp ASC`,
+        params
+      );
+      mantenimientoPreventivo = mpRows;
+    }
+
+    let ventaAdicional = [];
+    if (proyecto) {
+      const [pcRows] = await conn.query(
+        `SELECT
+           id_pc, zona_adm, proyecto, cliente, ov, fecha_ov, mes_ov, concepto,
+           precio_venta, pagado_iva, no_pagado_iva, venta_total, facturas_pendientes_pago,
+           adeudo, tipo_pago, no_factura, fecha_factura, mes_factura, terminos,
+           fecha_vencimiento, dias_vencimiento, estatus, estatus_administrativo,
+           estatus_operativo, fecha_pago, refacturacion_sustitucion, zona_operativa,
+           estado, comentarios_cobranza
+         FROM pc
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
+         ORDER BY id_pc ASC`,
+        [proyecto]
+      );
+      ventaAdicional = pcRows;
+    }
+
+    return res.json({
+      ok: true,
+      source: 'aiven',
+      generated_at: new Date().toISOString(),
+      gestion_credito: gestion,
+      mantenimiento_preventivo: mantenimientoPreventivo,
+      venta_adicional: ventaAdicional
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'No fue posible consultar las relaciones de Gestión de Crédito desde Aiven.',
+      error: error.message
+    });
+  } finally {
+    conn.release();
+  }
+}
+
 async function syncCobranzaUni(req, res) {
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
 
@@ -369,5 +456,6 @@ async function syncCobranzaUni(req, res) {
 
 module.exports = {
   getGestionCredito,
+  getGestionCreditoDetalle,
   syncCobranzaUni
 };

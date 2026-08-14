@@ -10,6 +10,7 @@ const requireCobranzaUniIntegration = requireIntegrationAuthFor(
 );
 
 router.get('/gestion-credito', requireAuth, cobranzaUniController.getGestionCredito);
+router.get('/gestion-credito/:id/detalle', requireAuth, cobranzaUniController.getGestionCreditoDetalle);
 router.post('/sync', requireCobranzaUniIntegration, cobranzaUniController.syncCobranzaUni);
 
 module.exports = router;

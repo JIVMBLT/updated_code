@@ -62,3 +62,22 @@
 
 .gc-uni-relations-table-panel{background:#fff;border:1px solid #dce5f1;border-radius:14px;padding:15px;min-width:0}.gc-uni-relations-table-panel header h2{margin:0;color:#173567;font-size:16px}.gc-uni-relations-table-panel header p{margin:3px 0 0;color:#7a8798;font-size:10px}.gc-uni-table-wrap{margin-top:12px;overflow-x:auto}.gc-uni-relations-table{width:100%;border-collapse:collapse;min-width:760px}.gc-uni-relations-table th,.gc-uni-relations-table td{padding:9px 10px;border-bottom:1px solid #e5ebf3;text-align:left;vertical-align:middle;font-size:10px;color:#3f4e63}.gc-uni-relations-table th{background:#f7f9fc;color:#65758d;font-size:8.5px;text-transform:uppercase;letter-spacing:.035em;font-weight:900}.gc-uni-relations-table td strong{color:#173567;font-size:10.5px}.gc-uni-relation-table-action{text-align:right!important;width:76px}.gc-uni-relation-table-action .gc-uni-relation-btn{min-height:31px;padding:5px 9px;font-size:9px}.gc-uni-relations-table-note{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:10px;color:#68778d;font-size:9px}.gc-uni-relations-table-note b{color:#173567;font-size:12px}
 @media(max-width:620px){.gc-uni-relations-table-panel{padding:12px}.gc-uni-relations-table-note{align-items:flex-start;justify-content:space-between}}
+
+/* V006 · tablas de registros relacionados del Detalle Gestión de Crédito */
+.gc-uni-record-section{background:#fff;border:1px solid #dce5f1;border-radius:14px;padding:15px;min-width:0;box-shadow:0 5px 18px rgba(13,46,110,.025)}
+.gc-uni-record-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.gc-uni-record-header h2{margin:0;color:#173567;font-size:16px}.gc-uni-record-header p{margin:3px 0 0;color:#7a8798;font-size:10px}.gc-uni-record-header code{font-size:10px;color:#465875;background:#edf2f8;padding:1px 4px;border-radius:5px}
+.gc-uni-record-header>span{flex:0 0 auto;padding:5px 9px;border:1px solid #d9e3f0;border-radius:999px;background:#f7f9fc;color:#52647d;font-size:9px;font-weight:850}
+.gc-uni-record-kicker{color:#536d99!important;font-size:8.5px!important;text-transform:uppercase;font-weight:900;letter-spacing:.04em}
+.gc-uni-record-table-wrap{margin-top:12px;border:1px solid #e4eaf2;border-radius:10px;max-width:100%;overflow:auto}
+.gc-uni-record-table{width:100%;border-collapse:separate;border-spacing:0;white-space:nowrap}.gc-uni-record-table-mp{min-width:1850px}.gc-uni-record-table-va{min-width:2200px}
+.gc-uni-record-table th,.gc-uni-record-table td{padding:8px 9px;border-bottom:1px solid #e7ecf3;border-right:1px solid #eef2f7;text-align:left;vertical-align:middle;font-size:9.5px;color:#3f4e63;background:#fff}
+.gc-uni-record-table th{position:sticky;top:0;z-index:2;background:#f7f9fc;color:#65758d;font-size:8px;text-transform:uppercase;letter-spacing:.03em;font-weight:900}
+.gc-uni-record-table th:first-child,.gc-uni-record-table td:first-child{position:sticky;left:0;z-index:1;background:#fbfcfe}.gc-uni-record-table th:first-child{z-index:3;background:#f3f6fa}
+.gc-uni-record-table tbody tr:hover td{background:#f9fbfe}.gc-uni-record-table tbody tr:hover td:first-child{background:#f5f8fc}.gc-uni-record-table td strong{color:#173567}
+.gc-uni-record-table .gc-uni-relation-table-action{position:static!important;min-width:78px;background:#fff}.gc-uni-record-table tbody tr:hover .gc-uni-relation-table-action{background:#f9fbfe}
+.gc-uni-record-open{min-height:29px;padding:4px 8px;font-size:8.5px}
+.gc-uni-record-empty{text-align:center!important;padding:28px 14px!important;color:#7b8899!important;background:#fbfcfe!important;white-space:normal!important}
+.gc-uni-related-loading,.gc-uni-related-error{display:flex;align-items:center;gap:12px;padding:18px;border:1px solid #dce5f1;border-radius:14px;background:#fff;color:#63738a}.gc-uni-related-loading h2,.gc-uni-related-error h2{margin:0;color:#173567;font-size:14px}.gc-uni-related-loading p,.gc-uni-related-error p{margin:3px 0 0;font-size:10px}.gc-uni-related-error{border-color:#f1d7d7;background:#fffafa}.gc-uni-related-error>span{font-size:20px}.gc-uni-related-error .gc-uni-btn{margin-top:8px}
+.gc-uni-loader{width:18px;height:18px;border:2px solid #d8e2ef;border-top-color:#2f65b8;border-radius:50%;animation:gcUniSpin .8s linear infinite}@keyframes gcUniSpin{to{transform:rotate(360deg)}}
+@media(max-width:620px){.gc-uni-record-section{padding:12px}.gc-uni-record-header{flex-direction:column;gap:8px}.gc-uni-record-table th,.gc-uni-record-table td{padding:7px 8px;font-size:9px}}

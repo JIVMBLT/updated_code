@@ -1,27 +1,46 @@
-# FIX COBRANZA UNI - DETALLE GESTION DE CREDITO V005
+# FIX COBRANZA UNI · GESTIÓN DE CRÉDITO · RELACIONES REGISTRO A REGISTRO V006
 
-## Alcance
-Se agrega al detalle de Gestion de Credito una tabla de relaciones del proyecto.
+Fecha: 14/08/2026
+Base: V005
 
-### Nombres visibles solicitados
-- MP: **Mantenimiento Preventivo**
-- PC: **Venta Adicional**
+## Objetivo
+Corregir la interpretación de V005. El Detalle de Gestión de Crédito ya no muestra una tabla-resumen de relaciones. Ahora muestra dos tablas independientes, estilo tabla de Tickets dentro de Proyecto United, con todos los registros relacionados al proyecto seleccionado:
 
-## Tabla agregada
-La tabla reutiliza exclusivamente los datos ya presentes en el snapshot de `gestion_credito`; no crea requests adicionales.
+1. **Mantenimiento Preventivo** → `detalle_mp_2026`
+2. **Venta Adicional** → `pc`
 
-Filas mostradas:
-- Mantenimiento Preventivo 2025: cantidad `mp_2025` y monto `monto_mp_2025`.
-- Mantenimiento Preventivo 2026: cantidad `mp_2026` y monto `monto_mp_2026`.
-- Mantenimiento Preventivo Pendiente: `facturas_mp` y `montp_mp`.
-- Venta Adicional: `facturas_va`, `monto_va` y `credito_para_va`.
-- Se muestra adicionalmente `credito_disponible_venta`.
+## Relación aplicada
+- Mantenimiento Preventivo: coincidencia por `idns` y, como relación alternativa del mismo proyecto, por `proyecto` normalizado.
+- Venta Adicional: coincidencia por `proyecto` normalizado, porque `pc` no contiene `idns` en su estructura vigente.
 
-Los botones de accion reutilizan la navegacion ya preparada en V004. Si la vista relacionada aun no esta registrada, permanecen deshabilitados como en V004.
+## Optimización
+Se agrega una sola consulta HTTP de detalle:
+
+`GET /api/cobranza-uni/gestion-credito/:id/detalle`
+
+La backend resuelve en la misma solicitud:
+- registro vigente de `gestion_credito`;
+- todos los registros relacionados de `detalle_mp_2026`;
+- todos los registros relacionados de `pc`.
+
+No se realizan fetch por fila ni un fetch independiente por cada tabla. La actualización desde el botón del detalle refresca únicamente este recurso relacionado, no toda la Main.
+
+## Navegación
+- **Ir a Proyecto** permanece funcional.
+- **Ir a MP** permanece visible pero deshabilitado.
+- **Ir a Venta Adicional** permanece visible pero deshabilitado.
+- Cada registro presenta la acción `Abrir` deshabilitada, preparada visualmente para una fase posterior.
 
 ## Archivos modificados
+- `backend/src/controllers/cobranza-uni.controller.js`
+- `backend/src/routes/cobranza-uni.routes.js`
 - `modules/cobranza-uni/cobranza-uni.js`
 - `modules/cobranza-uni/cobranza-uni.css`
 
-## Backend / SQL
-No requiere cambios de backend ni SQL.
+## Base de datos
+No crea tablas, no altera columnas y no modifica datos. Solo realiza SELECT sobre las tablas existentes.
+
+## Validación ejecutada
+- `node --check backend/src/controllers/cobranza-uni.controller.js`
+- `node --check backend/src/routes/cobranza-uni.routes.js`
+- `node --check modules/cobranza-uni/cobranza-uni.js`
