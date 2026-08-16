@@ -9,10 +9,11 @@
  */
 const legacyController = require('../../controllers/data.controller');
 const proyectosController = require('../proyectos/proyectos.controller');
+const portafolioComercialUni = require('./portafolio-comercial_uni');
 
 const handlers = Object.freeze({
   getPortafolioFiltros: legacyController.getPortafolioFiltros,
-  getPortafolioDashboard: legacyController.getPortafolioDashboard,
+  getPortafolioDashboard: portafolioComercialUni.getPortafolioDashboard_uni,
   getPortafolioMovimientos: legacyController.getPortafolioMovimientos,
   getPortafolioSemanasDisponibles: legacyController.getPortafolioSemanasDisponibles,
   getPortafolioMovimientosSemanales: legacyController.getPortafolioMovimientosSemanales,

@@ -3,7 +3,7 @@
 
   const ROUTE_GESTION_CREDITO_UNI = 'cobranza-uni-estados-cuenta';
   const ROUTE_MP_UNI = 'cobranza-uni-mp-pro';
-  const ROUTE_VENTA_ADICIONAL_UNI = 'cobranza-uni-venta-adicional';
+  const ROUTE_VENTA_ADICIONAL_UNI = 'cobranza-uni-aditivas';
   const MODULES_UNI = Object.freeze({
     'cobranza-uni-dashboard':{title:'Dashboard Cobranza',icon:'📊'},
     'cobranza-uni-estados-cuenta':{title:'Gestión de Crédito',icon:'🛡️'},
@@ -27,6 +27,13 @@
       mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},
       va:{search:'',estatus:'',page:1,pageSize:30}
     }
+  };
+
+  const vaState_uni = {
+    loaded:false, loading:false, rows:[], catalogs:{estatus:[],estatus_administrativo:[],estatus_operativo:[],zona_adm:[],zona_operativa:[],estado:[],tipo_pago:[]},
+    kpis:{}, generatedAt:null,
+    filters:{search:'',estatus:'',estatus_administrativo:'',zona_adm:'',zona_operativa:'',tipo_pago:''},
+    page:1, pageSize:30, detailId:null, detailCache:{}, detailLoading:false, detailError:null
   };
 
   const mpState_uni = {
@@ -516,7 +523,10 @@
     const firstMp = relatedMp.find(function(item){ return Number(item&&item.id_dmp)>0; }) || null;
     const mpReady = Boolean(firstMp && routeReady_uni(ROUTE_MP_UNI));
     const mpReason = relatedMp.length ? 'No fue posible resolver el detalle de Mantenimiento Preventivo.' : 'Este proyecto no tiene Mantenimiento Preventivo relacionado.';
-    const vaReason = 'Navegación a Venta Adicional pendiente de habilitar.';
+    const relatedVa = detailCurrent && Array.isArray(detailCurrent.venta_adicional) ? detailCurrent.venta_adicional : [];
+    const firstVa = relatedVa.find(function(item){ return Number(item&&item.id_pc)>0; }) || null;
+    const vaReady = Boolean(firstVa && routeReady_uni(ROUTE_VENTA_ADICIONAL_UNI));
+    const vaReason = relatedVa.length ? 'No fue posible resolver el detalle de Venta Adicional.' : 'Este proyecto no tiene Venta Adicional relacionada.';
 
     root.innerHTML = '<section class="gc-uni-titlebar gc-uni-detail-titlebar">' +
       '<div><p class="gc-uni-eyebrow">💰 Cobranza United · Gestión de Crédito</p><div class="gc-uni-detail-heading"><button type="button" class="gc-uni-btn gc-uni-back-main" data-gc-detail-action="back">← Volver</button><div><h1>' + escapeHtml_uni(projectLabel_uni(row)) + '</h1><p>' + escapeHtml_uni(row.cliente || 'Cliente no registrado') + (row.idns ? ' · IDNS ' + escapeHtml_uni(row.idns) : '') + '</p></div></div></div>' +
@@ -527,7 +537,7 @@
       '<div class="gc-uni-relation-actions">' +
         relationButton_uni('proyecto','Ir a Proyecto','🏢',projectReady,projectReady?'':'Proyecto no disponible para navegación.') +
         relationButton_uni('mp','Ir a MP','🧾',mpReady,mpReady?'':mpReason) +
-        relationButton_uni('venta-adicional','Ir a Venta Adicional','➕',false,vaReason) +
+        relationButton_uni('venta-adicional','Ir a Venta Adicional','➕',vaReady,vaReady?'':vaReason) +
       '</div>' +
     '</section>' +
     '<section class="gc-uni-kpis gc-uni-detail-kpis" aria-label="Indicadores del proyecto">' +
@@ -552,6 +562,12 @@
     renderRelatedRecords_uni() +
     '<footer class="gc-uni-footer"><span>Detalle base desde snapshot · relaciones cargadas en una sola consulta selectiva</span><span>Última consulta: ' + escapeHtml_uni(formatDateTime_uni(state_uni.generatedAt)) + '</span></footer>';
     bindGestionCredito_uni(root);
+  }
+
+  function navigateCobranzaDetail_uni(route, payload){
+    if(!window.ManttoRouter || typeof window.ManttoRouter.go !== 'function') return false;
+    window.ManttoRouter.go(route, payload || null);
+    return true;
   }
 
   function openDetail_uni(id){
@@ -585,7 +601,12 @@
       return;
     }
     if(type === 'venta-adicional' && routeReady_uni(ROUTE_VENTA_ADICIONAL_UNI)){
-      window.ManttoRouter.go(ROUTE_VENTA_ADICIONAL_UNI,{id:row.proyecto||row.idns,proyecto:row.proyecto||null,idns:row.idns||null,source:'gestion_credito'});
+      const detail=state_uni.detailCache[String(state_uni.detailId)]||null;
+      const list=detail&&Array.isArray(detail.venta_adicional)?detail.venta_adicional:[];
+      const target=list.find(function(item){ return Number(item&&item.id_pc)>0; });
+      if(!target) return;
+      if(!vaState_uni.rows.some(function(item){return Number(item.id_pc)===Number(target.id_pc);})) vaState_uni.rows.push(Object.assign({},target));
+      window.ManttoRouter.go(ROUTE_VENTA_ADICIONAL_UNI,{id_pc:Number(target.id_pc),id:Number(target.id_pc),proyecto:row.proyecto||null,idns:row.idns||null,source:'gestion_credito'});
     }
   }
 
@@ -615,7 +636,7 @@
 
   function bindGestionCredito_uni(root){
     root.querySelectorAll('[data-gc-project-id]').forEach(function(card){
-      const activate = function(){ openDetail_uni(card.getAttribute('data-gc-project-id')); };
+      const activate = function(){ const id=Number(card.getAttribute('data-gc-project-id')); if(id>0) navigateCobranzaDetail_uni(ROUTE_GESTION_CREDITO_UNI,{id_gc:id,id:id,source:'gestion_credito_main'}); };
       card.addEventListener('click',activate);
       card.addEventListener('keydown',function(event){ if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); activate(); } });
     });
@@ -885,7 +906,7 @@
       button.addEventListener('click',function(){ mpState_uni.page=Number(button.getAttribute('data-mp-page'))||1; renderMpMain_uni(); });
     });
     root.querySelectorAll('[data-mp-detail-id]').forEach(function(row){
-      const activate=function(){ openMpDetail_uni(row.getAttribute('data-mp-detail-id')); };
+      const activate=function(){ const id=Number(row.getAttribute('data-mp-detail-id')); if(id>0) navigateCobranzaDetail_uni(ROUTE_MP_UNI,{id_dmp:id,id:id,source:'mp_main'}); };
       row.addEventListener('click',activate);
       row.addEventListener('keydown',function(event){ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); activate(); } });
     });
@@ -916,7 +937,7 @@
   function renderMpDetailTables_uni(detail){
     const mp=detail&&Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
     const va=detail&&Array.isArray(detail.venta_adicional)?detail.venta_adicional:[];
-    return renderRelatedTable_uni('mp','Mantenimientos del Proyecto','🛠️ Mantenimiento Preventivo','Registros de <code>detalle_mp_2026</code> vinculados mediante <code>id_proyecto_cobranza</code>.',mp,mpState_uni.detailTables.mp,'mp')+
+    return renderRelatedTable_uni('mp','Mantenimientos del Proyecto','🛠️ Mantenimiento Preventivo','Registros de <code>detalle_mp_2026</code> relacionados por el mismo proyecto.',mp,mpState_uni.detailTables.mp,'mp')+
       renderRelatedTable_uni('va','Venta Adicional','➕ Relación comercial','Registros de <code>pc</code> vinculados al mismo proyecto.',va,mpState_uni.detailTables.va,'mp');
   }
 
@@ -988,13 +1009,22 @@
   }
 
   function openMpDetail_uni(id){
-    const exists=mpState_uni.rows.some(function(row){ return Number(row.id_dmp)===Number(id); });
-    if(!exists) return;
-    mpState_uni.detailId=Number(id);
+    const detailId=Number(id);
+    if(!detailId) return;
+    mpState_uni.detailId=detailId;
     mpState_uni.detailError=null;
     mpState_uni.detailTables={mp:{search:'',estado:'',periodicidad:'',page:1,pageSize:30},va:{search:'',estatus:'',page:1,pageSize:30}};
-    renderMpDetail_uni();
-    loadMpDetail_uni(mpState_uni.detailId,false);
+
+    const exists=mpState_uni.rows.some(function(row){ return Number(row.id_dmp)===detailId; });
+    if(exists){
+      renderMpDetail_uni();
+    }else{
+      const view=document.getElementById('view-' + ROUTE_MP_UNI);
+      if(view){
+        view.innerHTML='<div class="mp-uni-page" data-mp-uni-root><section class="mp-uni-titlebar"><div><p class="mp-uni-eyebrow">🛠️ Cobranza United · Detalle</p><h1>Mantenimiento Preventivo</h1><p>Preparando detalle del mantenimiento preventivo.</p></div></section><div class="mp-uni-loading"><span class="gc-uni-spinner"></span><b>Consultando MP '+escapeHtml_uni(detailId)+'...</b></div></div>';
+      }
+    }
+    loadMpDetail_uni(detailId,false);
   }
 
   async function loadMpDetail_uni(id,force){
@@ -1012,6 +1042,7 @@
       if(payload.mantenimiento){
         const index=mpState_uni.rows.findIndex(function(item){ return Number(item.id_dmp)===Number(id); });
         if(index>=0) mpState_uni.rows[index]=Object.assign({},mpState_uni.rows[index],payload.mantenimiento);
+        else mpState_uni.rows.push(Object.assign({},payload.mantenimiento));
       }
     }catch(error){
       mpState_uni.detailError=error.message||'Error de conexión';
@@ -1044,25 +1075,259 @@
     }finally{ mpState_uni.loading=false; }
   }
 
-  function init_uni(route){
+
+  function vaStatusClass_uni(value){
+    const v=normalize_uni(value);
+    if(v.includes('pagad')||v.includes('facturad')||v.includes('cerrad')) return 'ok';
+    if(v.includes('cancel')||v.includes('vencid')||v.includes('rechaz')) return 'danger';
+    if(v.includes('pend')||v.includes('proceso')||v.includes('parcial')) return 'warn';
+    return 'neutral';
+  }
+
+  function vaFilteredRows_uni(){
+    const f=vaState_uni.filters, needle=normalize_uni(f.search);
+    return vaState_uni.rows.filter(function(row){
+      if(needle){
+        const hay=normalize_uni([row.proyecto,row.cliente,row.ov,row.concepto,row.no_factura,row.estatus,row.zona_adm,row.zona_operativa,row.estado].join(' '));
+        if(!hay.includes(needle)) return false;
+      }
+      if(f.estatus && normalize_uni(row.estatus)!==normalize_uni(f.estatus)) return false;
+      if(f.estatus_administrativo && normalize_uni(row.estatus_administrativo)!==normalize_uni(f.estatus_administrativo)) return false;
+      if(f.zona_adm && normalize_uni(row.zona_adm)!==normalize_uni(f.zona_adm)) return false;
+      if(f.zona_operativa && normalize_uni(row.zona_operativa)!==normalize_uni(f.zona_operativa)) return false;
+      if(f.tipo_pago && normalize_uni(row.tipo_pago)!==normalize_uni(f.tipo_pago)) return false;
+      return true;
+    });
+  }
+
+  function renderVaMain_uni(){
+    const view=document.getElementById('view-' + ROUTE_VENTA_ADICIONAL_UNI);
+    if(!view) return;
+    const rows=vaFilteredRows_uni();
+    const totalPages=Math.max(1,Math.ceil(rows.length/vaState_uni.pageSize));
+    if(vaState_uni.page>totalPages) vaState_uni.page=totalPages;
+    const start=(vaState_uni.page-1)*vaState_uni.pageSize;
+    const pageRows=rows.slice(start,start+vaState_uni.pageSize);
+    const k=vaState_uni.kpis||{};
+    const body=pageRows.length?pageRows.map(function(row){
+      return '<tr>'+
+        '<td><button type="button" class="va-uni-project" data-va-id="'+escapeHtml_uni(row.id_pc)+'">'+escapeHtml_uni(projectName_uni(row.proyecto))+'</button></td>'+
+        '<td>'+tableCell_uni(row.ov)+'</td><td>'+tableCell_uni(row.cliente)+'</td><td class="va-uni-concept">'+tableCell_uni(row.concepto)+'</td>'+
+        '<td>'+tableCell_uni(row.tipo_pago)+'</td><td class="va-uni-money">'+tableCell_uni(row.venta_total||row.precio_venta,money_uni)+'</td>'+
+        '<td><span class="va-uni-status '+vaStatusClass_uni(row.estatus)+'">'+tableCell_uni(row.estatus)+'</span></td>'+
+        '<td>'+tableCell_uni(row.fecha_ov,date_uni)+'</td><td>'+tableCell_uni(row.no_factura)+'</td><td class="va-uni-money">'+tableCell_uni(row.adeudo,money_uni)+'</td>'+
+        '<td><button type="button" class="va-uni-open" data-va-id="'+escapeHtml_uni(row.id_pc)+'" aria-label="Abrir detalle">👁</button></td></tr>';
+    }).join(''):'<tr><td colspan="11" class="gc-uni-record-empty">No hay registros para los filtros seleccionados.</td></tr>';
+    view.innerHTML='<div class="va-uni-page" data-va-uni-root>'+
+      '<section class="va-uni-titlebar"><div><p>➕ Cobranza United</p><h1>Venta Adicional</h1><span>Control comercial y financiero de ventas adicionales · fuente Aiven / <code>pc</code>.</span></div><button type="button" class="va-uni-refresh" data-va-action="refresh">↻ Actualizar</button></section>'+
+      '<section class="va-uni-kpis">'+
+        '<article><i>🛒</i><div><span>Registros</span><strong>'+integer_uni(k.total_registros)+'</strong><small>Ventas adicionales</small></div></article>'+
+        '<article><i>💵</i><div><span>Venta total</span><strong>'+money_uni(k.venta_total)+'</strong><small>Importe acumulado</small></div></article>'+
+        '<article><i>✅</i><div><span>Pagado IVA</span><strong>'+money_uni(k.facturado_pagado)+'</strong><small>Cobrado registrado</small></div></article>'+
+        '<article><i>⏳</i><div><span>Adeudo</span><strong>'+money_uni(k.adeudo_total)+'</strong><small>'+integer_uni(k.registros_con_adeudo)+' registros con pendiente</small></div></article>'+
+        '<article><i>🧾</i><div><span>Facturas pendientes</span><strong>'+integer_uni(k.facturas_pendientes)+'</strong><small>'+money_uni(k.no_pagado)+' no pagado IVA</small></div></article>'+
+      '</section>'+
+      '<section class="va-uni-card va-uni-filterbar"><label class="wide">Buscar<input type="search" data-va-filter="search" value="'+escapeHtml_uni(vaState_uni.filters.search)+'" placeholder="Proyecto, OV, cliente, concepto, factura..."></label>'+
+        '<label>Estatus<select data-va-filter="estatus">'+optionList_uni(vaState_uni.catalogs.estatus,vaState_uni.filters.estatus,'Todos')+'</select></label>'+
+        '<label>Estatus administrativo<select data-va-filter="estatus_administrativo">'+optionList_uni(vaState_uni.catalogs.estatus_administrativo,vaState_uni.filters.estatus_administrativo,'Todos')+'</select></label>'+
+        '<label>Zona administrativa<select data-va-filter="zona_adm">'+optionList_uni(vaState_uni.catalogs.zona_adm,vaState_uni.filters.zona_adm,'Todas')+'</select></label>'+
+        '<label>Zona operativa<select data-va-filter="zona_operativa">'+optionList_uni(vaState_uni.catalogs.zona_operativa,vaState_uni.filters.zona_operativa,'Todas')+'</select></label>'+
+        '<label>Tipo de pago<select data-va-filter="tipo_pago">'+optionList_uni(vaState_uni.catalogs.tipo_pago,vaState_uni.filters.tipo_pago,'Todos')+'</select></label>'+
+        '<button type="button" class="va-uni-clear" data-va-action="clear">Limpiar</button></section>'+
+      '<section class="va-uni-card va-uni-table-card"><div class="va-uni-table-head"><div><h2>Ventas adicionales</h2><p>'+integer_uni(rows.length)+' registros filtrados</p></div><span>30 por página</span></div><div class="va-uni-table-wrap"><table><thead><tr><th>Proyecto</th><th>OV</th><th>Cliente</th><th>Concepto</th><th>Tipo pago</th><th>Venta total</th><th>Estatus</th><th>Fecha OV</th><th>Factura</th><th>Adeudo</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>'+
+      '<div class="va-uni-pagination"><button data-va-action="prev" '+(vaState_uni.page<=1?'disabled':'')+'>← Anterior</button><span>Página '+vaState_uni.page+' de '+totalPages+'</span><button data-va-action="next" '+(vaState_uni.page>=totalPages?'disabled':'')+'>Siguiente →</button></div></section></div>';
+    bindVaMain_uni(view);
+  }
+
+  function bindVaMain_uni(root){
+    root.querySelectorAll('[data-va-filter]').forEach(function(el){
+      const event=el.tagName==='INPUT'?'input':'change';
+      el.addEventListener(event,function(){ vaState_uni.filters[el.dataset.vaFilter]=el.value; vaState_uni.page=1; renderVaMain_uni(); });
+    });
+    root.querySelectorAll('[data-va-action]').forEach(function(btn){btn.addEventListener('click',function(){
+      const action=btn.dataset.vaAction;
+      if(action==='refresh') loadVentaAdicional_uni(true);
+      if(action==='clear'){vaState_uni.filters={search:'',estatus:'',estatus_administrativo:'',zona_adm:'',zona_operativa:'',tipo_pago:''};vaState_uni.page=1;renderVaMain_uni();}
+      if(action==='prev'&&vaState_uni.page>1){vaState_uni.page-=1;renderVaMain_uni();}
+      if(action==='next'){vaState_uni.page+=1;renderVaMain_uni();}
+    });});
+    root.querySelectorAll('[data-va-id]').forEach(function(btn){btn.addEventListener('click',function(ev){ev.preventDefault();const id=Number(btn.dataset.vaId);if(id>0)navigateCobranzaDetail_uni(ROUTE_VENTA_ADICIONAL_UNI,{id_pc:id,id:id,source:'venta_adicional_main'});});});
+  }
+
+  async function loadVentaAdicional_uni(force){
+    if(vaState_uni.loading) return;
+    if(vaState_uni.loaded&&!force){renderVaMain_uni();return;}
+    const view=document.getElementById('view-' + ROUTE_VENTA_ADICIONAL_UNI); if(!view) return;
+    vaState_uni.loading=true;
+    view.innerHTML='<div class="va-uni-page"><section class="va-uni-titlebar"><div><p>➕ Cobranza United</p><h1>Venta Adicional</h1><span>Consultando Aiven...</span></div></section><div class="mp-uni-loading"><span class="gc-uni-spinner"></span><b>Cargando tabla pc...</b></div></div>';
+    try{
+      const response=await fetch(apiBase_uni()+'/api/cobranza-uni/venta-adicional',{headers:authHeaders_uni(),cache:'no-store'});
+      const payload=await response.json().catch(function(){return {};});
+      if(!response.ok||!payload.ok) throw new Error(payload.message||('HTTP '+response.status));
+      vaState_uni.rows=Array.isArray(payload.rows)?payload.rows:[]; vaState_uni.catalogs=payload.catalogs||vaState_uni.catalogs; vaState_uni.kpis=payload.kpis||{}; vaState_uni.generatedAt=payload.generated_at||null; vaState_uni.loaded=true; renderVaMain_uni();
+    }catch(error){view.innerHTML='<section class="gc-uni-error"><span>⚠️</span><div><h2>No fue posible cargar Venta Adicional</h2><p>'+escapeHtml_uni(error.message||'Error de conexión')+'</p><button class="va-uni-refresh" data-va-action="refresh">Reintentar</button></div></section>'; const b=view.querySelector('[data-va-action="refresh"]');if(b)b.addEventListener('click',function(){loadVentaAdicional_uni(true);});}
+    finally{vaState_uni.loading=false;}
+  }
+
+  function currentVaRow_uni(){return vaState_uni.rows.find(function(r){return Number(r.id_pc)===Number(vaState_uni.detailId);})||null;}
+
+  function vaDetailGrid_uni(row){
+    return '<div class="va-uni-detail-grid">'+
+      detailItem_uni('Proyecto',projectName_uni(row.proyecto))+detailItem_uni('Cliente',row.cliente)+detailItem_uni('OV',row.ov)+detailItem_uni('Fecha OV',row.fecha_ov,date_uni)+
+      detailItem_uni('Concepto',row.concepto)+detailItem_uni('Tipo de pago',row.tipo_pago)+detailItem_uni('Venta total',row.venta_total||row.precio_venta,money_uni)+detailItem_uni('Precio venta',row.precio_venta,money_uni)+
+      detailItem_uni('Pagado IVA',row.pagado_iva,money_uni)+detailItem_uni('No pagado IVA',row.no_pagado_iva,money_uni)+detailItem_uni('Adeudo',row.adeudo,money_uni)+detailItem_uni('Facturas pendientes',row.facturas_pendientes_pago,integer_uni)+
+      detailItem_uni('No. factura',row.no_factura)+detailItem_uni('Fecha factura',row.fecha_factura,date_uni)+detailItem_uni('Términos',row.terminos)+detailItem_uni('Fecha vencimiento',row.fecha_vencimiento,date_uni)+
+      detailItem_uni('Días vencimiento',row.dias_vencimiento,integer_uni)+detailItem_uni('Estatus',row.estatus)+detailItem_uni('Estatus administrativo',row.estatus_administrativo)+detailItem_uni('Estatus operativo',row.estatus_operativo)+
+      detailItem_uni('Fecha pago',row.fecha_pago,date_uni)+detailItem_uni('Refacturación / sustitución',row.refacturacion_sustitucion)+detailItem_uni('Zona administrativa',row.zona_adm)+detailItem_uni('Zona operativa',row.zona_operativa)+detailItem_uni('Estado',row.estado)+
+    '</div>';
+  }
+
+  function renderVaRelated_uni(detail){
+    const mp=detail&&Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
+    const gc=detail&&Array.isArray(detail.gestion_credito)?detail.gestion_credito:[];
+    const mpRows=mp.length?mp.map(function(r){return '<tr><td>'+tableCell_uni(r.id_dmp)+'</td><td>'+tableCell_uni(r.periodicidad)+'</td><td>'+tableCell_uni(r.estado)+'</td><td>'+tableCell_uni(r.monto_anual,money_uni)+'</td><td>'+tableCell_uni(r.pendiente,money_uni)+'</td><td><button class="va-uni-open" data-va-mp="'+escapeHtml_uni(r.id_dmp)+'">↗</button></td></tr>';}).join(''):'<tr><td colspan="6" class="gc-uni-record-empty">Sin Mantenimiento Preventivo relacionado.</td></tr>';
+    const gcRows=gc.length?gc.map(function(r){return '<tr><td>'+tableCell_uni(r.id_gc)+'</td><td>'+tableCell_uni(r.nivel_riesgo_credito)+'</td><td>'+tableCell_uni(r.credito_disponible_venta,money_uni)+'</td><td>'+tableCell_uni(r.adeudo,money_uni)+'</td><td><button class="va-uni-open" data-va-gc="'+escapeHtml_uni(r.id_gc)+'">↗</button></td></tr>';}).join(''):'<tr><td colspan="5" class="gc-uni-record-empty">Sin Gestión de Crédito relacionada.</td></tr>';
+    return '<div class="va-uni-related-grid"><section class="va-uni-card"><div class="va-uni-table-head"><div><h2>Mantenimiento Preventivo</h2><p>'+mp.length+' registros relacionados</p></div></div><div class="va-uni-table-wrap"><table><thead><tr><th>ID MP</th><th>Periodicidad</th><th>Estado</th><th>Monto anual</th><th>Pendiente</th><th></th></tr></thead><tbody>'+mpRows+'</tbody></table></div></section>'+
+      '<section class="va-uni-card"><div class="va-uni-table-head"><div><h2>Gestión de Crédito</h2><p>'+gc.length+' registros relacionados</p></div></div><div class="va-uni-table-wrap"><table><thead><tr><th>ID GC</th><th>Riesgo</th><th>Crédito disponible</th><th>Adeudo</th><th></th></tr></thead><tbody>'+gcRows+'</tbody></table></div></section></div>';
+  }
+
+  function renderVaDetail_uni(){
+    const view=document.getElementById('view-' + ROUTE_VENTA_ADICIONAL_UNI); if(!view) return;
+    const row=currentVaRow_uni(); const detail=vaState_uni.detailCache[String(vaState_uni.detailId)]||null;
+    if(vaState_uni.detailLoading&&!detail){view.innerHTML='<div class="va-uni-page"><section class="va-uni-titlebar"><div><p>➕ Venta Adicional · Detalle</p><h1>Cargando registro...</h1></div></section><div class="mp-uni-loading"><span class="gc-uni-spinner"></span><b>Consultando Aiven...</b></div></div>';return;}
+    if(vaState_uni.detailError&&!detail){view.innerHTML='<section class="gc-uni-error"><span>⚠️</span><div><h2>No fue posible abrir el detalle</h2><p>'+escapeHtml_uni(vaState_uni.detailError)+'</p><button class="va-uni-refresh" data-va-action="back">← Volver</button></div></section>';const b=view.querySelector('[data-va-action="back"]');if(b)b.addEventListener('click',function(){vaState_uni.detailId=null;renderVaMain_uni();});return;}
+    const actual=(detail&&detail.venta)||row;if(!actual)return;
+    const mp=detail&&Array.isArray(detail.mantenimiento_preventivo)?detail.mantenimiento_preventivo:[];
+    const gc=detail&&Array.isArray(detail.gestion_credito)?detail.gestion_credito:[];
+    view.innerHTML='<div class="va-uni-page"><section class="va-uni-titlebar va-uni-detail-title"><div><p>➕ Cobranza United · Venta Adicional</p><h1>'+escapeHtml_uni(projectName_uni(actual.proyecto))+'</h1><span>'+escapeHtml_uni(actual.concepto||('Registro VA #'+actual.id_pc))+'</span></div><div class="va-uni-detail-actions"><button data-va-action="back">← Venta Adicional</button><button data-va-action="project">🏗️ Ir a Proyecto</button>'+(gc[0]?'<button data-va-gc="'+escapeHtml_uni(gc[0].id_gc)+'">🛡️ Ir a Gestión de Crédito</button>':'')+(mp[0]?'<button data-va-mp="'+escapeHtml_uni(mp[0].id_dmp)+'">🛠️ Ir a MP</button>':'')+'</div></section>'+
+      '<section class="va-uni-detail-summary"><article><span>Venta total</span><strong>'+money_uni(actual.venta_total||actual.precio_venta)+'</strong></article><article><span>Pagado IVA</span><strong>'+money_uni(actual.pagado_iva)+'</strong></article><article><span>No pagado IVA</span><strong>'+money_uni(actual.no_pagado_iva)+'</strong></article><article><span>Adeudo</span><strong>'+money_uni(actual.adeudo)+'</strong></article><article><span>Facturas pendientes</span><strong>'+integer_uni(actual.facturas_pendientes_pago)+'</strong></article></section>'+
+      '<section class="va-uni-card va-uni-detail-card"><div class="va-uni-table-head"><div><h2>Información de la Venta Adicional</h2><p>ID VA '+escapeHtml_uni(actual.id_pc)+' · ID Proyecto Cobranza '+escapeHtml_uni(actual.id_proyecto_cobranza||'—')+'</p></div><span class="va-uni-status '+vaStatusClass_uni(actual.estatus)+'">'+escapeHtml_uni(actual.estatus||'Sin estatus')+'</span></div>'+vaDetailGrid_uni(actual)+'<div class="va-uni-comments"><span>Comentarios de cobranza</span><p>'+escapeHtml_uni(actual.comentarios_cobranza||'Sin comentarios registrados.')+'</p></div></section></div>';
+    bindVaDetail_uni(view,actual);
+  }
+
+  function bindVaDetail_uni(root,row){
+    root.querySelectorAll('[data-va-action]').forEach(function(btn){btn.addEventListener('click',function(){const a=btn.dataset.vaAction;if(a==='back'){vaState_uni.detailId=null;renderVaMain_uni();}if(a==='project'&&window.ManttoDetails&&window.ManttoDetails.openProyecto)window.ManttoDetails.openProyecto(row.proyecto);});});
+    root.querySelectorAll('[data-va-mp]').forEach(function(btn){btn.addEventListener('click',function(){if(window.ManttoRouter)window.ManttoRouter.go(ROUTE_MP_UNI,{id_dmp:Number(btn.dataset.vaMp),id:Number(btn.dataset.vaMp),source:'venta_adicional'});});});
+    root.querySelectorAll('[data-va-gc]').forEach(function(btn){btn.addEventListener('click',function(){const id=Number(btn.dataset.vaGc);if(!id)return;if(window.ManttoRouter)window.ManttoRouter.go(ROUTE_GESTION_CREDITO_UNI,{id_gc:id,id:id,source:'venta_adicional'});});});
+  }
+
+  function openVaDetail_uni(id){const n=Number(id);if(!n)return;vaState_uni.detailId=n;vaState_uni.detailError=null;loadVaDetail_uni(n,false);}
+
+  async function loadVaDetail_uni(id,force){
+    const key=String(id||'');if(!key||vaState_uni.detailLoading)return;if(vaState_uni.detailCache[key]&&!force){renderVaDetail_uni();return;}
+    vaState_uni.detailLoading=true;vaState_uni.detailError=null;renderVaDetail_uni();
+    try{const response=await fetch(apiBase_uni()+'/api/cobranza-uni/venta-adicional/'+encodeURIComponent(key)+'/detalle',{headers:authHeaders_uni(),cache:'no-store'});const payload=await response.json().catch(function(){return {};});if(!response.ok||!payload.ok)throw new Error(payload.message||('HTTP '+response.status));vaState_uni.detailCache[key]=payload;if(payload.venta){const i=vaState_uni.rows.findIndex(function(r){return Number(r.id_pc)===Number(id);});if(i>=0)vaState_uni.rows[i]=Object.assign({},vaState_uni.rows[i],payload.venta);else vaState_uni.rows.push(payload.venta);}}
+    catch(error){vaState_uni.detailError=error.message||'Error de conexión';}finally{vaState_uni.detailLoading=false;renderVaDetail_uni();}
+  }
+
+  function findGestionCreditoByProject_uni(projectRef){
+    const raw = normalize_uni(projectRef);
+    const display = normalize_uni(projectName_uni(projectRef));
+    return state_uni.rows.find(function(row){
+      const rowRaw = normalize_uni(row && row.proyecto);
+      const rowDisplay = normalize_uni(projectName_uni(row && row.proyecto));
+      return (raw && rowRaw === raw) || (display && rowDisplay === display);
+    }) || null;
+  }
+
+  function currentProjectDetailRef_uni(){
+    if(!window.ManttoRouter || typeof window.ManttoRouter.getCurrent !== 'function') return '';
+    const current = window.ManttoRouter.getCurrent();
+    if(!current || current.route !== 'detalle' || !current.payload || current.payload.type !== 'proyecto') return '';
+    return String(current.payload.id || '').trim();
+  }
+
+  function navigateProjectGestionCredito_uni(projectRef){
+    const ref = String(projectRef || '').trim();
+    if(!ref || !window.ManttoRouter || typeof window.ManttoRouter.go !== 'function') return;
+    window.ManttoRouter.go(ROUTE_GESTION_CREDITO_UNI,{proyecto:ref,source:'detalle_proyecto'});
+  }
+
+  function ensureProjectGestionCreditoButton_uni(){
+    const projectRef = currentProjectDetailRef_uni();
+    if(!projectRef) return;
+    const detailView = document.getElementById('view-detalle');
+    if(!detailView || !detailView.classList.contains('active')) return;
+    const header = detailView.querySelector('.mg-company-block.united .mg-company-head');
+    if(!header || header.querySelector('[data-project-gc-uni]')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'mg-project-gc-link-uni';
+    button.setAttribute('data-project-gc-uni','1');
+    button.textContent = '🛡️ Ir a Gestión de Crédito';
+    button.addEventListener('click',function(event){
+      event.preventDefault();
+      event.stopPropagation();
+      navigateProjectGestionCredito_uni(projectRef);
+    });
+    header.appendChild(button);
+  }
+
+  let projectGcObserver_uni = null;
+  function installProjectGestionCreditoBridge_uni(){
+    if(projectGcObserver_uni) return;
+    const target = document.body;
+    if(!target) return;
+    projectGcObserver_uni = new MutationObserver(function(){ ensureProjectGestionCreditoButton_uni(); });
+    projectGcObserver_uni.observe(target,{childList:true,subtree:true});
+    ensureProjectGestionCreditoButton_uni();
+  }
+
+  function init_uni(route,payload){
     syncSidebarLabel_uni();
     if(route === ROUTE_GESTION_CREDITO_UNI){
-      loadGestionCredito_uni(false);
+      const requestedGcId=Number(payload&&(payload.id_gc||payload.id));
+      const requestedProject=String(payload&&payload.proyecto||'').trim();
+      if(!(requestedGcId>0) && !requestedProject){
+        state_uni.detailId=null;
+        state_uni.detailError=null;
+      }
+      loadGestionCredito_uni(false).then(function(){
+        if(requestedGcId>0){ openDetail_uni(requestedGcId); return; }
+        if(requestedProject){
+          const related=findGestionCreditoByProject_uni(requestedProject);
+          if(related&&Number(related.id_gc)>0){ openDetail_uni(related.id_gc); return; }
+          state_uni.detailId=null;
+          state_uni.filters.search=projectName_uni(requestedProject);
+          renderContent_uni();
+          return;
+        }
+        state_uni.detailId=null;
+        state_uni.detailError=null;
+        renderContent_uni();
+      });
       return true;
     }
     if(route === ROUTE_MP_UNI){
-      loadMpMain_uni(false);
+      const requestedId=Number(payload&&(payload.id_dmp||payload.id));
+      if(requestedId>0){
+        const view=document.getElementById('view-' + ROUTE_MP_UNI);
+        if(view && !view.querySelector('[data-mp-uni-root]')) renderMpBase_uni(view);
+        openMpDetail_uni(requestedId);
+      }else{
+        mpState_uni.detailId=null;
+        mpState_uni.detailError=null;
+        loadMpMain_uni(false);
+      }
+      return true;
+    }
+    if(route === ROUTE_VENTA_ADICIONAL_UNI){
+      const requestedVaId=Number(payload&&(payload.id_pc||payload.id));
+      if(requestedVaId>0) openVaDetail_uni(requestedVaId);
+      else { vaState_uni.detailId=null; vaState_uni.detailError=null; loadVentaAdicional_uni(false); }
       return true;
     }
     return shell_uni(route);
   }
 
   syncSidebarLabel_uni();
-  document.addEventListener('DOMContentLoaded',syncSidebarLabel_uni);
+  installProjectGestionCreditoBridge_uni();
+  document.addEventListener('DOMContentLoaded',function(){ syncSidebarLabel_uni(); installProjectGestionCreditoBridge_uni(); });
 
   window.ManttoCobranza_uni = {
     init:init_uni,
     reloadGestionCredito:function(){ return loadGestionCredito_uni(true); },
-    reloadMantenimientoPreventivo:function(){ return loadMpMain_uni(true); }
+    reloadMantenimientoPreventivo:function(){ return loadMpMain_uni(true); },
+    reloadVentaAdicional:function(){ return loadVentaAdicional_uni(true); }
   };
 })();

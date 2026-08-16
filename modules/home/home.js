@@ -9,6 +9,7 @@
     tasks: [],
     notifications: [],
     unreadNotifications: [],
+    unreadNotificationCount: 0,
     activities: [],
     catalogs: { areas: [], empresas: [], usuarios: [], proyectos: [], equipos: [] },
     selectedTask: null,
@@ -486,7 +487,7 @@
     const critical = document.getElementById('home-kpi-critical');
     const unread = document.getElementById('home-kpi-unread');
     if(critical) critical.textContent = state.tasks.filter(t=>t.prioridad==='CRITICA' && t.estatus !== 'Cerrado').length;
-    if(unread) unread.textContent = state.unreadNotifications.length;
+    if(unread) unread.textContent = Number(state.unreadNotificationCount || 0);
   }
 
   function renderRails(){
@@ -898,7 +899,6 @@
         await apiRequest('/api/pendientes/' + encodeURIComponent(p.id_pendiente), { method:'DELETE' });
         closeTaskModal();
         await loadHomeData();
-        await refreshHeaderNotifications();
       }catch(error){ alert(error.message); }
     });
     root.querySelectorAll('[data-delete-direct-file]').forEach(button => button.addEventListener('click', async () => {
@@ -943,7 +943,6 @@
         await apiRequest('/api/pendientes/' + encodeURIComponent(p.id_pendiente) + '/comentarios', { method:'POST', body: payload });
         await openTaskDetail(p.id_pendiente);
         await loadHomeData();
-        await refreshHeaderNotifications();
       }catch(error){
         alert(error.message);
       }finally{
@@ -968,13 +967,14 @@
       };
       state.notifications = (data.notificaciones_abiertas || []).map(normalizeNotification).filter(canShowHomeRelatedItem);
       state.unreadNotifications = (data.notificaciones_nuevas || []).map(normalizeNotification).filter(canShowHomeRelatedItem);
+      state.unreadNotificationCount = state.unreadNotifications.length;
       state.activities = (data.actividad_reciente || []).map(normalizeActivity).filter(canShowHomeRelatedItem);
       if(data.catalogos) state.catalogs = Object.assign({ areas: [], empresas: [], usuarios: [], proyectos: [], equipos: [] }, state.catalogs || {}, data.catalogos);
-      updateHeaderBadge(state.unreadNotifications.length);
+      updateHeaderBadge(state.unreadNotificationCount);
       state.apiOk = true;
     }catch(error){
       console.warn('No se pudo cargar Home desde API:', error);
-      state.tasks = []; state.notifications = []; state.unreadNotifications = []; state.activities = []; state.apiOk = false;
+      state.tasks = []; state.notifications = []; state.unreadNotifications = []; state.unreadNotificationCount = 0; state.activities = []; state.apiOk = false;
       updateHeaderBadge(0);
     }finally{
       state.loading = false;
@@ -991,15 +991,33 @@
     badge.hidden = n <= 0;
   }
 
+  async function refreshHeaderNotificationState(){
+    try{
+      const response = await apiRequest('/api/notificaciones/estado');
+      const data = response && response.data ? response.data : (response || {});
+      const count = Math.max(0, Number(data.nuevas || 0));
+      state.unreadNotificationCount = count;
+      updateHeaderBadge(count);
+      renderCounters();
+      return data;
+    }catch(error){
+      return null;
+    }
+  }
+
   async function refreshHeaderNotifications(){
     try{
       const nuevas = await apiGet('/api/notificaciones?estado=nuevas&limit=30');
       state.unreadNotifications = nuevas.map(normalizeNotification);
-      updateHeaderBadge(state.unreadNotifications.length);
+      if(state.unreadNotifications.length < 30){
+        state.unreadNotificationCount = state.unreadNotifications.length;
+      }else{
+        state.unreadNotificationCount = Math.max(state.unreadNotificationCount, state.unreadNotifications.length);
+      }
+      updateHeaderBadge(state.unreadNotificationCount);
       renderCounters();
       return state.unreadNotifications;
     }catch(error){
-      updateHeaderBadge(0);
       return [];
     }
   }
@@ -1059,5 +1077,5 @@
 
   function init(){ bindHeaderNotifications(); loadHomeData(); }
 
-  window.ManttoHome={init, reload:loadHomeData, refreshHeaderNotifications, openTaskForm, openTaskDetail, openTaskContext};
+  window.ManttoHome={init, reload:loadHomeData, refreshHeaderNotificationState, refreshHeaderNotifications, openTaskForm, openTaskDetail, openTaskContext};
 })();

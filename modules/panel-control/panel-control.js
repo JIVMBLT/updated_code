@@ -40,7 +40,19 @@
     adminUserCompany:'',
     adminRoleQuery:'',
     adminRoleCompany:'',
-    adminRoleStatus:''
+    adminRoleStatus:'',
+    notificationLoading:false,
+    notificationError:'',
+    notificationEvents:[],
+    notificationRoles:[],
+    notificationConfigs:new Map(),
+    notificationDirty:new Map(),
+    selectedNotificationEvent:'',
+    notificationQuery:'',
+    notificationRoleQuery:'',
+    notificationCompany:'',
+    notificationScope:null,
+    savingNotifications:false
   };
 
   const esc=(v)=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -211,6 +223,7 @@
       render();
       if(state.tab==='roles'&&state.selectedRoleId) await loadRolePermissions(state.selectedRoleId);
       if(state.tab==='admin-users') await loadAdminCatalogs();
+      if(state.tab==='notifications') await loadNotificationMatrix();
     }catch(error){
       state.bootLoading=false;
       state.error=error.message||'No se pudo cargar el Panel de Control.';
@@ -268,6 +281,428 @@
     }
   }
 
+  function notificationKey(codigoEvento,idRol){
+    return `${String(codigoEvento||'')}\u0000${Number(idRol)}`;
+  }
+
+  function applyNotificationMatrix(data,{clearDirty=true}={}){
+    const matrix=data||{};
+    state.notificationEvents=Array.isArray(matrix.eventos)?matrix.eventos:[];
+    state.notificationRoles=Array.isArray(matrix.roles)?matrix.roles:[];
+    state.notificationScope=matrix.alcance||null;
+    state.notificationConfigs=new Map((matrix.configuraciones||[]).map(row=>[
+      notificationKey(row.codigo_evento,row.id_rol),
+      {
+        habilitado:Boolean(row.activo),
+        politica:row.politica?String(row.politica).toUpperCase():null,
+        id_evento_rol:Number(row.id_evento_rol||0)||null
+      }
+    ]));
+    if(clearDirty) state.notificationDirty.clear();
+    const selectedExists=state.notificationEvents.some(event=>event.codigo_evento===state.selectedNotificationEvent);
+    if(!selectedExists) state.selectedNotificationEvent=state.notificationEvents[0]?.codigo_evento||'';
+  }
+
+  async function loadNotificationMatrix(){
+    state.notificationLoading=true;
+    state.notificationError='';
+    if(state.tab==='notifications') renderNotificationPanel();
+    updateSaveButton();
+    try{
+      const json=await request(`/api/panel-control/notificaciones/matriz?_=${Date.now()}`,{method:'GET',cache:'no-store'});
+      applyNotificationMatrix(json.data||{});
+    }catch(error){
+      state.notificationError=error.message||'No se pudo cargar la matriz de notificaciones.';
+    }finally{
+      state.notificationLoading=false;
+      if(state.tab==='notifications') renderNotificationPanel();
+      updateSaveButton();
+    }
+  }
+
+  function notificationBaseValue(codigoEvento,idRol){
+    return state.notificationConfigs.get(notificationKey(codigoEvento,idRol))||{habilitado:false,politica:null,id_evento_rol:null};
+  }
+
+  function notificationValue(codigoEvento,idRol){
+    const key=notificationKey(codigoEvento,idRol);
+    return state.notificationDirty.get(key)||notificationBaseValue(codigoEvento,idRol);
+  }
+
+  function normalizeNotificationDraft(value){
+    const habilitado=Boolean(value?.habilitado);
+    return {
+      habilitado,
+      politica:habilitado&&value?.politica?String(value.politica).toUpperCase():null
+    };
+  }
+
+  function setNotificationDraft(codigoEvento,idRol,value){
+    const key=notificationKey(codigoEvento,idRol);
+    const base=normalizeNotificationDraft(notificationBaseValue(codigoEvento,idRol));
+    const next=normalizeNotificationDraft(value);
+    if(base.habilitado===next.habilitado&&base.politica===next.politica){
+      state.notificationDirty.delete(key);
+    }else{
+      state.notificationDirty.set(key,next);
+    }
+    updateSaveButton();
+  }
+
+  function setNotificationDraftBulk(codigoEvento,roles,transform){
+    roles.forEach(role=>{
+      const idRol=Number(role.id_rol);
+      const key=notificationKey(codigoEvento,idRol);
+      const base=normalizeNotificationDraft(notificationBaseValue(codigoEvento,idRol));
+      const current=normalizeNotificationDraft(notificationValue(codigoEvento,idRol));
+      const next=normalizeNotificationDraft(transform({role,idRol,base,current})||current);
+      if(base.habilitado===next.habilitado&&base.politica===next.politica){
+        state.notificationDirty.delete(key);
+      }else{
+        state.notificationDirty.set(key,next);
+      }
+    });
+    updateSaveButton();
+  }
+
+  function notificationInvalidDrafts(){
+    return [...state.notificationDirty.values()].filter(value=>value.habilitado&&!['OBLIGATORIA','OPCIONAL'].includes(value.politica)).length;
+  }
+
+  function notificationEventCounts(codigoEvento){
+    let enabled=0;
+    let mandatory=0;
+    let optional=0;
+    state.notificationRoles.forEach(role=>{
+      const value=notificationValue(codigoEvento,role.id_rol);
+      if(!value.habilitado)return;
+      enabled+=1;
+      if(value.politica==='OBLIGATORIA') mandatory+=1;
+      if(value.politica==='OPCIONAL') optional+=1;
+    });
+    return {enabled,mandatory,optional};
+  }
+
+  function filteredNotificationEvents(){
+    const query=state.notificationQuery.trim().toLowerCase();
+    return state.notificationEvents.filter(event=>{
+      if(!query)return true;
+      return [event.nombre_evento,event.codigo_evento,event.agrupacion,event.modulo,event.accion,event.descripcion]
+        .join(' ').toLowerCase().includes(query);
+    });
+  }
+
+  function filteredNotificationRoles(){
+    const query=state.notificationRoleQuery.trim().toLowerCase();
+    return state.notificationRoles
+      .filter(role=>{
+        const company=normalizeCompany(role.empresa);
+        const text=[role.rol,role.codigo,role.descripcion,role.empresa].join(' ').toLowerCase();
+        return (!query||text.includes(query))&&(!state.notificationCompany||company===state.notificationCompany);
+      })
+      .sort((a,b)=>
+        String(a.rol||'').localeCompare(String(b.rol||''),'es',{sensitivity:'base',numeric:true})
+        || Number(a.id_rol||0)-Number(b.id_rol||0)
+      );
+  }
+
+  function notificationEventItem(event){
+    const selected=event.codigo_evento===state.selectedNotificationEvent;
+    const counts=notificationEventCounts(event.codigo_evento);
+    return `<button type="button" class="pc-notification-event ${selected?'active':''}" data-notification-event="${esc(event.codigo_evento)}">
+      <span class="pc-notification-event-copy"><b>${esc(event.nombre_evento||event.codigo_evento)}</b><small>${esc(event.agrupacion||'General')} · ${esc(event.modulo||'General')}</small></span>
+      <span class="pc-notification-event-count">${counts.enabled}</span>
+    </button>`;
+  }
+
+  function renderNotificationEventList(){
+    const list=document.getElementById('pc-notification-events');
+    if(!list)return;
+    const scrollTop=list.scrollTop;
+    const events=filteredNotificationEvents();
+    list.innerHTML=events.length?events.map(notificationEventItem).join(''):'<div class="pc-empty">Sin interacciones que coincidan.</div>';
+    list.querySelectorAll('[data-notification-event]').forEach(button=>button.addEventListener('click',()=>{
+      state.selectedNotificationEvent=button.dataset.notificationEvent||'';
+      renderNotificationEventList();
+      renderNotificationRoles();
+    }));
+    list.scrollTop=scrollTop;
+  }
+
+  function notificationRoleRow(role,event){
+    const value=notificationValue(event.codigo_evento,role.id_rol);
+    const key=notificationKey(event.codigo_evento,role.id_rol);
+    const changed=state.notificationDirty.has(key);
+    const policyMissing=value.habilitado&&!['OBLIGATORIA','OPCIONAL'].includes(value.politica);
+    return `<article class="pc-notification-role-row ${value.habilitado?'enabled':'disabled'} ${changed?'changed':''} ${policyMissing?'needs-policy':''}" data-notification-role-row="${role.id_rol}">
+      <label class="pc-notification-switch" title="${value.habilitado?'Desactivar':'Activar'} ${esc(role.rol)}">
+        <input type="checkbox" data-notification-enable="${role.id_rol}" ${value.habilitado?'checked':''}>
+        <span aria-hidden="true"></span>
+      </label>
+      <div class="pc-notification-role-copy"><b>${esc(role.rol)}</b><small>${esc(normalizeCompany(role.empresa))}${role.codigo?` · ${esc(role.codigo)}`:''}</small></div>
+      <span class="pc-notification-role-state">${value.habilitado?'Recibe':'No recibe'}</span>
+    </article>`;
+  }
+
+  function notificationPolicyRow(role,event){
+    const value=notificationValue(event.codigo_evento,role.id_rol);
+    const key=notificationKey(event.codigo_evento,role.id_rol);
+    const changed=state.notificationDirty.has(key);
+    const policyMissing=value.habilitado&&!['OBLIGATORIA','OPCIONAL'].includes(value.politica);
+    return `<article class="pc-notification-policy-row ${value.habilitado?'enabled':'disabled'} ${changed?'changed':''} ${policyMissing?'needs-policy':''}" data-notification-policy-row="${role.id_rol}">
+      <div class="pc-notification-policy ${value.habilitado?'':'locked'}">
+        <button type="button" data-notification-policy="OBLIGATORIA" data-role-id="${role.id_rol}" class="${value.politica==='OBLIGATORIA'?'active mandatory':''}" ${value.habilitado?'':'disabled'}>Obligatoria</button>
+        <button type="button" data-notification-policy="OPCIONAL" data-role-id="${role.id_rol}" class="${value.politica==='OPCIONAL'?'active optional':''}" ${value.habilitado?'':'disabled'}>Opcional</button>
+      </div>
+      <span class="pc-notification-policy-state">${!value.habilitado?'No recibe':policyMissing?'Selecciona política':value.politica==='OBLIGATORIA'?'Campana + Push':'Según preferencias'}</span>
+    </article>`;
+  }
+
+  function bindNotificationRolePolicyScroll(roleList,policyList){
+    if(!roleList||!policyList)return;
+    let syncing=false;
+    const mirror=(source,target)=>()=>{
+      if(syncing)return;
+      syncing=true;
+      target.scrollTop=source.scrollTop;
+      window.requestAnimationFrame(()=>{syncing=false;});
+    };
+    roleList.addEventListener('scroll',mirror(roleList,policyList),{passive:true});
+    policyList.addEventListener('scroll',mirror(policyList,roleList),{passive:true});
+  }
+
+  function renderNotificationRoles(){
+    const roleBox=document.getElementById('pc-notification-role-panel');
+    const policyBox=document.getElementById('pc-notification-policy-panel');
+    if(!roleBox||!policyBox)return;
+    const roleScrollTop=document.getElementById('pc-notification-role-list')?.scrollTop||0;
+    const policyScrollTop=document.getElementById('pc-notification-policy-list')?.scrollTop||roleScrollTop;
+    const event=state.notificationEvents.find(item=>item.codigo_evento===state.selectedNotificationEvent);
+    if(!event){
+      roleBox.innerHTML='<div class="pc-empty large">Selecciona una interacción.</div>';
+      policyBox.innerHTML='<div class="pc-empty large">Selecciona una interacción.</div>';
+      return;
+    }
+    const counts=notificationEventCounts(event.codigo_evento);
+    const roles=filteredNotificationRoles();
+    const companies=[...new Set(state.notificationRoles.map(role=>normalizeCompany(role.empresa)))].filter(Boolean).sort();
+    const eventName=event.nombre_evento||event.codigo_evento;
+    const visibleEnabled=roles.filter(role=>notificationValue(event.codigo_evento,role.id_rol).habilitado).length;
+    const allVisibleEnabled=Boolean(roles.length)&&visibleEnabled===roles.length;
+    const someVisibleEnabled=visibleEnabled>0;
+
+    roleBox.innerHTML=`<div class="pc-notification-column-head">
+      <div><span class="pc-eyebrow">ROL</span><h3>Roles</h3><p>${esc(eventName)}</p></div>
+      <span class="pc-notification-column-count">${roles.length}</span>
+    </div>
+    <div class="pc-notification-column-toolbar pc-notification-role-toolbar">
+      <div class="pc-notification-role-filters"><input id="pc-notification-role-search" value="${esc(state.notificationRoleQuery)}" placeholder="Buscar rol..."><select id="pc-notification-company"><option value="">Todas las empresas</option>${companies.map(company=>`<option value="${esc(company)}" ${state.notificationCompany===company?'selected':''}>${esc(company)}</option>`).join('')}</select></div>
+      <label class="pc-notification-bulk-switch ${roles.length?'':'disabled'}" title="Activa o desactiva todos los roles visibles">
+        <span class="pc-notification-switch"><input id="pc-notification-select-all" type="checkbox" ${allVisibleEnabled?'checked':''} ${roles.length?'':'disabled'}><span aria-hidden="true"></span></span>
+        <span><b>Seleccionar todo</b><small>${visibleEnabled} de ${roles.length} roles visibles activos</small></span>
+      </label>
+    </div>
+    <div class="pc-notification-column-note">Activa únicamente los roles principales que deben recibir esta interacción.</div>
+    <div class="pc-notification-role-list" id="pc-notification-role-list">${roles.length?roles.map(role=>notificationRoleRow(role,event)).join(''):'<div class="pc-empty">Sin roles que coincidan.</div>'}</div>`;
+
+    policyBox.innerHTML=`<div class="pc-notification-column-head">
+      <div><span class="pc-eyebrow">POLÍTICA</span><h3>Política</h3><p>${esc(eventName)}</p></div>
+      <div class="pc-notification-kpis"><span><b>${counts.enabled}</b> activos</span><span><b>${counts.mandatory}</b> oblig.</span><span><b>${counts.optional}</b> opc.</span></div>
+    </div>
+    <div class="pc-notification-column-toolbar pc-notification-policy-toolbar">
+      <div class="pc-notification-policy-legend"><span><b>Obligatoria</b> Campana + Push</span><span><b>Opcional</b> preferencias del usuario</span></div>
+      <div class="pc-notification-bulk-policies">
+        <button type="button" id="pc-notification-mandatory-all" ${someVisibleEnabled?'':'disabled'}>Obligatorio todo</button>
+        <button type="button" id="pc-notification-optional-all" ${someVisibleEnabled?'':'disabled'}>Opcional todo</button>
+      </div>
+    </div>
+    <div class="pc-notification-column-note">Las acciones masivas aplican a los roles visibles; si un rol está inactivo, no recibe la notificación.</div>
+    <div class="pc-notification-policy-list" id="pc-notification-policy-list">${roles.length?roles.map(role=>notificationPolicyRow(role,event)).join(''):'<div class="pc-empty">Sin políticas que mostrar.</div>'}</div>`;
+
+    document.getElementById('pc-notification-role-search')?.addEventListener('input',eventInput=>{
+      state.notificationRoleQuery=eventInput.target.value;
+      renderNotificationRoles();
+    });
+    document.getElementById('pc-notification-company')?.addEventListener('change',eventInput=>{
+      state.notificationCompany=eventInput.target.value;
+      renderNotificationRoles();
+    });
+
+    const selectAll=document.getElementById('pc-notification-select-all');
+    if(selectAll){
+      selectAll.indeterminate=someVisibleEnabled&&!allVisibleEnabled;
+      selectAll.addEventListener('change',()=>{
+        const enableAll=Boolean(selectAll.checked);
+        setNotificationDraftBulk(event.codigo_evento,roles,({base,current})=>({
+          habilitado:enableAll,
+          politica:enableAll?(current.politica||base.politica||null):null
+        }));
+        renderNotificationEventList();
+        renderNotificationRoles();
+      });
+    }
+
+    document.getElementById('pc-notification-mandatory-all')?.addEventListener('click',()=>{
+      setNotificationDraftBulk(event.codigo_evento,roles,({current})=>
+        current.habilitado?{habilitado:true,politica:'OBLIGATORIA'}:current
+      );
+      renderNotificationEventList();
+      renderNotificationRoles();
+    });
+
+    document.getElementById('pc-notification-optional-all')?.addEventListener('click',()=>{
+      setNotificationDraftBulk(event.codigo_evento,roles,({current})=>
+        current.habilitado?{habilitado:true,politica:'OPCIONAL'}:current
+      );
+      renderNotificationEventList();
+      renderNotificationRoles();
+    });
+
+    roleBox.querySelectorAll('[data-notification-enable]').forEach(input=>input.addEventListener('change',()=>{
+      const idRol=Number(input.dataset.notificationEnable);
+      const current=notificationValue(event.codigo_evento,idRol);
+      const base=notificationBaseValue(event.codigo_evento,idRol);
+      const politica=input.checked?(current.politica||base.politica||null):null;
+      setNotificationDraft(event.codigo_evento,idRol,{habilitado:input.checked,politica});
+      renderNotificationEventList();
+      renderNotificationRoles();
+    }));
+    policyBox.querySelectorAll('[data-notification-policy]').forEach(button=>button.addEventListener('click',()=>{
+      const idRol=Number(button.dataset.roleId);
+      const current=notificationValue(event.codigo_evento,idRol);
+      if(!current.habilitado)return;
+      setNotificationDraft(event.codigo_evento,idRol,{habilitado:true,politica:button.dataset.notificationPolicy});
+      renderNotificationEventList();
+      renderNotificationRoles();
+    }));
+
+    const roleList=document.getElementById('pc-notification-role-list');
+    const policyList=document.getElementById('pc-notification-policy-list');
+    if(roleList)roleList.scrollTop=roleScrollTop;
+    if(policyList)policyList.scrollTop=policyScrollTop;
+    bindNotificationRolePolicyScroll(roleList,policyList);
+  }
+
+  function renderNotificationPanel(){
+    const box=document.getElementById('pc-content');
+    if(!box||state.tab!=='notifications')return;
+    if(state.notificationLoading){
+      box.innerHTML='<section class="pc-permissions"><div class="pc-empty large"><span class="pc-spinner"></span>Cargando matriz de notificaciones...</div></section>';
+      updateSaveButton();
+      return;
+    }
+    if(state.notificationError){
+      box.innerHTML=`<section class="pc-permissions"><div class="pc-empty large"><b>No se pudo cargar la matriz de notificaciones.</b><br>${esc(state.notificationError)}<br><br><button type="button" class="pc-btn primary" id="pc-notification-retry">Reintentar</button></div></section>`;
+      document.getElementById('pc-notification-retry')?.addEventListener('click',loadNotificationMatrix);
+      updateSaveButton();
+      return;
+    }
+    box.innerHTML=`<section class="pc-notifications">
+      <div class="pc-notification-intro"><div><span class="pc-eyebrow">NOTIFICACIONES</span><h2>Matriz de notificaciones</h2><p>Define qué roles principales reciben cada interacción y si su política es obligatoria u opcional.</p></div><div class="pc-notification-scope">${state.notificationScope?.all?'Alcance global':`Alcance: ${esc((state.notificationScope?.companies||[]).join(', ')||'según sesión')}`}</div></div>
+      <div class="pc-notification-layout">
+        <aside class="pc-notification-events-panel"><div class="pc-notification-events-head"><div><h3>Interacciones</h3><small>Maestro</small></div><span>${state.notificationEvents.length}</span></div><div class="pc-notification-event-search"><input id="pc-notification-event-search" value="${esc(state.notificationQuery)}" placeholder="Buscar interacción..."></div><div class="pc-notification-events" id="pc-notification-events"></div></aside>
+        <section class="pc-notification-role-panel" id="pc-notification-role-panel"></section>
+        <section class="pc-notification-policy-panel" id="pc-notification-policy-panel"></section>
+      </div>
+    </section>`;
+    document.getElementById('pc-notification-event-search')?.addEventListener('input',event=>{
+      state.notificationQuery=event.target.value;
+      renderNotificationEventList();
+    });
+    renderNotificationEventList();
+    renderNotificationRoles();
+    updateSaveButton();
+  }
+
+  function captureNotificationViewContext(){
+    return {
+      windowX:Number(window.scrollX||0),
+      windowY:Number(window.scrollY||0),
+      eventScroll:Number(document.getElementById('pc-notification-events')?.scrollTop||0),
+      roleScroll:Number(document.getElementById('pc-notification-role-list')?.scrollTop||0),
+      policyScroll:Number(document.getElementById('pc-notification-policy-list')?.scrollTop||0),
+      selectedEvent:state.selectedNotificationEvent
+    };
+  }
+
+  function restoreNotificationViewContext(context){
+    window.requestAnimationFrame(()=>{
+      const events=document.getElementById('pc-notification-events');
+      const roles=document.getElementById('pc-notification-role-list');
+      const policies=document.getElementById('pc-notification-policy-list');
+      if(events)events.scrollTop=context.eventScroll;
+      if(roles)roles.scrollTop=context.roleScroll;
+      if(policies)policies.scrollTop=Number(context.policyScroll??context.roleScroll);
+      window.scrollTo(context.windowX,context.windowY);
+    });
+  }
+
+  function countConfirmedNotificationChanges(changes,matrix){
+    const rows=Array.isArray(matrix?.configuraciones)?matrix.configuraciones:[];
+    const byKey=new Map(rows.map(row=>[notificationKey(row.codigo_evento,row.id_rol),row]));
+    return changes.reduce((total,change)=>{
+      const row=byKey.get(notificationKey(change.codigo_evento,change.id_rol));
+      if(change.habilitado){
+        return total+(row&&Boolean(row.activo)&&String(row.politica||'').toUpperCase()===change.politica?1:0);
+      }
+      return total+(row&&!Boolean(row.activo)?1:0);
+    },0);
+  }
+
+  async function saveNotificationChanges(){
+    if(state.savingNotifications||!state.notificationDirty.size)return;
+    const invalid=notificationInvalidDrafts();
+    if(invalid){
+      toast(`Selecciona Obligatoria u Opcional en ${invalid} configuración(es) antes de guardar.`);
+      return;
+    }
+    const changes=[...state.notificationDirty.entries()].map(([key,value])=>{
+      const [codigoEvento,idRol]=key.split('\u0000');
+      return {
+        codigo_evento:codigoEvento,
+        id_rol:Number(idRol),
+        habilitado:Boolean(value.habilitado),
+        ...(value.habilitado?{politica:value.politica}:{})
+      };
+    });
+    if(!confirm(`¿Guardar ${changes.length} cambio(s) en la matriz de notificaciones?`))return;
+    const context=captureNotificationViewContext();
+    state.savingNotifications=true;
+    updateSaveButton();
+    setSaveStatus(15,`Preparando ${changes.length} cambio(s) de notificación...`);
+    try{
+      setSaveStatus(45,'Guardando matriz en Aiven...');
+      const response=await request('/api/panel-control/notificaciones/matriz',{
+        method:'PUT',
+        body:JSON.stringify({changes})
+      });
+      const updated=Number(response.data?.updated||0);
+      if(updated!==changes.length){
+        throw new Error(`Aiven procesó ${updated} de ${changes.length} cambios de notificación.`);
+      }
+      const matrix=response.data?.matriz||{};
+      setSaveStatus(78,'Verificando configuración guardada...');
+      const confirmed=countConfirmedNotificationChanges(changes,matrix);
+      if(confirmed!==changes.length){
+        throw new Error(`Aiven confirmó ${confirmed} de ${changes.length} cambios de notificación.`);
+      }
+      const selected=context.selectedEvent;
+      applyNotificationMatrix(matrix);
+      if(state.notificationEvents.some(event=>event.codigo_evento===selected)) state.selectedNotificationEvent=selected;
+      state.savingNotifications=false;
+      renderNotificationPanel();
+      restoreNotificationViewContext(context);
+      setSaveStatus(100,'Matriz de notificaciones guardada y verificada.','success',2600);
+      toast('Configuración de notificaciones guardada correctamente.');
+    }catch(error){
+      state.savingNotifications=false;
+      updateSaveButton();
+      restoreNotificationViewContext(context);
+      setSaveStatus(Number(state.saveProgress.percent||0),error.message||'No fue posible guardar la matriz de notificaciones.','error',5200);
+      toast(error.message||'No fue posible guardar la matriz de notificaciones.');
+    }
+  }
+
   function shell(){
     return `<div class="pc-page">
       <header class="pc-hero"><div><span class="pc-eyebrow">SEGURIDAD Y ACCESOS</span><h1>Panel de Control</h1><p>Configura permisos base por rol y personaliza el acceso efectivo de cada usuario.</p></div><div class="pc-hero-actions"><button class="pc-btn ghost" id="pc-reload">Recargar datos</button><div class="pc-save-stack"><button class="pc-btn primary" id="pc-save" disabled>Guardar cambios <span id="pc-dirty-count">0</span></button><div class="pc-save-status" id="pc-save-status" hidden aria-live="polite"><div class="pc-save-status-line"><span id="pc-save-status-text">Preparando...</span><strong id="pc-save-status-percent">0%</strong></div><div class="pc-save-progress" id="pc-save-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="pc-save-progress-fill"></span></div></div></div></div></header>
@@ -277,7 +712,7 @@
         <article><b>${esc(state.totals.permisos_disponibles||0)}</b><span>Permisos disponibles</span></article>
         <article><b>${esc(state.totals.personalizaciones_activas||0)}</b><span>Personalizaciones activas</span></article>
       </section>
-      <nav class="pc-tabs"><button data-tab="users" class="${state.tab==='users'?'active':''}">Permisos por usuario</button><button data-tab="roles" class="${state.tab==='roles'?'active':''}">Roles y permisos</button><button data-tab="admin-users" class="${state.tab==='admin-users'?'active':''}">Usuarios</button><button data-tab="admin-roles" class="${state.tab==='admin-roles'?'active':''}">Roles</button>${window.ManttoUserViewer?.allowed?.()?`<button data-tab="viewer" class="${state.tab==='viewer'?'active':''}">Visor de usuarios</button>`:''}<button data-tab="audit" class="${state.tab==='audit'?'active':''}">Auditoría</button></nav>
+      <nav class="pc-tabs"><button data-tab="users" class="${state.tab==='users'?'active':''}">Permisos por usuario</button><button data-tab="roles" class="${state.tab==='roles'?'active':''}">Roles y permisos</button><button data-tab="admin-users" class="${state.tab==='admin-users'?'active':''}">Usuarios</button><button data-tab="admin-roles" class="${state.tab==='admin-roles'?'active':''}">Roles</button><button data-tab="notifications" class="${state.tab==='notifications'?'active':''}">Notificaciones</button>${window.ManttoUserViewer?.allowed?.()?`<button data-tab="viewer" class="${state.tab==='viewer'?'active':''}">Visor de usuarios</button>`:''}<button data-tab="audit" class="${state.tab==='audit'?'active':''}">Auditoría</button></nav>
       <div id="pc-content"></div><div class="pc-toast" id="pc-toast"></div>
     </div>`;
   }
@@ -286,20 +721,29 @@
     const view=document.getElementById('view-panel-control');
     if(!view)return;
     view.innerHTML=shell();
-    document.getElementById('pc-reload')?.addEventListener('click',loadBootstrap);
+    document.getElementById('pc-reload')?.addEventListener('click',async()=>{
+      if(state.tab==='notifications'){
+        await loadNotificationMatrix();
+        return;
+      }
+      await loadBootstrap();
+    });
     document.getElementById('pc-save')?.addEventListener('click',saveChanges);
     renderSaveStatus();
     view.querySelectorAll('[data-tab]').forEach(btn=>btn.addEventListener('click',async()=>{
-      if(state.savingPermissions){toast('Espera a que termine el guardado actual.');return;}
+      if(state.savingPermissions||state.savingNotifications){toast('Espera a que termine el guardado actual.');return;}
       const nextTab=btn.dataset.tab;
       if(nextTab===state.tab)return;
-      if(state.dirty.size&&!confirm('Hay cambios sin guardar. ¿Deseas descartarlos y cambiar de pestaña?'))return;
+      const pending=state.tab==='notifications'?state.notificationDirty.size:state.dirty.size;
+      if(pending&&!confirm('Hay cambios sin guardar. ¿Deseas descartarlos y cambiar de pestaña?'))return;
       state.tab=nextTab;
       state.dirty.clear();
+      state.notificationDirty.clear();
       state.permissionQuery='';
       render();
       if(state.tab==='roles'&&state.selectedRoleId) await loadRolePermissions(state.selectedRoleId);
       if(state.tab==='admin-users'){ await loadAdminCatalogs(); renderAdminUsers(); }
+      if(state.tab==='notifications') await loadNotificationMatrix();
     }));
     renderMain();
   }
@@ -311,6 +755,7 @@
     if(state.error){box.innerHTML=`<section class="pc-permissions"><div class="pc-empty large"><b>No se pudo cargar el Panel de Control.</b><br>${esc(state.error)}</div></section>`;return;}
     if(state.tab==='admin-users'){ renderAdminUsers(); return; }
     if(state.tab==='admin-roles'){ renderAdminRoles(); return; }
+    if(state.tab==='notifications'){ renderNotificationPanel(); return; }
     if(state.tab==='viewer'){ window.ManttoUserViewer?.renderPanel?.(box); updateSaveButton(); return; }
     if(state.tab==='audit'){
       box.innerHTML='<section class="pc-audit"><div class="pc-audit-head"><div><span class="pc-eyebrow">TRAZABILIDAD</span><h2>Auditoría</h2><p>La auditoría histórica completa se integrará en una tabla dedicada. Los campos created_by, updated_by, created_at y updated_at ya se actualizan al guardar.</p></div></div></section>';
@@ -821,6 +1266,16 @@
   function updateSaveButton(){
     const btn=document.getElementById('pc-save');
     if(!btn)return;
+    if(state.tab==='notifications'){
+      const invalid=notificationInvalidDrafts();
+      btn.disabled=state.savingNotifications||state.notificationLoading||state.notificationDirty.size===0||invalid>0;
+      btn.title=invalid?`Falta seleccionar política en ${invalid} configuración(es).`:'';
+      btn.innerHTML=state.savingNotifications
+        ?'Guardando notificaciones...'
+        :`Guardar cambios <span id="pc-dirty-count">${state.notificationDirty.size}</span>`;
+      return;
+    }
+    btn.title='';
     const targetMissing=state.tab==='users'?!state.selectedUserId:state.tab==='roles'?!state.selectedRoleId:false;
     btn.disabled=state.savingPermissions||state.dirty.size===0||state.tab==='audit'||targetMissing||state.panelLoading;
     btn.innerHTML=state.savingPermissions
@@ -992,6 +1447,10 @@
   }
 
   async function saveChanges(){
+    if(state.tab==='notifications'){
+      await saveNotificationChanges();
+      return;
+    }
     if(state.savingPermissions||!state.dirty.size)return;
     const isUsers=state.tab==='users';
     const selectedId=isUsers?Number(state.selectedUserId):Number(state.selectedRoleId);

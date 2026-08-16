@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const pendientesAccess = require('../modules/pendientes/pendientes-access.service');
 const pendientesFiles = require('../modules/pendientes/pendientes-files.service');
+const notificationService = require('../services/notifications/notification.service');
 
 
 function positiveInt(value, fallback, min, max) {
@@ -1147,6 +1148,332 @@ function normalizeTicketIdentity(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+
+const N6_EVENTO_COMENTARIO = 'COMENTARIO';
+const N6_EVENTO_FALLA_EQUIPO_CRITICO = 'FALLA_EQUIPO_CRITICO';
+const N6_EVENTO_PERSONA_ATRAPADA = 'PERSONA_ATRAPADA';
+const N6_EVENTO_NUEVO_EQUIPO_CRITICO = 'NUEVO_EQUIPO_CRITICO';
+const N6_CRITICOS_DIAS = 35;
+const N6_CRITICOS_MIN_FALLAS_BLT = 3;
+const N6_ATRAPADO_KEYWORDS = Object.freeze([
+  'atrapado', 'atrapada', 'encerrado', 'encerrada',
+  'persona atrapada', 'personas atrapadas', 'rescate'
+]);
+
+function n6NormalizeText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function n6TicketIsBlt(ticketRow) {
+  return n6NormalizeText(ticketRow && ticketRow.responsabilidad).includes('blt');
+}
+
+function n6TicketIsPersonaAtrapada(ticketRow) {
+  // Reutiliza el clasificador ya usado por Atencion Prioritaria/estados visuales.
+  // La tabla tickets no tiene actualmente una columna dedicada tipo_evento.
+  const blob = [
+    ticketRow && ticketRow.descripcion,
+    ticketRow && ticketRow.causa,
+    ticketRow && ticketRow.accion_en_cierre
+  ].filter(Boolean).join(' ').toLowerCase();
+  return N6_ATRAPADO_KEYWORDS.some(keyword => blob.includes(keyword));
+}
+
+async function n6ResolveRelatedTicketUserIds(executor, ticketRow) {
+  const responsibleNames = await ticketResponsibleNames(ticketRow, executor);
+  const normalizedResponsibles = new Set(
+    responsibleNames.map(normalizeTicketIdentity).filter(Boolean)
+  );
+  if (!normalizedResponsibles.size) return [];
+
+  const [userRows] = await executor.query(`
+    SELECT id_SB, nombre, iniciales, correo
+    FROM usuarios
+    WHERE estado = 1
+  `);
+
+  const relatedUserIds = new Set();
+  for (const user of userRows) {
+    const identities = [user.nombre, user.iniciales, user.correo]
+      .map(normalizeTicketIdentity)
+      .filter(Boolean);
+    if (identities.some(identity => normalizedResponsibles.has(identity))) {
+      relatedUserIds.add(Number(user.id_SB));
+    }
+  }
+
+  if (relatedUserIds.size) {
+    const ids = [...relatedUserIds];
+    const placeholders = ids.map(() => '?').join(',');
+    const [adminRows] = await executor.query(`
+      SELECT DISTINCT ura.id_admin
+      FROM usuarios_rel_admin ura
+      INNER JOIN usuarios admin
+        ON admin.id_SB = ura.id_admin
+       AND admin.estado = 1
+      WHERE ura.id_asesor IN (${placeholders})
+    `, ids);
+    adminRows.forEach(row => {
+      const id = Number(row.id_admin || 0);
+      if (id > 0) relatedUserIds.add(id);
+    });
+  }
+
+  return [...relatedUserIds].filter(id => Number.isInteger(id) && id > 0);
+}
+
+async function n6ListActiveUserIds(executor) {
+  const [rows] = await executor.query(`
+    SELECT id_SB
+    FROM usuarios
+    WHERE estado = 1
+  `);
+  return rows
+    .map(row => Number(row.id_SB || 0))
+    .filter(id => Number.isInteger(id) && id > 0);
+}
+
+async function n6FindZoneId(executor, zoneValue) {
+  const raw = String(zoneValue || '').trim();
+  if (!raw) return null;
+  const normalized = raw.toUpperCase().replace(/[-\s]/g, '');
+  const [rows] = await executor.query(`
+    SELECT id_zona, zona
+    FROM z_op
+    WHERE estado = 1
+      AND (
+        UPPER(TRIM(zona)) = UPPER(TRIM(?))
+        OR UPPER(REPLACE(REPLACE(TRIM(zona), '-', ''), ' ', '')) = ?
+      )
+    ORDER BY id_zona ASC
+    LIMIT 1
+  `, [raw, normalized]);
+  return rows[0] ? Number(rows[0].id_zona) || null : null;
+}
+
+async function n6ResolveTicketZoneId(executor, ticketRow) {
+  const candidates = [];
+  const direct = String(ticketRow && ticketRow.zona || '').trim();
+  if (direct) candidates.push(direct);
+
+  const code = String(ticketRow && ticketRow.codigo_equipo || '').trim();
+  const project = String(ticketRow && (ticketRow.proyecto || ticketRow.proyecto_padre) || '').trim();
+  if (code || project) {
+    const clauses = [];
+    const params = [];
+    if (code) { clauses.push("TRIM(COALESCE(numero_equipo, '')) = TRIM(?)"); params.push(code); }
+    if (project) { clauses.push("TRIM(COALESCE(proyecto, '')) = TRIM(?)"); params.push(project); }
+    const [rows] = await executor.query(`
+      SELECT zona_operativa
+      FROM portafolio
+      WHERE estado_registro = 1
+        AND (${clauses.join(' OR ')})
+        AND zona_operativa IS NOT NULL
+        AND TRIM(zona_operativa) <> ''
+      ORDER BY CASE WHEN TRIM(COALESCE(numero_equipo, '')) = TRIM(?) THEN 0 ELSE 1 END,
+               id_portafolio DESC
+      LIMIT 5
+    `, [...params, code || '']);
+    rows.forEach(row => {
+      const value = String(row.zona_operativa || '').trim();
+      if (value && !candidates.includes(value)) candidates.push(value);
+    });
+  }
+
+  for (const candidate of candidates) {
+    const id = await n6FindZoneId(executor, candidate);
+    if (id) return id;
+  }
+  return null;
+}
+
+async function n6ResolveTaskZoneScope(executor, taskRow) {
+  const equipment = String(taskRow && taskRow.equipo || '').trim();
+  const project = String(taskRow && taskRow.proyecto || '').trim();
+  if (!equipment && !project) return { zonaOperativaNoAplica: true };
+
+  const clauses = [];
+  const params = [];
+  if (equipment) {
+    clauses.push("(TRIM(COALESCE(numero_equipo, '')) = TRIM(?) OR TRIM(COALESCE(identificacion_sitio, '')) = TRIM(?))");
+    params.push(equipment, equipment);
+  }
+  if (project) {
+    clauses.push("TRIM(COALESCE(proyecto, '')) = TRIM(?)");
+    params.push(project);
+  }
+
+  const [rows] = await executor.query(`
+    SELECT zona_operativa
+    FROM portafolio
+    WHERE estado_registro = 1
+      AND (${clauses.join(' OR ')})
+      AND zona_operativa IS NOT NULL
+      AND TRIM(zona_operativa) <> ''
+    ORDER BY id_portafolio DESC
+    LIMIT 5
+  `, params);
+
+  for (const row of rows) {
+    const zoneId = await n6FindZoneId(executor, row.zona_operativa);
+    if (zoneId) return { zonaOperativaId: zoneId };
+  }
+
+  // La tarea declara un proyecto/equipo pero no fue posible resolver su zona:
+  // no se marca NO_APLICA para que N3 cierre el envio de forma segura.
+  return {};
+}
+
+async function n6EmitTicketEvent(executor, {
+  codigoEvento,
+  ticketRow,
+  actor,
+  titulo,
+  mensaje,
+  icono,
+  recipientMode = 'zone'
+}) {
+  // Comentario: solo usuarios ya relacionados con la entidad.
+  // Eventos criticos: candidatos activos; N3 reduce por Rol Principal + Zona Operativa.
+  // Esto permite que la matriz defina los Roles receptores sin ampliar el acceso zonal.
+  const recipients = recipientMode === 'related'
+    ? await n6ResolveRelatedTicketUserIds(executor, ticketRow)
+    : await n6ListActiveUserIds(executor);
+  const zoneId = await n6ResolveTicketZoneId(executor, ticketRow);
+  return notificationService.emitWithConnection_gnral(executor, {
+    codigoEvento,
+    destinatarios: recipients,
+    actorUserId: actor && actor.id,
+    ...(zoneId ? { zonaOperativaId: zoneId } : {}),
+    requireRoleMatrix: true,
+    allowMissingEvent: true,
+    titulo,
+    mensaje,
+    icono,
+    accion: 'ABRIR_TICKET',
+    idReferencia: Number(ticketRow && ticketRow.id) || null,
+    ruta: ticketRow && ticketRow.ticket ? `detalle:ticket:${ticketRow.ticket}` : null
+  });
+}
+
+async function n6CreateTicketCommentNotification(executor, ticketRow, actor, message) {
+  return n6EmitTicketEvent(executor, {
+    codigoEvento: N6_EVENTO_COMENTARIO,
+    ticketRow,
+    actor,
+    titulo: 'Nuevo comentario en ticket',
+    mensaje: String(message || '').slice(0, 2000),
+    icono: '💬',
+    recipientMode: 'related'
+  });
+}
+
+async function n6ListCriticalEquipmentState(executor, equipmentCodes) {
+  const codes = [...new Set((equipmentCodes || [])
+    .map(value => String(value || '').trim())
+    .filter(Boolean))];
+  if (!codes.length) return new Map();
+
+  const [rows] = await executor.query(`
+    SELECT
+      p.numero_equipo,
+      MAX(p.zona_operativa) AS zona_operativa,
+      MAX(p.proyecto) AS proyecto,
+      COUNT(DISTINCT t.id) AS fallas_blt_periodo
+    FROM portafolio p
+    LEFT JOIN tickets t
+      ON t.codigo_equipo = p.numero_equipo
+     AND t.fecha_reporte IS NOT NULL
+     AND t.fecha_reporte >= DATE_SUB(CURDATE(), INTERVAL ${N6_CRITICOS_DIAS} DAY)
+     AND UPPER(COALESCE(t.responsabilidad, '')) LIKE '%BLT%'
+    WHERE p.numero_equipo IN (?)
+      AND p.estado_registro = 1
+      AND (p.inactivo IS NULL OR UPPER(TRIM(CAST(p.inactivo AS CHAR))) NOT IN ('SI','SÍ','1','TRUE'))
+      AND UPPER(TRIM(COALESCE(p.estatus_servicio,''))) NOT LIKE '%NO EN SERVICIO%'
+    GROUP BY p.numero_equipo
+  `, [codes]);
+
+  return new Map(rows.map(row => [String(row.numero_equipo || '').trim(), {
+    fallas: Number(row.fallas_blt_periodo || 0),
+    zona_operativa: row.zona_operativa || null,
+    proyecto: row.proyecto || null
+  }]));
+}
+
+async function n6ProcessInsertedTicketNotifications(executor, insertedRows, criticalBefore, actor) {
+  const rows = Array.isArray(insertedRows) ? insertedRows : [];
+  const equipmentCodes = rows.map(row => row.codigo_equipo).filter(Boolean);
+  const criticalAfter = await n6ListCriticalEquipmentState(executor, equipmentCodes);
+  const summary = {
+    comentario: 0,
+    falla_equipo_critico: 0,
+    persona_atrapada: 0,
+    nuevo_equipo_critico: 0,
+    eventos: []
+  };
+
+  for (const row of rows) {
+    if (n6TicketIsPersonaAtrapada(row)) {
+      const result = await n6EmitTicketEvent(executor, {
+        codigoEvento: N6_EVENTO_PERSONA_ATRAPADA,
+        ticketRow: row,
+        actor,
+        titulo: 'Ticket de persona atrapada',
+        mensaje: `Se genero el ticket ${row.ticket} relacionado con una persona atrapada.`,
+        icono: '🚨'
+      });
+      summary.persona_atrapada += Number(result.created || 0);
+      summary.eventos.push({ codigo_evento: N6_EVENTO_PERSONA_ATRAPADA, ticket: row.ticket, created: Number(result.created || 0), reason: result.reason || null });
+    }
+
+    const code = String(row.codigo_equipo || '').trim();
+    const before = criticalBefore.get(code);
+    if (code && before && before.fallas >= N6_CRITICOS_MIN_FALLAS_BLT && n6TicketIsBlt(row)) {
+      const result = await n6EmitTicketEvent(executor, {
+        codigoEvento: N6_EVENTO_FALLA_EQUIPO_CRITICO,
+        ticketRow: row,
+        actor,
+        titulo: 'Nueva falla en equipo critico',
+        mensaje: `Se genero el ticket ${row.ticket} con responsabilidad BLT sobre el equipo critico ${code}.`,
+        icono: '💥'
+      });
+      summary.falla_equipo_critico += Number(result.created || 0);
+      summary.eventos.push({ codigo_evento: N6_EVENTO_FALLA_EQUIPO_CRITICO, ticket: row.ticket, created: Number(result.created || 0), reason: result.reason || null });
+    }
+  }
+
+  const newBltByEquipment = new Map();
+  rows.filter(n6TicketIsBlt).forEach(row => {
+    const code = String(row.codigo_equipo || '').trim();
+    if (code && !newBltByEquipment.has(code)) newBltByEquipment.set(code, row);
+  });
+
+  for (const [code, triggerRow] of newBltByEquipment.entries()) {
+    const before = criticalBefore.get(code);
+    const after = criticalAfter.get(code);
+    const beforeCount = Number(before && before.fallas || 0);
+    const afterCount = Number(after && after.fallas || 0);
+    if (beforeCount >= N6_CRITICOS_MIN_FALLAS_BLT || afterCount < N6_CRITICOS_MIN_FALLAS_BLT) continue;
+
+    const result = await n6EmitTicketEvent(executor, {
+      codigoEvento: N6_EVENTO_NUEVO_EQUIPO_CRITICO,
+      ticketRow: triggerRow,
+      actor,
+      titulo: 'Nuevo equipo critico',
+      mensaje: `El equipo ${code} paso a condicion critica al alcanzar ${afterCount} fallas BLT en los ultimos ${N6_CRITICOS_DIAS} dias.`,
+      icono: '💥'
+    });
+    summary.nuevo_equipo_critico += Number(result.created || 0);
+    summary.eventos.push({ codigo_evento: N6_EVENTO_NUEVO_EQUIPO_CRITICO, ticket: triggerRow.ticket, created: Number(result.created || 0), reason: result.reason || null });
+  }
+
+  return summary;
+}
+
 async function createTicketNotifications(executor, ticketRow, actor, type, message) {
   const mandatoryRoles = new Set([
     'director general',
@@ -1319,8 +1646,8 @@ async function createTicketComentario(req, res) {
   const conn=await db.getConnection();
   try { await conn.beginTransaction(); const row=await findTicketRow(ticket,conn); if(!row){await conn.rollback();return res.status(404).json({ok:false,message:'Ticket no encontrado.'});}
     const [result]=await conn.query('INSERT INTO ticket_comentarios (id_ticket,id_usuario,comentario) VALUES (?,?,?)',[row.id,user.id,comentario]);
-    const notificationResult = await createTicketNotifications(conn,row,user,'TICKET_COMENTARIO',`${user.iniciales||user.correo||'Usuario'} comentó el ticket ${row.ticket}.`);
-    await conn.commit(); return res.status(201).json({ok:true,message:'Comentario agregado.',data:{id_comentario:result.insertId,notificaciones_creadas:notificationResult.inserted,destinatarios_notificacion:notificationResult.recipients}});
+    const notificationResult = await n6CreateTicketCommentNotification(conn,row,user,`${user.iniciales||user.correo||'Usuario'} comentó el ticket ${row.ticket}.`);
+    await conn.commit(); return res.status(201).json({ok:true,message:'Comentario agregado.',data:{id_comentario:result.insertId,notificaciones_creadas:notificationResult.created,destinatarios_notificacion:notificationResult.recipients}});
   } catch(error){await conn.rollback();return res.status(500).json({ok:false,message:'Error agregando comentario.',error:error.message});} finally{conn.release();}
 }
 async function saveTicketValidacion(req,res){
@@ -2255,22 +2582,42 @@ async function createPendienteCommentNotifications(executor, access, actor, inte
   const actionText = preview
     ? `${actorInitials} comentó: ${preview}`
     : `${actorInitials} adjuntó${fileName ? `: ${fileName}` : ' un archivo'}`;
-
-  for (const idUsuario of recipientIds) {
-    await executor.query(`
-      INSERT INTO sup_notificaciones (
-        id_usuario, tipo_notificacion, titulo_notificacion, mensaje_notificacion,
-        icono_notificacion, accion_notificacion, id_referencia, ruta_destino,
-        leido, activo
-      ) VALUES (?, 'TAREA_COMENTARIO', 'Nueva interacción en tarea', ?, '💬', 'ABRIR_TAREA', ?, ?, 0, 1)
-    `, [
-      idUsuario,
-      actionText,
-      access.row.id_pendiente,
-      `home:tarea:${access.row.id_pendiente}`
-    ]);
+  // N6 unifica solo la interacción COMENTARIO. Un adjunto sin texto conserva
+  // temporalmente su notificación legacy para no cambiar el significado funcional.
+  if (!preview) {
+    for (const idUsuario of recipientIds) {
+      await executor.query(`
+        INSERT INTO sup_notificaciones (
+          id_usuario, tipo_notificacion, titulo_notificacion, mensaje_notificacion,
+          icono_notificacion, accion_notificacion, id_referencia, ruta_destino,
+          leido, activo
+        ) VALUES (?, 'TAREA_COMENTARIO', 'Nueva interacción en tarea', ?, '💬', 'ABRIR_TAREA', ?, ?, 0, 1)
+      `, [
+        idUsuario,
+        actionText,
+        access.row.id_pendiente,
+        `home:tarea:${access.row.id_pendiente}`
+      ]);
+    }
+    return recipientIds.size;
   }
-  return recipientIds.size;
+
+  const zoneScope = await n6ResolveTaskZoneScope(executor, access.row);
+  const result = await notificationService.emitWithConnection_gnral(executor, {
+    codigoEvento: N6_EVENTO_COMENTARIO,
+    destinatarios: [...recipientIds],
+    actorUserId: actorId || null,
+    ...zoneScope,
+    requireRoleMatrix: true,
+    allowMissingEvent: true,
+    titulo: 'Nuevo comentario en tarea',
+    mensaje: actionText,
+    icono: '💬',
+    accion: 'ABRIR_TAREA',
+    idReferencia: access.row.id_pendiente,
+    ruta: `home:tarea:${access.row.id_pendiente}`
+  });
+  return Number(result.created || 0);
 }
 
 async function createPendienteComentario(req, res) {
@@ -3955,6 +4302,12 @@ async function syncTickets(req, res) {
       existingByTicket.set(normalizeTicket(existing.ticket), existing);
     }
 
+    const n6EquipmentCodes = preparedRows
+      .map(row => String(row.codigo_equipo || '').trim())
+      .filter(Boolean);
+    const n6CriticalBefore = await n6ListCriticalEquipmentState(connection, n6EquipmentCodes);
+    const n6InsertedRows = [];
+
     const insertColumns = ['id', ...syncColumns];
     const insertSql = `
       INSERT INTO tickets (${insertColumns.join(', ')})
@@ -4035,6 +4388,7 @@ async function syncTickets(req, res) {
         if (!sameId) {
           await connection.query(insertSql, [row.id, ...values]);
           inserted += 1;
+          n6InsertedRows.push(row);
           continue;
         }
 
@@ -4057,6 +4411,32 @@ async function syncTickets(req, res) {
       }
     }
 
+    let n6Notificaciones = {
+      falla_equipo_critico: 0,
+      persona_atrapada: 0,
+      nuevo_equipo_critico: 0,
+      eventos: []
+    };
+    let n6NotificationError = null;
+
+    if (n6InsertedRows.length) {
+      await connection.query('SAVEPOINT n6_notificaciones');
+      try {
+        n6Notificaciones = await n6ProcessInsertedTicketNotifications(
+          connection,
+          n6InsertedRows,
+          n6CriticalBefore,
+          currentUserRef(req)
+        );
+        await connection.query('RELEASE SAVEPOINT n6_notificaciones');
+      } catch (notificationError) {
+        n6NotificationError = notificationError.message;
+        console.error('[tickets/sync][N6] Los tickets se conservaran, pero se revirtieron las notificaciones del lote:', notificationError.message);
+        await connection.query('ROLLBACK TO SAVEPOINT n6_notificaciones');
+        await connection.query('RELEASE SAVEPOINT n6_notificaciones');
+      }
+    }
+
     await connection.commit();
 
     return res.json({
@@ -4069,7 +4449,9 @@ async function syncTickets(req, res) {
       omitidos: errores.length,
       errores,
       first_id: ids.length ? Math.min(...ids) : null,
-      last_id: ids.length ? Math.max(...ids) : null
+      last_id: ids.length ? Math.max(...ids) : null,
+      notificaciones_n6: n6Notificaciones,
+      notificaciones_n6_error: n6NotificationError
     });
   } catch (error) {
     if (connection) {

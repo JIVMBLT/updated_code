@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const controller = require('../controllers/panel-control.controller');
+const notificationAdminController = require('../controllers/panel-control-notificaciones.controller');
 
 const router = express.Router();
 
@@ -10,6 +11,8 @@ router.get('/viewer-bootstrap', requireAuth, controller.getViewerBootstrap);
 router.post('/viewer-context', requireAuth, controller.postViewerContext);
 router.post('/viewer-close', requireAuth, controller.postViewerClose);
 router.get('/bootstrap', requireAuth, controller.getBootstrap);
+router.get('/notificaciones/matriz', requireAuth, notificationAdminController.getNotificationMatrix_gnral);
+router.put('/notificaciones/matriz', requireAuth, notificationAdminController.saveNotificationMatrix_gnral);
 router.get('/roles/:id/permisos', requireAuth, controller.getRolePermissions);
 router.put('/roles/:id/permisos', requireAuth, controller.saveRolePermissions);
 router.get('/usuarios/:id/permisos', requireAuth, controller.getUserPermissions);

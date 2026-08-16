@@ -1,25 +1,6 @@
 (function(){
 
 
-  function installMutationRefreshSignal(){
-    if(window.__MANTTO_FETCH_MUTATION_SIGNAL_INSTALLED__ || typeof window.fetch !== 'function') return;
-    window.__MANTTO_FETCH_MUTATION_SIGNAL_INSTALLED__ = true;
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async function(input, init){
-      const response = await originalFetch(input, init);
-      try{
-        const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-        if(response.ok && ['POST','PUT','PATCH','DELETE'].includes(method)){
-          const url = typeof input === 'string' ? input : String(input && input.url || '');
-          window.setTimeout(function(){
-            document.dispatchEvent(new CustomEvent('mantto:data-mutated',{ detail:{ method:method, url:url } }));
-          },0);
-        }
-      }catch(error){}
-      return response;
-    };
-  }
-
   function formatDate(date){
     return date.toLocaleDateString('es-MX', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
   }
@@ -245,17 +226,17 @@
       });
     }
   }
-  const NOTIFICACIONES_REFRESH_MS = 10000;
+  const NOTIFICACIONES_REFRESH_MS = 30000;
   let notificacionesTimer = null;
   let notificacionesActualizando = false;
 
   async function refrescarNotificacionesHeader(){
     if(document.hidden || notificacionesActualizando) return;
-    if(!window.ManttoHome || typeof window.ManttoHome.refreshHeaderNotifications !== 'function') return;
+    if(!window.ManttoHome || typeof window.ManttoHome.refreshHeaderNotificationState !== 'function') return;
 
     notificacionesActualizando = true;
     try{
-      await window.ManttoHome.refreshHeaderNotifications();
+      await window.ManttoHome.refreshHeaderNotificationState();
     }finally{
       notificacionesActualizando = false;
     }
@@ -268,11 +249,11 @@
     }
   }
 
-  function iniciarTimerNotificaciones(){
+  function iniciarTimerNotificaciones(refrescarAhora){
     detenerTimerNotificaciones();
     if(document.hidden) return;
 
-    refrescarNotificacionesHeader();
+    if(refrescarAhora) refrescarNotificacionesHeader();
     notificacionesTimer = window.setInterval(refrescarNotificacionesHeader, NOTIFICACIONES_REFRESH_MS);
   }
 
@@ -285,19 +266,19 @@
         detenerTimerNotificaciones();
         return;
       }
-      iniciarTimerNotificaciones();
+      iniciarTimerNotificaciones(true);
     });
   }
 
   function initAfterAuth(){
     if(window.__MANTTO_APP_READY__) return;
     window.__MANTTO_APP_READY__ = true;
-    installMutationRefreshSignal();
     if(window.ManttoHome) window.ManttoHome.init();
     bindNotificationRefreshVisibility();
-    iniciarTimerNotificaciones();
+    iniciarTimerNotificaciones(false);
     if(window.ManttoSupport) window.ManttoSupport.init();
     initDailyPhrase();
+    if(window.ManttoBuildInfo && typeof window.ManttoBuildInfo.initProgrammerBanner === 'function') window.ManttoBuildInfo.initProgrammerBanner();
     bindGlobalNavigation();
   }
 

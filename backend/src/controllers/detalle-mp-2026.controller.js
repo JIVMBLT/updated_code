@@ -203,21 +203,24 @@ async function getDetalleMp2026(req, res) {
     }
 
     const mantenimiento = rows[0];
-    const projectId = mantenimiento.id_proyecto_cobranza;
+    const proyecto = String(mantenimiento.proyecto || '').trim();
     let mantenimientoPreventivo = [mantenimiento];
     let gestionCredito = null;
     let ventaAdicional = [];
 
-    if (projectId) {
+    // Regla Cobranza United V014:
+    // todas las relaciones funcionales de MP con GC y Venta Adicional se
+    // resuelven por proyecto. La FK no condiciona la navegación cruzada.
+    if (proyecto) {
       const [mpRows] = await conn.query(
         `SELECT
            id_dmp, zona_adm, proyecto, id_proyecto_cobranza, idns, cliente, periodicidad,
            momento_facturacion, estado, z_oper, forma_pago, iguala, condiciones_pago,
            monto_anual, pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
          FROM ${TABLE_NAME}
-         WHERE id_proyecto_cobranza = ?
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
          ORDER BY id_dmp ASC`,
-        [projectId]
+        [proyecto]
       );
       mantenimientoPreventivo = mpRows;
 
@@ -228,10 +231,10 @@ async function getDetalleMp2026(req, res) {
            credito_disponible_venta, mp_2026, monto_mp_2026, facturas_mp, montp_mp,
            facturas_va, monto_va
          FROM gestion_credito
-         WHERE id_proyecto_cobranza = ?
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
          ORDER BY id_gc ASC
          LIMIT 1`,
-        [projectId]
+        [proyecto]
       );
       gestionCredito = gcRows[0] || null;
 
@@ -244,9 +247,9 @@ async function getDetalleMp2026(req, res) {
            estatus_administrativo, estatus_operativo, fecha_pago,
            refacturacion_sustitucion, zona_operativa, estado, comentarios_cobranza
          FROM pc
-         WHERE id_proyecto_cobranza = ?
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
          ORDER BY id_pc ASC`,
-        [projectId]
+        [proyecto]
       );
       ventaAdicional = pcRows;
     }

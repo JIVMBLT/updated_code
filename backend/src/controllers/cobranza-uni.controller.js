@@ -265,64 +265,28 @@ async function getGestionCreditoDetalle(req, res) {
     }
 
     const gestion = gestionRows[0];
-    const projectId = gestion.id_proyecto_cobranza;
-    const idns = String(gestion.idns || '').trim();
     const proyecto = String(gestion.proyecto || '').trim();
 
     let mantenimientoPreventivo = [];
-    if (projectId) {
-      const [mpRows] = await conn.query(
-        `SELECT
-           id_dmp, zona_adm, proyecto, id_proyecto_cobranza, idns, cliente, periodicidad,
-           momento_facturacion, estado, z_oper, forma_pago, iguala, condiciones_pago,
-           monto_anual, pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
-         FROM detalle_mp_2026
-         WHERE id_proyecto_cobranza = ?
-         ORDER BY id_dmp ASC`,
-        [projectId]
-      );
-      mantenimientoPreventivo = mpRows;
-    } else if (idns || proyecto) {
-      const conditions = [];
-      const params = [];
-      if (idns) {
-        conditions.push(`TRIM(COALESCE(idns, '')) = ?`);
-        params.push(idns);
-      }
-      if (proyecto) {
-        conditions.push(`LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)`);
-        params.push(proyecto);
-      }
-      const [mpRows] = await conn.query(
-        `SELECT
-           id_dmp, zona_adm, proyecto, id_proyecto_cobranza, idns, cliente, periodicidad,
-           momento_facturacion, estado, z_oper, forma_pago, iguala, condiciones_pago,
-           monto_anual, pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
-         FROM detalle_mp_2026
-         WHERE ${conditions.join(' OR ')}
-         ORDER BY id_dmp ASC`,
-        params
-      );
-      mantenimientoPreventivo = mpRows;
-    }
-
     let ventaAdicional = [];
-    if (projectId) {
-      const [pcRows] = await conn.query(
+
+    // Regla Cobranza United V014:
+    // GC, MP y Venta Adicional se relacionan funcionalmente por proyecto.
+    // id_proyecto_cobranza puede existir como dato técnico, pero no condiciona
+    // la navegación ni las consultas cruzadas entre estos tres módulos.
+    if (proyecto) {
+      const [mpRows] = await conn.query(
         `SELECT
-           id_pc, zona_adm, proyecto, id_proyecto_cobranza, cliente, ov, fecha_ov, mes_ov, concepto,
-           precio_venta, pagado_iva, no_pagado_iva, venta_total, facturas_pendientes_pago,
-           adeudo, tipo_pago, no_factura, fecha_factura, mes_factura, terminos,
-           fecha_vencimiento, dias_vencimiento, estatus, estatus_administrativo,
-           estatus_operativo, fecha_pago, refacturacion_sustitucion, zona_operativa,
-           estado, comentarios_cobranza
-         FROM pc
-         WHERE id_proyecto_cobranza = ?
-         ORDER BY id_pc ASC`,
-        [projectId]
+           id_dmp, zona_adm, proyecto, id_proyecto_cobranza, idns, cliente, periodicidad,
+           momento_facturacion, estado, z_oper, forma_pago, iguala, condiciones_pago,
+           monto_anual, pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
+         FROM detalle_mp_2026
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
+         ORDER BY id_dmp ASC`,
+        [proyecto]
       );
-      ventaAdicional = pcRows;
-    } else if (proyecto) {
+      mantenimientoPreventivo = mpRows;
+
       const [pcRows] = await conn.query(
         `SELECT
            id_pc, zona_adm, proyecto, id_proyecto_cobranza, cliente, ov, fecha_ov, mes_ov, concepto,
@@ -482,8 +446,151 @@ async function syncCobranzaUni(req, res) {
   }
 }
 
+
+function normalizePcId(value) {
+  const text = String(value == null ? '' : value).trim();
+  return /^\d+$/.test(text) && !/^0+$/.test(text) ? text : null;
+}
+
+async function getVentaAdicional(req, res) {
+  const conn = await db.getConnection();
+  try {
+    const [rows] = await conn.query(
+      `SELECT
+         id_pc, zona_adm, proyecto, id_proyecto_cobranza, cliente, ov, fecha_ov, mes_ov,
+         concepto, precio_venta, pagado_iva, no_pagado_iva, venta_total,
+         facturas_pendientes_pago, adeudo, tipo_pago, no_factura, fecha_factura,
+         mes_factura, terminos, fecha_vencimiento, dias_vencimiento, estatus,
+         estatus_administrativo, estatus_operativo, fecha_pago,
+         refacturacion_sustitucion, zona_operativa, estado, comentarios_cobranza
+       FROM pc
+       ORDER BY COALESCE(fecha_ov, '1900-01-01') DESC, id_pc DESC`
+    );
+
+    const kpis = {
+      total_registros: rows.length,
+      venta_total: 0,
+      facturado_pagado: 0,
+      no_pagado: 0,
+      adeudo_total: 0,
+      facturas_pendientes: 0,
+      registros_con_adeudo: 0
+    };
+
+    for (const row of rows) {
+      kpis.venta_total += numberOrZero(row.venta_total || row.precio_venta);
+      kpis.facturado_pagado += numberOrZero(row.pagado_iva);
+      kpis.no_pagado += numberOrZero(row.no_pagado_iva);
+      kpis.adeudo_total += numberOrZero(row.adeudo);
+      kpis.facturas_pendientes += numberOrZero(row.facturas_pendientes_pago);
+      if (numberOrZero(row.adeudo) > 0 || numberOrZero(row.facturas_pendientes_pago) > 0) {
+        kpis.registros_con_adeudo += 1;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      source: 'aiven',
+      table: 'pc',
+      generated_at: new Date().toISOString(),
+      kpis,
+      catalogs: {
+        estatus: uniqueSorted(rows.map(row => row.estatus)),
+        estatus_administrativo: uniqueSorted(rows.map(row => row.estatus_administrativo)),
+        estatus_operativo: uniqueSorted(rows.map(row => row.estatus_operativo)),
+        zona_adm: uniqueSorted(rows.map(row => row.zona_adm)),
+        zona_operativa: uniqueSorted(rows.map(row => row.zona_operativa)),
+        estado: uniqueSorted(rows.map(row => row.estado)),
+        tipo_pago: uniqueSorted(rows.map(row => row.tipo_pago))
+      },
+      rows
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'No fue posible consultar Venta Adicional desde Aiven.',
+      error: error.message
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function getVentaAdicionalDetalle(req, res) {
+  const id = normalizePcId(req.params.id);
+  if (!id) return res.status(400).json({ ok: false, message: 'id_pc inválido.' });
+
+  const conn = await db.getConnection();
+  try {
+    const [rows] = await conn.query(
+      `SELECT
+         id_pc, zona_adm, proyecto, id_proyecto_cobranza, cliente, ov, fecha_ov, mes_ov,
+         concepto, precio_venta, pagado_iva, no_pagado_iva, venta_total,
+         facturas_pendientes_pago, adeudo, tipo_pago, no_factura, fecha_factura,
+         mes_factura, terminos, fecha_vencimiento, dias_vencimiento, estatus,
+         estatus_administrativo, estatus_operativo, fecha_pago,
+         refacturacion_sustitucion, zona_operativa, estado, comentarios_cobranza
+       FROM pc
+       WHERE id_pc = ?
+       LIMIT 1`,
+      [id]
+    );
+    const venta = rows[0];
+    if (!venta) return res.status(404).json({ ok: false, message: 'Venta Adicional no encontrada.' });
+
+    let gestionCredito = [];
+    let mantenimientoPreventivo = [];
+    const proyecto = String(venta.proyecto || '').trim();
+
+    // En Venta Adicional una misma obra/proyecto puede tener muchas facturas.
+    // La relación de navegación se resuelve por proyecto, no por FK de cada factura.
+    if (proyecto) {
+      const [gcRows] = await conn.query(
+        `SELECT id_gc, id_proyecto_cobranza, idns, proyecto, cliente, estado, z_oper, z_adm,
+                nivel_riesgo_credito, credito_disponible_venta, adeudo, facts_adeudadas
+         FROM gestion_credito
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
+         ORDER BY id_gc ASC`,
+        [proyecto]
+      );
+      gestionCredito = gcRows;
+
+      const [mpRows] = await conn.query(
+        `SELECT id_dmp, id_proyecto_cobranza, proyecto, idns, cliente, periodicidad,
+                momento_facturacion, estado, z_oper, zona_adm, forma_pago, monto_anual,
+                pendiente_corriente, pendiente_vencido, pendiente, facturas_pendientes
+         FROM detalle_mp_2026
+         WHERE LOWER(TRIM(COALESCE(proyecto, ''))) = LOWER(?)
+         ORDER BY id_dmp ASC`,
+        [proyecto]
+      );
+      mantenimientoPreventivo = mpRows;
+    }
+
+    return res.json({
+      ok: true,
+      source: 'aiven',
+      table: 'pc',
+      generated_at: new Date().toISOString(),
+      venta,
+      gestion_credito: gestionCredito,
+      mantenimiento_preventivo: mantenimientoPreventivo
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'No fue posible consultar el detalle de Venta Adicional.',
+      error: error.message
+    });
+  } finally {
+    conn.release();
+  }
+}
+
 module.exports = {
   getGestionCredito,
   getGestionCreditoDetalle,
+  getVentaAdicional,
+  getVentaAdicionalDetalle,
   syncCobranzaUni
 };
