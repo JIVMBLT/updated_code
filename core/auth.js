@@ -453,9 +453,41 @@
         },120);
         return;
       }
-      clearSession();
+
+      const status=Number(error&&error.status||0);
+      const transientFailure=(error&&error.name==='TypeError') || status>=500;
+
+      if(status===401){
+        clearSession();
+        showLogin();
+        msg('login-msg','Tu sesión expiró. Inicia sesión nuevamente.','info');
+        return;
+      }
+
+      // Un fallo temporal de red/Aiven no equivale a una sesion expirada.
+      // Conservamos la sesion local; cada endpoint protegido seguira validando
+      // el JWT en backend cuando la conectividad vuelva a estar disponible.
+      if(transientFailure && savedToken && savedUser){
+        state.token=savedToken;
+        state.user=savedUser;
+        sessionStorage.setItem(TOKEN_KEY,savedToken);
+        sessionStorage.setItem(USER_KEY,JSON.stringify(savedUser));
+        sessionStorage.setItem(SESSION_KEY,JSON.stringify({
+          token:savedToken,
+          user:savedUser,
+          restored_at:new Date().toISOString(),
+          validation_deferred:true
+        }));
+        persistActorSession(savedToken,savedUser,'validation-deferred');
+        console.warn('[AUTH] Validacion temporalmente no disponible; la sesion local se conserva.',error);
+        showApp();
+        return;
+      }
+
+      // Errores de acceso distintos de 401 no deben destruir una sesion
+      // persistida. Se conserva para permitir una nueva validacion en F5.
       showLogin();
-      msg('login-msg','Tu sesión expiró. Inicia sesión nuevamente.','info');
+      msg('login-msg',error&&error.message ? error.message : 'No fue posible validar el acceso. Intenta nuevamente.','error');
     }
   }
   function setViewUser(user){
