@@ -1,5 +1,6 @@
 (function(){
   const API_BASE = (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
+  const AUTH_API_BASE = (window.MANTTO_SESSION_API_BASE || API_BASE).replace(/\/$/, '');
   const TOKEN_KEY = 'mantto_token';
   const USER_KEY = 'mantto_user';
   const SESSION_KEY = 'mantto_session';
@@ -123,6 +124,12 @@
     sessionStorage.setItem(VIEWER_TOKEN_KEY,String(launch.viewer_token));
     return launch.user;
   }
+  function isAuthPath(path){
+    return String(path||'').split('?')[0].startsWith('/api/auth/');
+  }
+  function requestBase(path){
+    return isAuthPath(path) ? AUTH_API_BASE : API_BASE;
+  }
   function isPublicAuthPath(path){
     const cleanPath=String(path||'').split('?')[0];
     return cleanPath==='/api/auth/login' ||
@@ -164,7 +171,7 @@
   }
   async function requestSessionRefresh(){
     for(let attempt=0;attempt<2;attempt+=1){
-      const res=await fetch(API_BASE+'/api/auth/refresh',{
+      const res=await fetch(AUTH_API_BASE+'/api/auth/refresh',{
         method:'POST',
         credentials:'include',
         headers:{'Accept':'application/json','X-Session-CSRF':String(localStorage.getItem(SESSION_CSRF_KEY)||'')}
@@ -213,7 +220,7 @@
     const fetchOptions = Object.assign({ credentials:'include' }, opts, { headers });
     delete fetchOptions.skipMutationEvent;
     delete fetchOptions.skipAuthRefresh;
-    const res = await fetch(API_BASE + path, fetchOptions);
+    const res = await fetch(requestBase(path) + path, fetchOptions);
     const json = await res.json().catch(()=>({ ok:false, message:'Respuesta no JSON' }));
     if(!res.ok || json.ok === false){
       const error=buildApiError(res,json);
@@ -460,7 +467,7 @@
   function clearViewUser(){ setViewUser(null); }
   async function logout(){
     const csrfToken=String(localStorage.getItem(SESSION_CSRF_KEY)||'');
-    const revokeRequest=fetch(API_BASE+'/api/auth/logout',{method:'POST',credentials:'include',headers:{'Accept':'application/json','X-Session-CSRF':csrfToken}});
+    const revokeRequest=fetch(AUTH_API_BASE+'/api/auth/logout',{method:'POST',credentials:'include',headers:{'Accept':'application/json','X-Session-CSRF':csrfToken}});
     clearSession();
     showLogin();
     try{

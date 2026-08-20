@@ -416,10 +416,10 @@ function visualStateConfig(catalog) {
   };
 }
 
-async function getReport(query) {
+async function getReport(query, informationAccess) {
   const filters = normalizeFilters(query);
   const [availableYears, currentDate] = await Promise.all([
-    repository.getDeliveredYears(),
+    repository.getDeliveredYears(informationAccess),
     repository.getRulesDate()
   ]);
 
@@ -436,9 +436,9 @@ async function getReport(query) {
   }
 
   const [rows, countRows, optionRows, visualStateRows] = await Promise.all([
-    repository.listReportRows(filters, deliveredYear),
-    repository.countReportRowsByStatus(filters, deliveredYear),
-    repository.getFilterOptions(deliveredYear),
+    repository.listReportRows(filters, deliveredYear, informationAccess),
+    repository.countReportRowsByStatus(filters, deliveredYear, informationAccess),
+    repository.getFilterOptions(deliveredYear, informationAccess),
     repository.getVisualStates(VISUAL_STATE_CODES)
   ]);
 
