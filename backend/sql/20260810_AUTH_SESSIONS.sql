@@ -1,9 +1,18 @@
-/* Sesiones renovables: 28 días de inactividad y máximo absoluto de 90 días. */
+/*
+  Sesiones renovables: 28 dias de inactividad y maximo absoluto de 90 dias.
+
+  IMPORTANTE:
+  - Este archivo es de bootstrap para instalaciones donde auth_sessions NO exista.
+  - NO migra una tabla auth_sessions legacy ya existente.
+  - En Aiven actual la tabla ya fue reconciliada y validada el 12/08/2026;
+    NO volver a ejecutar DROP/RENAME por esta fase.
+  - usuario_id debe ser BIGINT para coincidir con usuarios.id_SB.
+*/
 USE mydb;
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
   id_session BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  usuario_id INT NOT NULL,
+  usuario_id BIGINT NOT NULL,
   token_hash CHAR(64) NOT NULL,
   csrf_hash CHAR(64) NOT NULL,
   session_version VARCHAR(64) NOT NULL,

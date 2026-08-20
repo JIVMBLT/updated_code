@@ -1,5 +1,35 @@
 (function(){
 
+  let interactionsModulePromise = null;
+
+  function ensureInteractionsModule_gnral(){
+    if(window.ManttoInteractions) return Promise.resolve(window.ManttoInteractions);
+    if(interactionsModulePromise) return interactionsModulePromise;
+
+    interactionsModulePromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-mantto-interactions="1"]');
+      if(existing){
+        existing.addEventListener('load', () => resolve(window.ManttoInteractions || null), { once:true });
+        existing.addEventListener('error', reject, { once:true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = './core/interactions.js?v=20260818-h1-v001';
+      script.async = true;
+      script.dataset.manttoInteractions = '1';
+      script.addEventListener('load', () => resolve(window.ManttoInteractions || null), { once:true });
+      script.addEventListener('error', reject, { once:true });
+      document.head.appendChild(script);
+    });
+
+    return interactionsModulePromise;
+  }
+
+  ensureInteractionsModule_gnral().catch(error => {
+    console.warn('No fue posible cargar el módulo general de interacciones H1.', error);
+  });
+
 
   function formatDate(date){
     return date.toLocaleDateString('es-MX', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
@@ -270,10 +300,98 @@
     });
   }
 
+  const HOME_HOY_VIEW_PERMISSION_CODE = 'GENERAL_INICIO_BARRA_BIENVENIDA_BOTON_HOY.VER';
+  const HOME_HOY_OPEN_PERMISSION_CODE = 'GENERAL_INICIO_BARRA_BIENVENIDA_BOTON_HOY.ABRIR_RESUMEN_DEL_DIA';
+  let homeHoyPermissionObserver = null;
+  let homeHoyPermissionFrame = null;
+
+  function homeTargetModule_gnral(node){
+    if(!node || !node.dataset || !node.dataset.target) return '';
+    try{
+      const target = JSON.parse(node.dataset.target);
+      return String(target && (target.module || target.route) || '').trim().toLowerCase();
+    }catch(_error){
+      return '';
+    }
+  }
+
+  function homeHoyPermissionEffective_gnral(code){
+    if(!window.ManttoPermissions || typeof window.ManttoPermissions.state !== 'function') return false;
+    const permission = window.ManttoPermissions.state(code);
+    return Boolean(permission && permission.exists && permission.efectivo === true);
+  }
+
+  function canViewHomeHoy_gnral(){
+    return homeHoyPermissionEffective_gnral(HOME_HOY_VIEW_PERMISSION_CODE);
+  }
+
+  function canOpenHomeHoy_gnral(){
+    return homeHoyPermissionEffective_gnral(HOME_HOY_OPEN_PERMISSION_CODE);
+  }
+
+  function applyHomeHoyPermission_gnral(){
+    const root = document.getElementById('view-home');
+    if(!root) return;
+    const visible = canViewHomeHoy_gnral();
+    const canOpen = visible && canOpenHomeHoy_gnral();
+    root.querySelectorAll('[data-target]').forEach(node => {
+      if(homeTargetModule_gnral(node) !== 'resumen') return;
+      node.hidden = !visible;
+      node.setAttribute('aria-disabled', canOpen ? 'false' : 'true');
+      if(canOpen) node.removeAttribute('tabindex');
+      else node.setAttribute('tabindex', '-1');
+    });
+  }
+
+  function scheduleHomeHoyPermission_gnral(){
+    if(homeHoyPermissionFrame !== null) return;
+    homeHoyPermissionFrame = window.requestAnimationFrame(() => {
+      homeHoyPermissionFrame = null;
+      applyHomeHoyPermission_gnral();
+    });
+  }
+
+  function bindHomeHoyPermission_gnral(){
+    if(window.__MANTTO_HOME_HOY_PERMISSION_BOUND__) return;
+    window.__MANTTO_HOME_HOY_PERMISSION_BOUND__ = true;
+
+    document.addEventListener('mantto:permissions-updated', scheduleHomeHoyPermission_gnral);
+    document.addEventListener('mantto:navigation', scheduleHomeHoyPermission_gnral);
+
+    document.addEventListener('click', event => {
+      const target = event.target instanceof Element
+        ? event.target.closest('#view-home [data-target]')
+        : null;
+      if(!target || homeTargetModule_gnral(target) !== 'resumen') return;
+      if(canViewHomeHoy_gnral() && canOpenHomeHoy_gnral()) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if(!canViewHomeHoy_gnral()) return;
+      alert('Puedes ver el botón Hoy, pero no tienes permiso para abrir Resumen del Día.');
+    }, true);
+
+    const observedRoot = document.getElementById('view-home') || document.body;
+    if(observedRoot && typeof MutationObserver === 'function'){
+      homeHoyPermissionObserver = new MutationObserver(scheduleHomeHoyPermission_gnral);
+      homeHoyPermissionObserver.observe(observedRoot, { childList:true, subtree:true });
+    }
+
+    scheduleHomeHoyPermission_gnral();
+  }
+
   function initAfterAuth(){
     if(window.__MANTTO_APP_READY__) return;
     window.__MANTTO_APP_READY__ = true;
     if(window.ManttoHome) window.ManttoHome.init();
+    bindHomeHoyPermission_gnral();
+    ensureInteractionsModule_gnral()
+      .then(module => {
+        if(module && typeof module.init === 'function') module.init();
+      })
+      .catch(error => {
+        console.warn('No fue posible inicializar el módulo general de interacciones H1.', error);
+      });
     bindNotificationRefreshVisibility();
     iniciarTimerNotificaciones(false);
     if(window.ManttoSupport) window.ManttoSupport.init();

@@ -55,6 +55,38 @@ function isoWeekInfoFromYmd(year, month, day) {
   return { anio_iso: isoYear, semana_iso: isoWeek, fecha_inicio: fmt(monday), fecha_fin: fmt(sunday) };
 }
 
+function shiftYmd(year, month, day, deltaDays) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    date: date.toISOString().slice(0, 10)
+  };
+}
+
+function latestDueSunday(date = new Date()) {
+  const parts = zonedParts(date);
+  const weekdayIndex = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[parts.weekday];
+  if (weekdayIndex === undefined) throw new Error(`Día de semana no reconocido para ${TZ}: ${parts.weekday}`);
+
+  const scheduledMinutes = HOUR * 60 + MINUTE;
+  const currentMinutes = parts.hour * 60 + parts.minute;
+  const currentSundayIsDue = weekdayIndex === 0 && currentMinutes >= scheduledMinutes;
+  const daysBack = currentSundayIsDue ? 0 : (weekdayIndex === 0 ? 7 : weekdayIndex);
+  const target = shiftYmd(parts.year, parts.month, parts.day, -daysBack);
+  const iso = isoWeekInfoFromYmd(target.year, target.month, target.day);
+
+  return {
+    ...target,
+    ...iso,
+    scheduled_datetime: `${target.date} ${String(HOUR).padStart(2, '0')}:${String(MINUTE).padStart(2, '0')}:00`,
+    execution_parts: parts,
+    recovery: target.date !== parts.date || !currentSundayIsDue
+  };
+}
+
 function normalizeStatus(value) {
   return String(value == null ? '' : value).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
@@ -140,9 +172,15 @@ function buildMovements(previousSnapshot, currentSnapshot, timestamp) {
   return movements;
 }
 
-async function runWeeklyClose(date = new Date(), generatedBy = null) {
+async function runWeeklyClose(date = new Date(), generatedBy = null, targetDate = null) {
   const parts = zonedParts(date);
-  const iso = isoWeekInfoFromYmd(parts.year, parts.month, parts.day);
+  const target = targetDate || {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    date: parts.date
+  };
+  const iso = isoWeekInfoFromYmd(target.year, target.month, target.day);
 
   const [existingRows] = await db.query(
     `SELECT id_corte, estado FROM portafolio_cortes_semanales WHERE anio_iso = ? AND semana_iso = ? LIMIT 1`,
@@ -215,33 +253,42 @@ async function runWeeklyClose(date = new Date(), generatedBy = null) {
   console.log('[Portafolio] Cierre semanal ejecutado:', {
     anio_iso: iso.anio_iso,
     semana_iso: iso.semana_iso,
+    fecha_programada: target.date,
+    fecha_corte_real: parts.datetime,
+    recuperacion: target.date !== parts.date,
     total_portafolio: currentSnapshot.length,
     total_movimientos: totals.total,
     linea_base: !previousCut
   });
 
-  return { ok: true, ...iso, total_portafolio: currentSnapshot.length, ...totals, linea_base: !previousCut };
+  return {
+    ok: true,
+    ...iso,
+    fecha_programada: target.date,
+    fecha_corte_real: parts.datetime,
+    recuperacion: target.date !== parts.date,
+    total_portafolio: currentSnapshot.length,
+    ...totals,
+    linea_base: !previousCut
+  };
 }
 
 async function checkWeeklyClose(date = new Date()) {
   if (!ENABLED) return { skipped: true, reason: 'disabled' };
-  const parts = zonedParts(date);
-  const iso = isoWeekInfoFromYmd(parts.year, parts.month, parts.day);
-  const runKey = `${iso.anio_iso}-${String(iso.semana_iso).padStart(2, '0')}`;
-  const scheduledMinutes = HOUR * 60 + MINUTE;
-  const currentMinutes = parts.hour * 60 + parts.minute;
-  const shouldRun = parts.weekday === 'Sun' && currentMinutes >= scheduledMinutes;
 
-  if (!shouldRun) return { skipped: true, reason: 'not_scheduled_time', parts, iso };
-  if (lastRunKey === runKey) return { skipped: true, reason: 'already_ran_in_process', parts, iso };
+  const due = latestDueSunday(date);
+  const runKey = `${due.anio_iso}-${String(due.semana_iso).padStart(2, '0')}`;
+  if (lastRunKey === runKey) {
+    return { skipped: true, reason: 'already_ran_in_process', due };
+  }
 
   lastRunKey = runKey;
   try {
-    return await runWeeklyClose(date);
+    return await runWeeklyClose(date, null, due);
   } catch (error) {
     lastRunKey = null;
     console.error('[Portafolio] Error ejecutando cierre semanal:', error.message);
-    return { ok: false, error: error.message, parts, iso };
+    return { ok: false, error: error.message, due };
   }
 }
 
@@ -252,7 +299,9 @@ function startPortafolioCierreSemanalJob() {
   }
   if (timer) return timer;
 
-  console.log(`[Portafolio] Cierre semanal automático activo: domingo ${String(HOUR).padStart(2, '0')}:${String(MINUTE).padStart(2, '0')} (${TZ}).`);
+  console.log(`[Portafolio] Cierre semanal automático activo: domingo ${String(HOUR).padStart(2, '0')}:${String(MINUTE).padStart(2, '0')} (${TZ}), con recuperación del último corte pendiente.`);
+
+  checkWeeklyClose().catch(error => console.error('[Portafolio] Error verificando corte semanal al iniciar:', error.message));
   timer = setInterval(() => {
     checkWeeklyClose().catch(error => console.error('[Portafolio] Error en job semanal:', error.message));
   }, 30000);
@@ -264,5 +313,6 @@ module.exports = {
   startPortafolioCierreSemanalJob,
   checkWeeklyClose,
   runWeeklyClose,
-  isoWeekInfoFromYmd
+  isoWeekInfoFromYmd,
+  latestDueSunday
 };

@@ -1,6 +1,20 @@
-const db = require('../../config/db');
+'use strict';
 
-async function getSupervisoresActivosPorZona() {
+const db = require('../../config/db');
+const informationRecordScope = require('../../services/information-record-scope-gnral.service');
+
+function visibleUserIds_uni(informationAccess) {
+  return informationRecordScope.visibleUserIds_gnral(informationAccess);
+}
+
+async function getSupervisoresActivosPorZona(informationAccess = null) {
+  const ids = visibleUserIds_uni(informationAccess);
+  const userFilter = ids === null
+    ? { sql: '1 = 1', params: [] }
+    : (ids.length
+      ? { sql: 'u.id_SB IN (?)', params: [ids] }
+      : { sql: '1 = 0', params: [] });
+
   const [rows] = await db.query(`
     SELECT DISTINCT
       u.id_SB AS supervisor_id,
@@ -21,14 +35,16 @@ async function getSupervisoresActivosPorZona() {
       ON z.id_zona = uz.zona_id
      AND z.estado = 1
     WHERE u.estado = 1
+      AND ${userFilter.sql}
       AND UPPER(TRIM(r.rol)) LIKE 'SUPERVISOR MANTENIMIENTO ZONA%'
     ORDER BY supervisor ASC, z.zona ASC
-  `);
+  `, userFilter.params);
 
   return rows;
 }
 
-async function getPreventivosPorZona(mes) {
+async function getPreventivosPorZona(mes, informationAccess = null) {
+  const scope = informationRecordScope.buildPortafolioScopeSql_gnral(informationAccess, 'p');
   const [rows] = await db.query(`
     SELECT
       UPPER(REPLACE(REPLACE(TRIM(p.zona_operativa), '-', ''), ' ', '')) AS zona_clave,
@@ -41,8 +57,9 @@ async function getPreventivosPorZona(mes) {
       AND sp.tipo_servicio = 'PREVENTIVO'
       AND p.estado_registro = 1
       AND (p.inactivo IS NULL OR UPPER(TRIM(p.inactivo)) NOT IN ('SI','SÍ','1','TRUE','INACTIVO'))
+      AND ${scope.sql}
     GROUP BY zona_clave
-  `, [mes]);
+  `, [mes, ...scope.params]);
 
   return rows;
 }

@@ -10,5 +10,6 @@ router.use(require('./data/criticos.routes'));
 router.use(require('./data/home.routes'));
 router.use(require('./data/pendientes.routes'));
 router.use(require('./data/notificaciones.routes'));
+router.use(require('./data/interacciones.routes'));
 
 module.exports = router;

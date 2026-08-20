@@ -49,15 +49,38 @@
     notificationDirty:new Map(),
     selectedNotificationEvent:'',
     notificationQuery:'',
+    notificationQueryDraft:'',
     notificationRoleQuery:'',
+    notificationRoleQueryDraft:'',
     notificationCompany:'',
     notificationScope:null,
-    savingNotifications:false
+    savingNotifications:false,
+    informationScopeUserId:null,
+    informationScopeQuery:'',
+    informationScopeCompany:'',
+    informationScopeRole:'',
+    informationScopeLoading:false,
+    informationScopeError:'',
+    informationScopeBackendPending:false,
+    informationScopeCanManageAdditional:false,
+    informationScopeBase:null,
+    informationScopeDraft:null,
+    informationScopeAdditionalQuery:'',
+    informationScopeCandidateId:null,
+    informationScopeListScrollTop:0,
+    informationScopeBulkOpen:false,
+    informationScopeBulkSelected:new Set(),
+    informationScopeBulkDraft:{dominios_completos:new Set(),agrupaciones:new Set(),ver_propio:true,ver_reporta_a:false,ver_rel_admin:false},
+    savingInformationScope:false,
+    savingInformationScopeBulk:false
   };
 
-  const esc=(v)=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const esc=(v)=>String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const api=()=>window.ManttoAuth;
+  const RESET_CREDENTIAL_STORAGE_PREFIX='mantto:panel-control:reset-credential:';
+  const NOTIFICATION_KEY_SEPARATOR='\u0000';
   let saveStatusTimer=null;
+  let resetCredentialStatusTimer=null;
 
   function consumeSaveMessage(){
     const message=sessionStorage.getItem('mantto:panel-control:save-message');
@@ -69,6 +92,198 @@
   async function request(path,options){
     if(!api()) throw new Error('No se encontró el servicio de autenticación.');
     return api().api(path,options||{method:'GET'});
+  }
+
+  const informationScopePath=(id)=>`/api/panel-control/usuarios/${Number(id)}/alcance-informacion`;
+  const informationScopeBulkPath='/api/panel-control/usuarios/alcance-informacion/masivo';
+
+  function emptyInformationScopeBulkDraft(){
+    return {dominios_completos:new Set(),agrupaciones:new Set(),ver_propio:true,ver_reporta_a:false,ver_rel_admin:false};
+  }
+
+  function informationScopeBulkHasActivation(){
+    const draft=state.informationScopeBulkDraft||emptyInformationScopeBulkDraft();
+    return draft.dominios_completos.size>0||draft.agrupaciones.size>0||draft.ver_reporta_a||draft.ver_rel_admin;
+  }
+
+  function emptyInformationScopeDraft(){
+    return {
+      dominios_completos:new Set(),
+      agrupaciones:new Set(),
+      ver_propio:true,
+      ver_reporta_a:false,
+      ver_rel_admin:false,
+      usuarios_adicionales:new Set()
+    };
+  }
+
+  function cloneInformationScopeDraft(value){
+    const source=value||emptyInformationScopeDraft();
+    return {
+      dominios_completos:new Set(source.dominios_completos||[]),
+      agrupaciones:new Set(source.agrupaciones||[]),
+      ver_propio:true,
+      ver_reporta_a:Boolean(source.ver_reporta_a),
+      ver_rel_admin:Boolean(source.ver_rel_admin),
+      usuarios_adicionales:new Set(source.usuarios_adicionales||[])
+    };
+  }
+
+  function normalizeInformationScopeData(data,userId){
+    const source=data||{};
+    const rawDomains=Array.isArray(source.dominios_completos)
+      ?source.dominios_completos
+      :Object.entries(source.dominio_completo||{}).filter(([,enabled])=>Boolean(enabled)).map(([domain])=>domain);
+    const domains=new Set(rawDomains.map(value=>String(value||'').trim().toUpperCase()).filter(value=>value==='UNITED'||value==='CORELLIAN'));
+    const rawGroupings=Array.isArray(source.agrupaciones)
+      ?source.agrupaciones
+      :(Array.isArray(source.agrupaciones_acceso)?source.agrupaciones_acceso:[]);
+    const groupings=new Set(rawGroupings.map(item=>Number(item&&typeof item==='object'?(item.id_agrupacion??item.id):item)).filter(id=>Number.isInteger(id)&&id>0));
+    const additionalRaw=Array.isArray(source.usuarios_adicionales)?source.usuarios_adicionales:[];
+    const additional=new Set(additionalRaw.map(item=>Number(item&&typeof item==='object'?(item.id_SB??item.id_usuario??item.id_usuario_visible):item)).filter(id=>Number.isInteger(id)&&id>0&&id!==Number(userId)));
+    return {
+      dominios_completos:domains,
+      agrupaciones:groupings,
+      ver_propio:true,
+      ver_reporta_a:Boolean(source.ver_reporta_a),
+      ver_rel_admin:Boolean(source.ver_rel_admin),
+      usuarios_adicionales:additional
+    };
+  }
+
+  function informationScopePayload(value){
+    const source=value||emptyInformationScopeDraft();
+    return {
+      dominios_completos:[...source.dominios_completos].filter(value=>value==='UNITED'||value==='CORELLIAN').sort(),
+      agrupaciones:[...source.agrupaciones].map(Number).filter(id=>Number.isInteger(id)&&id>0).sort((a,b)=>a-b),
+      ver_propio:true,
+      ver_reporta_a:Boolean(source.ver_reporta_a),
+      ver_rel_admin:Boolean(source.ver_rel_admin),
+      usuarios_adicionales:[...source.usuarios_adicionales].map(Number).filter(id=>Number.isInteger(id)&&id>0).sort((a,b)=>a-b)
+    };
+  }
+
+  function sameInformationScope(left,right){
+    return JSON.stringify(informationScopePayload(left))===JSON.stringify(informationScopePayload(right));
+  }
+
+  function informationScopeDirty(){
+    return Boolean(state.informationScopeUserId&&state.informationScopeBase&&state.informationScopeDraft&&!sameInformationScope(state.informationScopeBase,state.informationScopeDraft));
+  }
+
+  function informationScopeGroupingDomain(group){
+    const company=normalizeText(group?.company);
+    if(company.includes('UNITED'))return 'UNITED';
+    if(company.includes('CORELLIAN'))return 'CORELLIAN';
+    return '';
+  }
+
+  function informationScopeGroupsForDomain(domain){
+    const normalized=String(domain||'').trim().toUpperCase();
+    return state.catalog
+      .filter(group=>group&&group.active!==false&&informationScopeGroupingDomain(group)===normalized)
+      .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base'}));
+  }
+
+  function informationScopeGroupIdsForDomain(domain){
+    return new Set(informationScopeGroupsForDomain(domain).map(group=>Number(group.id)).filter(id=>Number.isInteger(id)&&id>0));
+  }
+
+  function informationScopeAccessDomainHtml(draft,domain,{bulk=false}={}){
+  const groups=informationScopeGroupsForDomain(domain);
+  const complete=draft.dominios_completos.has(domain);
+  const domainAttribute=bulk?'data-information-scope-bulk-domain':'data-information-scope-domain';
+  const groupAttribute=bulk?'data-information-scope-bulk-group':'data-information-scope-group';
+  const domainLabel=domain==='UNITED'?'United':'Corellian';
+  const selectedDoors=groups.filter(group=>draft.agrupaciones.has(Number(group.id))).length;
+  const doorSummary=complete
+    ?`${groups.length} puerta(s) cubiertas por la llave maestra`
+    :`${selectedDoors} de ${groups.length} puerta(s) abiertas`;
+
+  return `<article class="pc-scope-key-card ${domain.toLowerCase()} ${complete?'master-active':''}">
+    <div class="pc-scope-key-head">
+      <div class="pc-scope-key-title"><span class="pc-scope-key-icon">🔑</span><span><small>EMPRESA</small><b>${esc(domainLabel)}</b><em>${esc(doorSummary)}</em></span></div>
+      <label class="pc-scope-master-switch ${complete?'selected':''}"><input type="checkbox" ${domainAttribute}="${domain}" ${complete?'checked':''}><span><b>Llave maestra</b><small>${complete?'Acceso completo activo':'Acceso completo apagado'}</small></span></label>
+    </div>
+    <div class="pc-scope-doors-head"><span>🚪 Puertas / agrupaciones</span><small>${complete?'La llave maestra cubre todas las puertas; no se guardan duplicadas.':'Abre solamente las áreas de información necesarias.'}</small></div>
+    <div class="pc-scope-door-grid">${groups.length?groups.map(group=>{
+      const id=Number(group.id);
+      const explicit=draft.agrupaciones.has(id);
+      const open=complete||explicit;
+      return `<label class="pc-scope-door ${open?'open':'closed'} ${complete?'implicit':''}"><input type="checkbox" ${groupAttribute}="${id}" data-information-scope-group-domain="${domain}" ${open?'checked':''} ${complete?'disabled':''}><span class="pc-scope-door-icon">${open?'🔓':'🔒'}</span><span class="pc-scope-door-copy"><b>${esc(group.name||group.code||`Agrupación ${id}`)}</b><small>${esc(group.code||'AGRUPACION')}</small></span><em>${complete?'LLAVE MAESTRA':open?'ABIERTA':'CERRADA'}</em></label>`;
+    }).join(''):'<div class="pc-information-scope-no-users">No hay agrupaciones activas de este dominio en el catálogo de permisos.</div>'}</div>
+  </article>`;
+}
+
+  function informationScopeAccessGeneralHtml(draft,{bulk=false}={}){
+  return `<div class="pc-scope-access-grid">${['UNITED','CORELLIAN'].map(domain=>informationScopeAccessDomainHtml(draft,domain,{bulk})).join('')}</div>`;
+}
+
+  const FIX_PANEL_ALCANCE_USUARIO_MASIVO_V002=true;
+
+  function resetCredentialStorageKey(userId){
+    const actor=api()&&typeof api().getActorUser==='function'?api().getActorUser():null;
+    const actorId=Number(actor&&actor.id_SB)||0;
+    return RESET_CREDENTIAL_STORAGE_PREFIX+String(actorId)+':'+String(Number(userId)||0);
+  }
+
+  function readPendingResetCredential(userId){
+    const id=Number(userId);
+    if(!Number.isInteger(id)||id<=0)return null;
+    try{
+      const data=JSON.parse(sessionStorage.getItem(resetCredentialStorageKey(id))||'null');
+      if(!data||!String(data.password||'').trim())return null;
+      return data;
+    }catch(_error){return null;}
+  }
+
+  function storePendingResetCredential(userId,password,email){
+    const id=Number(userId);
+    const value=String(password||'').trim();
+    if(!Number.isInteger(id)||id<=0||!value)return;
+    sessionStorage.setItem(resetCredentialStorageKey(id),JSON.stringify({
+      password:value,
+      email:String(email||'').trim(),
+      created_at:new Date().toISOString()
+    }));
+  }
+
+  function clearPendingResetCredential(userId){
+    const id=Number(userId);
+    if(Number.isInteger(id)&&id>0)sessionStorage.removeItem(resetCredentialStorageKey(id));
+  }
+
+  function stopResetCredentialStatusPolling(){
+    if(resetCredentialStatusTimer){
+      window.clearInterval(resetCredentialStatusTimer);
+      resetCredentialStatusTimer=null;
+    }
+  }
+
+  function startResetCredentialStatusPolling(userId){
+    stopResetCredentialStatusPolling();
+    const id=Number(userId);
+    if(!Number.isInteger(id)||id<=0||!readPendingResetCredential(id))return;
+    resetCredentialStatusTimer=window.setInterval(async()=>{
+      if(state.tab!=='admin-users'||Number(state.adminUserId)!==id){
+        stopResetCredentialStatusPolling();
+        return;
+      }
+      try{
+        const response=await request(`/api/usuarios/${id}/detalle`);
+        const detail=response.data||null;
+        if(!detail)return;
+        if(Number(detail.must_change_password)!==1){
+          clearPendingResetCredential(id);
+          stopResetCredentialStatusPolling();
+          state.adminUserDetail=detail;
+          renderAdminUsers();
+          toast('El usuario completó correctamente su proceso de primer acceso.');
+        }
+      }catch(_error){
+        // Si la comprobación temporal falla, conservar la contraseña visible y reintentar.
+      }
+    },30000);
   }
 
   function normalizeCompany(value){
@@ -282,7 +497,7 @@
   }
 
   function notificationKey(codigoEvento,idRol){
-    return `${String(codigoEvento||'')}\u0000${Number(idRol)}`;
+    return `${String(codigoEvento||'')}${NOTIFICATION_KEY_SEPARATOR}${Number(idRol)}`;
   }
 
   function applyNotificationMatrix(data,{clearDirty=true}={}){
@@ -397,13 +612,92 @@
     return state.notificationRoles
       .filter(role=>{
         const company=normalizeCompany(role.empresa);
-        const text=[role.rol,role.codigo,role.descripcion,role.empresa].join(' ').toLowerCase();
+        const text=[role.rol,role.codigo,role.descripcion,role.empresa,notificationRoleArea(role)].join(' ').toLowerCase();
         return (!query||text.includes(query))&&(!state.notificationCompany||company===state.notificationCompany);
       })
       .sort((a,b)=>
         String(a.rol||'').localeCompare(String(b.rol||''),'es',{sensitivity:'base',numeric:true})
         || Number(a.id_rol||0)-Number(b.id_rol||0)
       );
+  }
+
+  function notificationRoleArea(role){
+    const idRol=Number(role?.id_rol||0);
+    if(!Number.isInteger(idRol)||idRol<=0)return 'Sin área asignada';
+    const areas=[...new Set(state.users
+      .filter(user=>Number(user.estado)!==0)
+      .filter(user=>{
+        const explicitPrincipal=(user.roles||[]).find(item=>Boolean(item?.principal));
+        const principalId=Number(explicitPrincipal?.id_rol||user.rol_id||0);
+        return principalId===idRol;
+      })
+      .map(user=>areaLabel(user.area))
+      .filter(Boolean))];
+    if(areas.length===1)return areas[0];
+    if(areas.length>1)return 'Varias áreas';
+    return 'Sin área asignada';
+  }
+
+  function groupedNotificationRoles(roles){
+    const groups=new Map();
+    roles.forEach(role=>{
+      const label=notificationRoleArea(role);
+      const key=normalizeText(label)||'SIN AREA ASIGNADA';
+      if(!groups.has(key))groups.set(key,{key,label,roles:[]});
+      groups.get(key).roles.push(role);
+    });
+    return [...groups.values()]
+      .map(group=>({
+        ...group,
+        roles:group.roles.sort((a,b)=>
+          String(a.rol||'').localeCompare(String(b.rol||''),'es',{sensitivity:'base',numeric:true})
+          || Number(a.id_rol||0)-Number(b.id_rol||0)
+        )
+      }))
+      .sort((a,b)=>
+        areaRank(a.label)-areaRank(b.label)
+        || a.label.localeCompare(b.label,'es',{sensitivity:'base'})
+      );
+  }
+
+  function notificationAreaCounts(group,event){
+    const enabled=group.roles.filter(role=>notificationValue(event.codigo_evento,role.id_rol).habilitado).length;
+    return {
+      enabled,
+      total:group.roles.length,
+      all:Boolean(group.roles.length)&&enabled===group.roles.length,
+      some:enabled>0
+    };
+  }
+
+  function notificationRoleGroupsHtml(groups,event){
+    return groups.map((group,index)=>{
+      const counts=notificationAreaCounts(group,event);
+      return `<section class="pc-area-group pc-notification-area-group" data-notification-area-group="${index}">
+        <div class="pc-area-heading pc-notification-area-heading">
+          <span>${esc(group.label)}</span>
+          <label class="pc-notification-area-toggle" title="Activa o desactiva todos los roles visibles de ${esc(group.label)}">
+            <span class="pc-notification-switch"><input type="checkbox" data-notification-area-select="${index}" ${counts.all?'checked':''}><span aria-hidden="true"></span></span>
+            <b>Seleccionar área</b>
+            <em>${counts.enabled}/${counts.total}</em>
+          </label>
+        </div>
+        <div class="pc-area-users">${group.roles.map(role=>notificationRoleRow(role,event)).join('')}</div>
+      </section>`;
+    }).join('');
+  }
+
+  function notificationPolicyGroupsHtml(groups,event){
+    return groups.map(group=>{
+      const counts=notificationAreaCounts(group,event);
+      return `<section class="pc-area-group pc-notification-area-group">
+        <div class="pc-area-heading pc-notification-area-heading pc-notification-area-heading-policy">
+          <span>${esc(group.label)}</span>
+          <em>${counts.enabled}/${counts.total} activos</em>
+        </div>
+        <div class="pc-area-users">${group.roles.map(role=>notificationPolicyRow(role,event)).join('')}</div>
+      </section>`;
+    }).join('');
   }
 
   function notificationEventItem(event){
@@ -485,6 +779,7 @@
     }
     const counts=notificationEventCounts(event.codigo_evento);
     const roles=filteredNotificationRoles();
+    const groups=groupedNotificationRoles(roles);
     const companies=[...new Set(state.notificationRoles.map(role=>normalizeCompany(role.empresa)))].filter(Boolean).sort();
     const eventName=event.nombre_evento||event.codigo_evento;
     const visibleEnabled=roles.filter(role=>notificationValue(event.codigo_evento,role.id_rol).habilitado).length;
@@ -492,18 +787,18 @@
     const someVisibleEnabled=visibleEnabled>0;
 
     roleBox.innerHTML=`<div class="pc-notification-column-head">
-      <div><span class="pc-eyebrow">ROL</span><h3>Roles</h3><p>${esc(eventName)}</p></div>
+      <div><span class="pc-eyebrow">ROL</span><h3>Roles por área</h3><p>${esc(eventName)}</p></div>
       <span class="pc-notification-column-count">${roles.length}</span>
     </div>
     <div class="pc-notification-column-toolbar pc-notification-role-toolbar">
-      <div class="pc-notification-role-filters"><input id="pc-notification-role-search" value="${esc(state.notificationRoleQuery)}" placeholder="Buscar rol..."><select id="pc-notification-company"><option value="">Todas las empresas</option>${companies.map(company=>`<option value="${esc(company)}" ${state.notificationCompany===company?'selected':''}>${esc(company)}</option>`).join('')}</select></div>
+      <div class="pc-notification-role-filters"><form id="pc-notification-role-search-form" class="pc-notification-search-form"><input id="pc-notification-role-search" type="search" value="${esc(state.notificationRoleQueryDraft)}" placeholder="Buscar rol..."><button type="submit">Buscar</button></form><select id="pc-notification-company"><option value="">Todas las empresas</option>${companies.map(company=>`<option value="${esc(company)}" ${state.notificationCompany===company?'selected':''}>${esc(company)}</option>`).join('')}</select></div>
       <label class="pc-notification-bulk-switch ${roles.length?'':'disabled'}" title="Activa o desactiva todos los roles visibles">
         <span class="pc-notification-switch"><input id="pc-notification-select-all" type="checkbox" ${allVisibleEnabled?'checked':''} ${roles.length?'':'disabled'}><span aria-hidden="true"></span></span>
         <span><b>Seleccionar todo</b><small>${visibleEnabled} de ${roles.length} roles visibles activos</small></span>
       </label>
     </div>
-    <div class="pc-notification-column-note">Activa únicamente los roles principales que deben recibir esta interacción.</div>
-    <div class="pc-notification-role-list" id="pc-notification-role-list">${roles.length?roles.map(role=>notificationRoleRow(role,event)).join(''):'<div class="pc-empty">Sin roles que coincidan.</div>'}</div>`;
+    <div class="pc-notification-column-note">Los roles se agrupan por el área real de sus usuarios con ese Rol Principal. La selección por área aplica únicamente a los roles visibles de ese grupo.</div>
+    <div class="pc-notification-role-list" id="pc-notification-role-list">${roles.length?notificationRoleGroupsHtml(groups,event):'<div class="pc-empty">Sin roles que coincidan.</div>'}</div>`;
 
     policyBox.innerHTML=`<div class="pc-notification-column-head">
       <div><span class="pc-eyebrow">POLÍTICA</span><h3>Política</h3><p>${esc(eventName)}</p></div>
@@ -516,11 +811,16 @@
         <button type="button" id="pc-notification-optional-all" ${someVisibleEnabled?'':'disabled'}>Opcional todo</button>
       </div>
     </div>
-    <div class="pc-notification-column-note">Las acciones masivas aplican a los roles visibles; si un rol está inactivo, no recibe la notificación.</div>
-    <div class="pc-notification-policy-list" id="pc-notification-policy-list">${roles.length?roles.map(role=>notificationPolicyRow(role,event)).join(''):'<div class="pc-empty">Sin políticas que mostrar.</div>'}</div>`;
+    <div class="pc-notification-column-note">Las acciones masivas de política aplican a los roles visibles que estén activos.</div>
+    <div class="pc-notification-policy-list" id="pc-notification-policy-list">${roles.length?notificationPolicyGroupsHtml(groups,event):'<div class="pc-empty">Sin políticas que mostrar.</div>'}</div>`;
 
-    document.getElementById('pc-notification-role-search')?.addEventListener('input',eventInput=>{
-      state.notificationRoleQuery=eventInput.target.value;
+    const roleSearch=document.getElementById('pc-notification-role-search');
+    roleSearch?.addEventListener('input',eventInput=>{
+      state.notificationRoleQueryDraft=eventInput.target.value;
+    });
+    document.getElementById('pc-notification-role-search-form')?.addEventListener('submit',eventInput=>{
+      eventInput.preventDefault();
+      state.notificationRoleQuery=state.notificationRoleQueryDraft;
       renderNotificationRoles();
     });
     document.getElementById('pc-notification-company')?.addEventListener('change',eventInput=>{
@@ -541,6 +841,23 @@
         renderNotificationRoles();
       });
     }
+
+    roleBox.querySelectorAll('[data-notification-area-select]').forEach(input=>{
+      const index=Number(input.dataset.notificationAreaSelect);
+      const group=groups[index];
+      if(!group)return;
+      const areaCounts=notificationAreaCounts(group,event);
+      input.indeterminate=areaCounts.some&&!areaCounts.all;
+      input.addEventListener('change',()=>{
+        const enableArea=Boolean(input.checked);
+        setNotificationDraftBulk(event.codigo_evento,group.roles,({base,current})=>({
+          habilitado:enableArea,
+          politica:enableArea?(current.politica||base.politica||null):null
+        }));
+        renderNotificationEventList();
+        renderNotificationRoles();
+      });
+    });
 
     document.getElementById('pc-notification-mandatory-all')?.addEventListener('click',()=>{
       setNotificationDraftBulk(event.codigo_evento,roles,({current})=>
@@ -600,13 +917,17 @@
     box.innerHTML=`<section class="pc-notifications">
       <div class="pc-notification-intro"><div><span class="pc-eyebrow">NOTIFICACIONES</span><h2>Matriz de notificaciones</h2><p>Define qué roles principales reciben cada interacción y si su política es obligatoria u opcional.</p></div><div class="pc-notification-scope">${state.notificationScope?.all?'Alcance global':`Alcance: ${esc((state.notificationScope?.companies||[]).join(', ')||'según sesión')}`}</div></div>
       <div class="pc-notification-layout">
-        <aside class="pc-notification-events-panel"><div class="pc-notification-events-head"><div><h3>Interacciones</h3><small>Maestro</small></div><span>${state.notificationEvents.length}</span></div><div class="pc-notification-event-search"><input id="pc-notification-event-search" value="${esc(state.notificationQuery)}" placeholder="Buscar interacción..."></div><div class="pc-notification-events" id="pc-notification-events"></div></aside>
+        <aside class="pc-notification-events-panel"><div class="pc-notification-events-head"><div><h3>Interacciones</h3><small>Maestro</small></div><span>${state.notificationEvents.length}</span></div><div class="pc-notification-event-search"><form id="pc-notification-event-search-form" class="pc-notification-search-form"><input id="pc-notification-event-search" type="search" value="${esc(state.notificationQueryDraft)}" placeholder="Buscar interacción..."><button type="submit">Buscar</button></form></div><div class="pc-notification-events" id="pc-notification-events"></div></aside>
         <section class="pc-notification-role-panel" id="pc-notification-role-panel"></section>
         <section class="pc-notification-policy-panel" id="pc-notification-policy-panel"></section>
       </div>
     </section>`;
     document.getElementById('pc-notification-event-search')?.addEventListener('input',event=>{
-      state.notificationQuery=event.target.value;
+      state.notificationQueryDraft=event.target.value;
+    });
+    document.getElementById('pc-notification-event-search-form')?.addEventListener('submit',event=>{
+      event.preventDefault();
+      state.notificationQuery=state.notificationQueryDraft;
       renderNotificationEventList();
     });
     renderNotificationEventList();
@@ -657,7 +978,7 @@
       return;
     }
     const changes=[...state.notificationDirty.entries()].map(([key,value])=>{
-      const [codigoEvento,idRol]=key.split('\u0000');
+      const [codigoEvento,idRol]=key.split(NOTIFICATION_KEY_SEPARATOR);
       return {
         codigo_evento:codigoEvento,
         id_rol:Number(idRol),
@@ -665,6 +986,11 @@
         ...(value.habilitado?{politica:value.politica}:{})
       };
     });
+    const malformed=changes.find(change=>!String(change.codigo_evento||'').trim()||!Number.isInteger(change.id_rol)||change.id_rol<=0);
+    if(malformed){
+      toast('No fue posible preparar la matriz de notificaciones. Recarga la página antes de guardar.');
+      return;
+    }
     if(!confirm(`¿Guardar ${changes.length} cambio(s) en la matriz de notificaciones?`))return;
     const context=captureNotificationViewContext();
     state.savingNotifications=true;
@@ -712,7 +1038,7 @@
         <article><b>${esc(state.totals.permisos_disponibles||0)}</b><span>Permisos disponibles</span></article>
         <article><b>${esc(state.totals.personalizaciones_activas||0)}</b><span>Personalizaciones activas</span></article>
       </section>
-      <nav class="pc-tabs"><button data-tab="users" class="${state.tab==='users'?'active':''}">Permisos por usuario</button><button data-tab="roles" class="${state.tab==='roles'?'active':''}">Roles y permisos</button><button data-tab="admin-users" class="${state.tab==='admin-users'?'active':''}">Usuarios</button><button data-tab="admin-roles" class="${state.tab==='admin-roles'?'active':''}">Roles</button><button data-tab="notifications" class="${state.tab==='notifications'?'active':''}">Notificaciones</button>${window.ManttoUserViewer?.allowed?.()?`<button data-tab="viewer" class="${state.tab==='viewer'?'active':''}">Visor de usuarios</button>`:''}<button data-tab="audit" class="${state.tab==='audit'?'active':''}">Auditoría</button></nav>
+      <nav class="pc-tabs"><button data-tab="users" class="${state.tab==='users'?'active':''}">Permisos por usuario</button><button data-tab="roles" class="${state.tab==='roles'?'active':''}">Roles y permisos</button><button data-tab="admin-users" class="${state.tab==='admin-users'?'active':''}">Usuarios</button><button data-tab="admin-roles" class="${state.tab==='admin-roles'?'active':''}">Roles</button><button data-tab="information-scope" class="${state.tab==='information-scope'?'active':''}">Alcance de información</button><button data-tab="notifications" class="${state.tab==='notifications'?'active':''}">Notificaciones</button>${window.ManttoUserViewer?.allowed?.()?`<button data-tab="viewer" class="${state.tab==='viewer'?'active':''}">Visor de usuarios</button>`:''}<button data-tab="audit" class="${state.tab==='audit'?'active':''}">Auditoría</button></nav>
       <div id="pc-content"></div><div class="pc-toast" id="pc-toast"></div>
     </div>`;
   }
@@ -726,16 +1052,32 @@
         await loadNotificationMatrix();
         return;
       }
+      if(state.tab==='information-scope'){
+        const selectedId=Number(state.informationScopeUserId)||null;
+        await loadBootstrap();
+        if(selectedId&&state.users.some(user=>Number(user.id_SB)===selectedId)){
+          state.informationScopeUserId=selectedId;
+          await loadInformationScope(selectedId);
+        }
+        return;
+      }
       await loadBootstrap();
     });
     document.getElementById('pc-save')?.addEventListener('click',saveChanges);
     renderSaveStatus();
     view.querySelectorAll('[data-tab]').forEach(btn=>btn.addEventListener('click',async()=>{
-      if(state.savingPermissions||state.savingNotifications){toast('Espera a que termine el guardado actual.');return;}
+      if(state.savingPermissions||state.savingNotifications||state.savingInformationScope||state.savingInformationScopeBulk){toast('Espera a que termine el guardado actual.');return;}
       const nextTab=btn.dataset.tab;
       if(nextTab===state.tab)return;
-      const pending=state.tab==='notifications'?state.notificationDirty.size:state.dirty.size;
+      const pending=state.tab==='notifications'
+        ?state.notificationDirty.size
+        :state.tab==='information-scope'
+          ?(informationScopeDirty()?1:0)
+          :state.dirty.size;
       if(pending&&!confirm('Hay cambios sin guardar. ¿Deseas descartarlos y cambiar de pestaña?'))return;
+      if(state.tab==='information-scope'&&state.informationScopeBase){
+        state.informationScopeDraft=cloneInformationScopeDraft(state.informationScopeBase);
+      }
       state.tab=nextTab;
       state.dirty.clear();
       state.notificationDirty.clear();
@@ -755,6 +1097,7 @@
     if(state.error){box.innerHTML=`<section class="pc-permissions"><div class="pc-empty large"><b>No se pudo cargar el Panel de Control.</b><br>${esc(state.error)}</div></section>`;return;}
     if(state.tab==='admin-users'){ renderAdminUsers(); return; }
     if(state.tab==='admin-roles'){ renderAdminRoles(); return; }
+    if(state.tab==='information-scope'){ renderInformationScope(); return; }
     if(state.tab==='notifications'){ renderNotificationPanel(); return; }
     if(state.tab==='viewer'){ window.ManttoUserViewer?.renderPanel?.(box); updateSaveButton(); return; }
     if(state.tab==='audit'){
@@ -1275,6 +1618,12 @@
         :`Guardar cambios <span id="pc-dirty-count">${state.notificationDirty.size}</span>`;
       return;
     }
+    if(state.tab==='information-scope'){
+      btn.disabled=true;
+      btn.title='El alcance de información se guarda desde el editor del usuario seleccionado.';
+      btn.innerHTML='Guardar cambios <span id="pc-dirty-count">0</span>';
+      return;
+    }
     btn.title='';
     const targetMissing=state.tab==='users'?!state.selectedUserId:state.tab==='roles'?!state.selectedRoleId:false;
     btn.disabled=state.savingPermissions||state.dirty.size===0||state.tab==='audit'||targetMissing||state.panelLoading;
@@ -1539,6 +1888,388 @@
   }
 
 
+  function filteredInformationScopeUsers(){
+  const query=state.informationScopeQuery.trim().toLowerCase();
+  const roleId=Number(state.informationScopeRole||0);
+  return state.users.filter(user=>{
+    if(Number(user.estado)===0)return false;
+    const text=[user.nombre,user.correo,user.puesto,user.area,user.empresa,...(user.roles||[]).map(role=>role.rol)].join(' ').toLowerCase();
+    const company=String(user.empresa||'').trim();
+    const hasRole=!roleId
+      || Number(user.rol_id)===roleId
+      || (user.roles||[]).some(role=>Number(role.id_rol)===roleId);
+    return (!query||text.includes(query))
+      &&(!state.informationScopeCompany||normalizeText(company)===normalizeText(state.informationScopeCompany))
+      &&hasRole;
+  });
+}
+
+  function captureInformationScopeListScroll(){
+    const list=document.getElementById('pc-information-scope-user-items');
+    if(list)state.informationScopeListScrollTop=Number(list.scrollTop||0);
+  }
+
+  function informationScopeUserItem(user){
+    const active=Number(user.id_SB)===Number(state.informationScopeUserId);
+    const role=principalRole(user);
+    const bulkSelected=state.informationScopeBulkSelected.has(Number(user.id_SB));
+    if(state.informationScopeBulkOpen){
+      return `<button type="button" class="pc-list-item pc-information-scope-bulk-user ${bulkSelected?'bulk-selected':''}" data-information-scope-bulk-user="${user.id_SB}"><span class="pc-information-scope-bulk-check">${bulkSelected?'✓':''}</span><span class="pc-avatar">${esc(initials(user))}</span><span><b>${esc(user.nombre)}</b><small>${esc(role?.rol||user.puesto||'Sin rol principal')}</small></span><em>${esc(userHierarchyLevel(user))}</em></button>`;
+    }
+    return `<button type="button" class="pc-list-item ${active?'active':''}" data-information-scope-user="${user.id_SB}"><span class="pc-avatar">${esc(initials(user))}</span><span><b>${esc(user.nombre)}</b><small>${esc(role?.rol||user.puesto||'Sin rol principal')}</small></span><em>${esc(userHierarchyLevel(user))}</em></button>`;
+  }
+
+  function renderInformationScopeUserList(){
+    const list=document.getElementById('pc-information-scope-user-items');
+    if(!list)return;
+    const users=filteredInformationScopeUsers();
+    list.innerHTML=users.length
+      ?groupedUsers(users).map(group=>`<section class="pc-area-group"><div class="pc-area-heading"><span>${esc(group.label)}</span><em>${group.users.length}</em></div><div class="pc-area-users">${group.users.map(informationScopeUserItem).join('')}</div></section>`).join('')
+      :'<div class="pc-empty">Sin resultados.</div>';
+    list.scrollTop=Number(state.informationScopeListScrollTop||0);
+    list.addEventListener('scroll',()=>{state.informationScopeListScrollTop=Number(list.scrollTop||0);},{passive:true});
+    list.querySelectorAll('[data-information-scope-user]').forEach(button=>button.addEventListener('click',async()=>{
+      captureInformationScopeListScroll();
+      if(state.savingInformationScope||state.savingInformationScopeBulk){toast('Espera a que termine el guardado actual.');return;}
+      const id=Number(button.dataset.informationScopeUser);
+      if(id===Number(state.informationScopeUserId))return;
+      if(informationScopeDirty()&&!confirm('Hay cambios de alcance sin guardar. ¿Deseas descartarlos y seleccionar otro usuario?'))return;
+      await selectInformationScopeUser(id);
+    }));
+    list.querySelectorAll('[data-information-scope-bulk-user]').forEach(button=>button.addEventListener('click',()=>{
+      captureInformationScopeListScroll();
+      const id=Number(button.dataset.informationScopeBulkUser);
+      if(!Number.isInteger(id)||id<=0)return;
+      state.informationScopeBulkSelected.has(id)
+        ?state.informationScopeBulkSelected.delete(id)
+        :state.informationScopeBulkSelected.add(id);
+      renderInformationScope();
+    }));
+  }
+
+  async function selectInformationScopeUser(id){
+    captureInformationScopeListScroll();
+    const userId=Number(id);
+    if(!Number.isInteger(userId)||userId<=0)return;
+    state.informationScopeUserId=userId;
+    state.informationScopeAdditionalQuery='';
+    state.informationScopeCandidateId=null;
+    state.informationScopeBase=null;
+    state.informationScopeDraft=null;
+    await loadInformationScope(userId);
+  }
+
+  async function loadInformationScope(id){
+    const userId=Number(id);
+    if(!Number.isInteger(userId)||userId<=0)return;
+    state.informationScopeLoading=true;
+    state.informationScopeError='';
+    state.informationScopeBackendPending=false;
+    state.informationScopeCanManageAdditional=false;
+    renderInformationScope();
+    try{
+      const response=await request(`${informationScopePath(userId)}?_=${Date.now()}`,{method:'GET',cache:'no-store'});
+      if(Number(state.informationScopeUserId)!==userId)return;
+      const data=response.data||{};
+      state.informationScopeCanManageAdditional=Boolean(data.capacidades?.puede_gestionar_usuarios_adicionales);
+      const normalized=normalizeInformationScopeData(data,userId);
+      state.informationScopeBase=cloneInformationScopeDraft(normalized);
+      state.informationScopeDraft=cloneInformationScopeDraft(normalized);
+    }catch(error){
+      if(Number(state.informationScopeUserId)!==userId)return;
+      state.informationScopeError=error.message||'No se pudo consultar la backend de Alcance de Información.';
+      state.informationScopeBackendPending=true;
+      state.informationScopeCanManageAdditional=false;
+      const blank=emptyInformationScopeDraft();
+      state.informationScopeBase=cloneInformationScopeDraft(blank);
+      state.informationScopeDraft=cloneInformationScopeDraft(blank);
+    }finally{
+      if(Number(state.informationScopeUserId)===userId){
+        state.informationScopeLoading=false;
+        renderInformationScope();
+      }
+    }
+  }
+
+  function informationScopeAdditionalUsers(){
+    if(!state.informationScopeDraft)return [];
+    return [...state.informationScopeDraft.usuarios_adicionales]
+      .map(id=>state.users.find(user=>Number(user.id_SB)===Number(id)))
+      .filter(Boolean)
+      .sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{sensitivity:'base'}));
+  }
+
+  function informationScopeCandidates(){
+    if(!state.informationScopeCanManageAdditional)return [];
+    const selectedId=Number(state.informationScopeUserId);
+    const draft=state.informationScopeDraft||emptyInformationScopeDraft();
+    const query=normalizeText(state.informationScopeAdditionalQuery);
+    if(!query)return [];
+    return state.users
+      .filter(user=>Number(user.estado)!==0&&Number(user.id_SB)!==selectedId&&!draft.usuarios_adicionales.has(Number(user.id_SB)))
+      .filter(user=>normalizeText([user.nombre,user.iniciales,user.correo,user.puesto,user.area,user.empresa].join(' ')).includes(query))
+      .sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{sensitivity:'base'}))
+      .slice(0,8);
+  }
+
+  function informationScopeBulkEditorHtml(){
+  const draft=state.informationScopeBulkDraft||emptyInformationScopeBulkDraft();
+  const selected=[...state.informationScopeBulkSelected]
+    .map(id=>state.users.find(user=>Number(user.id_SB)===Number(id)))
+    .filter(Boolean)
+    .sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{sensitivity:'base'}));
+
+  return `<div class="pc-information-scope-form pc-information-scope-bulk-form">
+    <div class="pc-admin-head pc-information-scope-head"><div><span class="pc-eyebrow">ASIGNACIÓN MASIVA · ALCANCE DE INFORMACIÓN</span><h2>Aplicar la misma selección a varios usuarios</h2><p>La selección masiva es una herramienta de captura. La backend procesa cada <b>id_usuario</b> por separado; no crea un alcance global ni una relación grupal.</p></div><span class="pc-status ok">${selected.length} seleccionado(s)</span></div>
+    <div class="pc-scope-context-banner bulk"><span>👥</span><div><b>Cada usuario conserva su configuración individual.</b><small>Las opciones marcadas se activan individualmente para cada seleccionado. La operación actual es aditiva: conserva accesos que ya existan y nunca modifica Usuarios adicionales.</small></div></div>
+    <section class="pc-admin-section pc-information-scope-section"><div class="pc-information-scope-section-title"><div><h3>1. Usuarios seleccionados</h3><p>Filtra por empresa o rol, marca personas específicas o usa «Seleccionar visibles» para aplicar el mismo alcance a un grupo operativo, por ejemplo todos los Supervisores.</p></div></div><div class="pc-information-scope-bulk-toolbar"><button type="button" class="pc-btn ghost" id="pc-information-scope-bulk-select-visible">Seleccionar visibles</button><button type="button" class="pc-btn ghost" id="pc-information-scope-bulk-clear">Limpiar selección</button><span>${selected.length} usuario(s)</span></div><div class="pc-information-scope-bulk-selected">${selected.length?selected.slice(0,24).map(user=>`<span><b>${esc(user.iniciales||initials(user))}</b>${esc(user.nombre)}</span>`).join(''):'<div class="pc-information-scope-no-users">Sin usuarios seleccionados.</div>'}${selected.length>24?`<em>+${selected.length-24} más</em>`:''}</div></section>
+    <section class="pc-admin-section pc-information-scope-section"><div class="pc-information-scope-section-title"><div><h3>2. Llaves y puertas</h3><p>Selecciona la misma llave maestra o las mismas puertas para todos los usuarios marcados. Esto controla información, no permisos funcionales.</p></div></div>${informationScopeAccessGeneralHtml(draft,{bulk:true})}</section>
+    <section class="pc-admin-section pc-information-scope-section"><div class="pc-information-scope-section-title"><div><h3>3. Alcance automático</h3><p>Las relaciones se activan individualmente para cada usuario; por eso dos Supervisores pueden tener la misma regla REPORTA_A y aun así ver personas distintas.</p></div></div><div class="pc-information-scope-options">
+      <label class="pc-information-scope-option selected locked"><input type="checkbox" checked disabled><span><b>Su propia información</b><small>Siempre incluida para cada usuario.</small></span></label>
+      <label class="pc-information-scope-option ${draft.ver_reporta_a?'selected':''}"><input type="checkbox" id="pc-information-scope-bulk-reports" ${draft.ver_reporta_a?'checked':''}><span><b>Personas que le reportan</b><small>Fuente individual: usuarios.reporta_a.</small></span></label>
+      <label class="pc-information-scope-option ${draft.ver_rel_admin?'selected':''}"><input type="checkbox" id="pc-information-scope-bulk-rel-admin" ${draft.ver_rel_admin?'checked':''}><span><b>Relaciones administrativas</b><small>Fuente individual: usuarios_rel_admin.</small></span></label>
+    </div></section>
+    <div class="pc-scope-formula"><span>🔑 Llaves / puertas</span><b>+</b><span>👥 Alcance automático</span><b>→</b><span>💾 Registros individuales por usuario</span></div>
+    <div class="pc-admin-actions pc-information-scope-actions"><span class="pc-information-scope-dirty ${informationScopeBulkHasActivation()?'on':''}">${informationScopeBulkHasActivation()?'Configuración lista para aplicar':'Selecciona al menos una llave, puerta o regla automática'}</span><button type="button" class="pc-btn primary" id="pc-information-scope-bulk-apply" ${state.savingInformationScopeBulk||!selected.length||!informationScopeBulkHasActivation()?'disabled':''}>${state.savingInformationScopeBulk?'Aplicando...':`Aplicar a ${selected.length||0} usuario(s)`}</button></div>
+  </div>`;
+}
+
+  function informationScopeEditorHtml(user){
+  if(!user){
+    return `<div class="pc-admin-empty pc-information-scope-empty"><span class="pc-avatar big">A</span><h2>Selecciona un usuario</h2><p>La configuración de Alcance de Información es individual. Selecciona una persona para editar únicamente sus llaves, puertas, relaciones automáticas y excepciones.</p></div>`;
+  }
+  if(state.informationScopeLoading){
+    return `<div class="pc-empty large"><span class="pc-spinner"></span>Cargando alcance de ${esc(user.nombre)}...</div>`;
+  }
+  const draft=state.informationScopeDraft||emptyInformationScopeDraft();
+  const additional=informationScopeAdditionalUsers();
+  const candidates=informationScopeCandidates();
+  const selectedCandidate=state.users.find(item=>Number(item.id_SB)===Number(state.informationScopeCandidateId));
+  const role=principalRole(user);
+  const backendNote=state.informationScopeBackendPending
+    ?`<div class="pc-information-scope-warning"><b>No se pudo consultar Alcance de Información.</b><span>No se permitirá guardar hasta recuperar una lectura válida para evitar sobrescribir configuración real.</span><button type="button" class="pc-btn ghost" id="pc-information-scope-retry">Reintentar conexión</button></div>`
+    :'';
+  const additionalList=additional.length
+    ?additional.map(item=>`<span class="pc-information-scope-chip"><span class="pc-avatar">${esc(initials(item))}</span><span><b>${esc(item.iniciales||initials(item))}</b><small>${esc(item.nombre)}</small></span>${state.informationScopeCanManageAdditional?`<button type="button" data-information-scope-remove="${item.id_SB}" aria-label="Quitar ${esc(item.nombre)}">×</button>`:''}</span>`).join('')
+    :'<div class="pc-information-scope-no-users">Sin usuarios adicionales.</div>';
+  const additionalEditor=state.informationScopeCanManageAdditional
+    ?`<div class="pc-information-scope-add"><div class="pc-information-scope-search"><input id="pc-information-scope-additional-search" autocomplete="off" value="${esc(state.informationScopeAdditionalQuery)}" placeholder="Buscar usuario por nombre, iniciales, correo, puesto o área...">${state.informationScopeAdditionalQuery?`<div class="pc-information-scope-results">${candidates.length?candidates.map(candidate=>`<button type="button" data-information-scope-candidate="${candidate.id_SB}" class="${Number(candidate.id_SB)===Number(state.informationScopeCandidateId)?'active':''}"><span class="pc-avatar">${esc(initials(candidate))}</span><span><b>${esc(candidate.nombre)}</b><small>${esc(candidate.area||candidate.puesto||'Sin área')}</small></span></button>`).join(''):'<div class="pc-empty">Sin coincidencias disponibles.</div>'}</div>`:''}</div><button type="button" class="pc-btn primary" id="pc-information-scope-add" ${selectedCandidate?'':'disabled'}>Agregar</button></div>`
+    :`<div class="pc-information-scope-warning"><b>Solo Programador puede editar Usuarios adicionales.</b><span>Esta sección es una excepción individual. Puedes consultar los usuarios ya asignados, pero no modificarlos.</span></div>`;
+
+  return `<div class="pc-information-scope-form">
+    <div class="pc-admin-head pc-information-scope-head"><div class="pc-user-head"><span class="pc-avatar big">${esc(initials(user))}</span><div><span class="pc-eyebrow">ALCANCE DE INFORMACIÓN · CONFIGURACIÓN INDIVIDUAL</span><h2>${esc(user.nombre)}</h2><p>${esc(role?.rol||user.puesto||'Sin rol principal')} · ${esc(user.empresa||'Sin empresa')} · ${esc(user.area||'Sin área')} · ID ${esc(user.id_SB)}</p></div></div><span class="pc-status ${Number(user.estado)===1?'ok':''}">${Number(user.estado)===1?'Activo':'Inactivo'}</span></div>
+    ${backendNote}
+    <div class="pc-scope-context-banner"><span>👤</span><div><b>Este editor modifica únicamente a ${esc(user.nombre)}.</b><small>Los permisos funcionales se administran por rol/usuario en las pestañas de Permisos. Aquí solo definimos qué información puede alcanzar este usuario.</small></div></div>
+    <section class="pc-admin-section pc-information-scope-section"><div class="pc-information-scope-section-title"><div><h3>1. Llaves y puertas — Acceso General</h3><p>La llave maestra abre toda la información del dominio. Sin llave maestra, puedes abrir puertas específicas. Ninguna de las dos opciones habilita módulos ni acciones por sí sola.</p></div></div>${informationScopeAccessGeneralHtml(draft)}</section>
+    <section class="pc-admin-section pc-information-scope-section"><div class="pc-information-scope-section-title"><div><h3>2. Alcance automático — Personas</h3><p>Una vez abierta una puerta, estas relaciones determinan qué personas/registros entran al filtro normal de este usuario.</p></div></div><div class="pc-information-scope-options">
+      <label class="pc-information-scope-option selected locked"><input type="checkbox" checked disabled><span><b>Su propia información</b><small>Siempre incluida.</small></span></label>
+      <label class="pc-information-scope-option ${draft.ver_reporta_a?'selected':''}"><input type="checkbox" id="pc-information-scope-reports" ${draft.ver_reporta_a?'checked':''}><span><b>Personas que le reportan</b><small>Fuente: usuarios.reporta_a.</small></span></label>
+      <label class="pc-information-scope-option ${draft.ver_rel_admin?'selected':''}"><input type="checkbox" id="pc-information-scope-rel-admin" ${draft.ver_rel_admin?'checked':''}><span><b>Relaciones administrativas</b><small>Fuente: usuarios_rel_admin.</small></span></label>
+    </div></section>
+    <section class="pc-admin-section pc-information-scope-section"><div class="pc-information-scope-section-title"><div><h3>3. Usuarios adicionales — Excepción individual</h3><p>Amplían las personas visibles de este usuario únicamente dentro de las puertas que ya tenga abiertas. No entregan llaves, puertas, módulos ni acciones.</p></div></div>${additionalEditor}<div class="pc-information-scope-chips">${additionalList}</div></section>
+    <div class="pc-scope-formula"><span>🔑 Llave / puerta</span><b>+</b><span>👥 Personas</span><b>+</b><span>⚙ Permiso funcional</span><b>=</b><span>🛡 Información accesible</span></div>
+    <div class="pc-admin-actions pc-information-scope-actions"><span class="pc-information-scope-dirty ${informationScopeDirty()?'on':''}">${informationScopeDirty()?'Cambios pendientes para este usuario':'Sin cambios pendientes'}</span><button type="button" class="pc-btn primary" id="pc-information-scope-save" ${state.savingInformationScope||state.informationScopeBackendPending||!informationScopeDirty()?'disabled':''}>${state.savingInformationScope?'Guardando...':'Guardar este usuario'}</button></div>
+  </div>`;
+}
+
+  function renderInformationScope(){
+  const box=document.getElementById('pc-content');
+  if(!box||state.tab!=='information-scope')return;
+  captureInformationScopeListScroll();
+  const selected=state.users.find(user=>Number(user.id_SB)===Number(state.informationScopeUserId))||null;
+  const companies=distinctUserValues('empresa');
+  const roleOptions=state.roles.filter(role=>Number(role.estado)!==0).sort((a,b)=>String(a.rol||'').localeCompare(String(b.rol||''),'es',{sensitivity:'base'}));
+  const editor=state.informationScopeBulkOpen?informationScopeBulkEditorHtml():informationScopeEditorHtml(selected);
+  box.innerHTML=`<div class="pc-admin-layout pc-information-scope-layout"><aside class="pc-admin-list pc-admin-user-selector"><div class="pc-selector-head pc-information-scope-selector-head"><div><h2>${state.informationScopeBulkOpen?'Seleccionar usuarios':'Usuarios'}</h2><p>${state.informationScopeBulkOpen?'La selección solo facilita la captura; cada usuario se registra individualmente.':'Selecciona una persona para editar únicamente su alcance.'}</p></div><button type="button" class="pc-btn ${state.informationScopeBulkOpen?'ghost':'primary'} pc-information-scope-bulk-toggle" id="pc-information-scope-bulk-toggle">${state.informationScopeBulkOpen?'Volver a individual':'Asignación masiva'}</button></div><div class="pc-filters pc-information-scope-filters"><input id="pc-information-scope-user-search" value="${esc(state.informationScopeQuery)}" placeholder="Buscar usuario..."><select id="pc-information-scope-company"><option value="">Todas las empresas</option>${companies.map(company=>`<option value="${esc(company)}" ${normalizeText(company)===normalizeText(state.informationScopeCompany)?'selected':''}>${esc(company)}</option>`).join('')}</select><select id="pc-information-scope-role"><option value="">Todos los roles</option>${roleOptions.map(role=>`<option value="${role.id_rol}" ${Number(role.id_rol)===Number(state.informationScopeRole)?'selected':''}>${esc(role.rol)}</option>`).join('')}</select></div><div class="pc-list" id="pc-information-scope-user-items"></div></aside><section class="pc-admin-editor pc-information-scope-editor">${editor}</section></div>`;
+  renderInformationScopeUserList();
+  bindInformationScopeEvents();
+  updateSaveButton();
+  requestAnimationFrame(()=>{
+    const list=document.getElementById('pc-information-scope-user-items');
+    if(list)list.scrollTop=Number(state.informationScopeListScrollTop||0);
+  });
+}
+
+  function mutateInformationScope(mutator){
+    if(!state.informationScopeDraft)return;
+    mutator(state.informationScopeDraft);
+    renderInformationScope();
+  }
+
+  function bindInformationScopeEvents(){
+  document.getElementById('pc-information-scope-bulk-toggle')?.addEventListener('click',()=>{
+    if(state.savingInformationScope||state.savingInformationScopeBulk)return;
+    if(!state.informationScopeBulkOpen&&informationScopeDirty()&&!confirm('Hay cambios individuales sin guardar. ¿Deseas descartarlos y entrar a Asignación masiva?'))return;
+    if(!state.informationScopeBulkOpen&&state.informationScopeBase){
+      state.informationScopeDraft=cloneInformationScopeDraft(state.informationScopeBase);
+    }
+    state.informationScopeBulkOpen=!state.informationScopeBulkOpen;
+    if(!state.informationScopeBulkOpen){
+      state.informationScopeBulkSelected.clear();
+      state.informationScopeBulkDraft=emptyInformationScopeBulkDraft();
+    }
+    renderInformationScope();
+  });
+  document.getElementById('pc-information-scope-bulk-select-visible')?.addEventListener('click',()=>{
+    filteredInformationScopeUsers().forEach(user=>state.informationScopeBulkSelected.add(Number(user.id_SB)));
+    renderInformationScope();
+  });
+  document.getElementById('pc-information-scope-bulk-clear')?.addEventListener('click',()=>{
+    state.informationScopeBulkSelected.clear();
+    renderInformationScope();
+  });
+  document.querySelectorAll('[data-information-scope-bulk-domain]').forEach(input=>input.addEventListener('change',()=>{
+    const domain=String(input.dataset.informationScopeBulkDomain||'').toUpperCase();
+    if(input.checked){
+      state.informationScopeBulkDraft.dominios_completos.add(domain);
+      const groupIds=informationScopeGroupIdsForDomain(domain);
+      groupIds.forEach(id=>state.informationScopeBulkDraft.agrupaciones.delete(id));
+    }else{
+      state.informationScopeBulkDraft.dominios_completos.delete(domain);
+    }
+    renderInformationScope();
+  }));
+  document.querySelectorAll('[data-information-scope-bulk-group]').forEach(input=>input.addEventListener('change',()=>{
+    const id=Number(input.dataset.informationScopeBulkGroup);
+    if(!Number.isInteger(id)||id<=0)return;
+    input.checked?state.informationScopeBulkDraft.agrupaciones.add(id):state.informationScopeBulkDraft.agrupaciones.delete(id);
+    renderInformationScope();
+  }));
+  document.getElementById('pc-information-scope-bulk-reports')?.addEventListener('change',event=>{state.informationScopeBulkDraft.ver_reporta_a=Boolean(event.target.checked);renderInformationScope();});
+  document.getElementById('pc-information-scope-bulk-rel-admin')?.addEventListener('change',event=>{state.informationScopeBulkDraft.ver_rel_admin=Boolean(event.target.checked);renderInformationScope();});
+  document.getElementById('pc-information-scope-bulk-apply')?.addEventListener('click',saveInformationScopeBulk);
+  document.getElementById('pc-information-scope-user-search')?.addEventListener('input',event=>{state.informationScopeQuery=event.target.value;renderInformationScopeUserList();});
+  document.getElementById('pc-information-scope-company')?.addEventListener('change',event=>{state.informationScopeCompany=event.target.value;renderInformationScopeUserList();});
+  document.getElementById('pc-information-scope-role')?.addEventListener('change',event=>{state.informationScopeRole=event.target.value;renderInformationScopeUserList();});
+  document.querySelectorAll('[data-information-scope-domain]').forEach(input=>input.addEventListener('change',()=>mutateInformationScope(draft=>{
+    const domain=String(input.dataset.informationScopeDomain||'').toUpperCase();
+    if(input.checked){
+      draft.dominios_completos.add(domain);
+      const groupIds=informationScopeGroupIdsForDomain(domain);
+      groupIds.forEach(id=>draft.agrupaciones.delete(id));
+    }else{
+      draft.dominios_completos.delete(domain);
+    }
+  })));
+  document.querySelectorAll('[data-information-scope-group]').forEach(input=>input.addEventListener('change',()=>mutateInformationScope(draft=>{
+    const id=Number(input.dataset.informationScopeGroup);
+    if(!Number.isInteger(id)||id<=0)return;
+    input.checked?draft.agrupaciones.add(id):draft.agrupaciones.delete(id);
+  })));
+  document.getElementById('pc-information-scope-reports')?.addEventListener('change',event=>mutateInformationScope(draft=>{draft.ver_reporta_a=Boolean(event.target.checked);}));
+  document.getElementById('pc-information-scope-rel-admin')?.addEventListener('change',event=>mutateInformationScope(draft=>{draft.ver_rel_admin=Boolean(event.target.checked);}));
+  document.getElementById('pc-information-scope-additional-search')?.addEventListener('input',event=>{
+    if(!state.informationScopeCanManageAdditional)return;
+    state.informationScopeAdditionalQuery=event.target.value;
+    state.informationScopeCandidateId=null;
+    renderInformationScope();
+    const input=document.getElementById('pc-information-scope-additional-search');
+    input?.focus({preventScroll:true});
+    if(input&&typeof input.setSelectionRange==='function')input.setSelectionRange(input.value.length,input.value.length);
+  });
+  document.querySelectorAll('[data-information-scope-candidate]').forEach(button=>button.addEventListener('click',()=>{
+    if(!state.informationScopeCanManageAdditional)return;
+    state.informationScopeCandidateId=Number(button.dataset.informationScopeCandidate);
+    const candidate=state.users.find(user=>Number(user.id_SB)===Number(state.informationScopeCandidateId));
+    state.informationScopeAdditionalQuery=candidate?.nombre||state.informationScopeAdditionalQuery;
+    renderInformationScope();
+  }));
+  document.getElementById('pc-information-scope-add')?.addEventListener('click',()=>{
+    if(!state.informationScopeCanManageAdditional)return;
+    const id=Number(state.informationScopeCandidateId);
+    if(!Number.isInteger(id)||id<=0||!state.informationScopeDraft)return;
+    state.informationScopeDraft.usuarios_adicionales.add(id);
+    state.informationScopeAdditionalQuery='';
+    state.informationScopeCandidateId=null;
+    renderInformationScope();
+  });
+  document.querySelectorAll('[data-information-scope-remove]').forEach(button=>button.addEventListener('click',()=>{
+    if(!state.informationScopeCanManageAdditional)return;
+    const id=Number(button.dataset.informationScopeRemove);
+    if(!state.informationScopeDraft)return;
+    state.informationScopeDraft.usuarios_adicionales.delete(id);
+    renderInformationScope();
+  }));
+  document.getElementById('pc-information-scope-retry')?.addEventListener('click',()=>loadInformationScope(state.informationScopeUserId));
+  document.getElementById('pc-information-scope-save')?.addEventListener('click',saveInformationScope);
+}
+
+  async function saveInformationScopeBulk(){
+  const ids=[...state.informationScopeBulkSelected].map(Number).filter(id=>Number.isInteger(id)&&id>0);
+  if(!ids.length||!informationScopeBulkHasActivation()||state.savingInformationScopeBulk)return;
+  const draft=state.informationScopeBulkDraft||emptyInformationScopeBulkDraft();
+  const payload={
+    usuario_ids:ids,
+    activar:{
+      dominios_completos:[...draft.dominios_completos].sort(),
+      agrupaciones:[...draft.agrupaciones].map(Number).filter(id=>Number.isInteger(id)&&id>0).sort((a,b)=>a-b),
+      ver_reporta_a:Boolean(draft.ver_reporta_a),
+      ver_rel_admin:Boolean(draft.ver_rel_admin)
+    }
+  };
+  if(!confirm(`¿Aplicar esta selección a ${ids.length} usuario(s)? La backend registrará cada usuario individualmente. La operación es aditiva: no desactiva accesos existentes ni modifica Usuarios adicionales.`))return;
+  state.savingInformationScopeBulk=true;
+  renderInformationScope();
+  try{
+    const response=await request(informationScopeBulkPath,{method:'PUT',body:JSON.stringify(payload)});
+    const updated=Number(response.data?.usuarios_actualizados||0);
+    if(updated!==ids.length)throw new Error(`La backend confirmó ${updated} de ${ids.length} usuarios.`);
+    toast(`Alcance aplicado individualmente a ${updated} usuario(s).`);
+    const currentId=Number(state.informationScopeUserId);
+    const reloadCurrent=ids.includes(currentId);
+    state.informationScopeBulkSelected.clear();
+    state.informationScopeBulkDraft=emptyInformationScopeBulkDraft();
+    state.informationScopeBulkOpen=false;
+    if(reloadCurrent&&currentId){
+      await loadInformationScope(currentId);
+    }else{
+      renderInformationScope();
+    }
+  }catch(error){
+    toast(error.message||'No se pudo aplicar la asignación masiva.');
+  }finally{
+    state.savingInformationScopeBulk=false;
+    renderInformationScope();
+  }
+}
+
+  function informationScopeReadbackMatches(expected,readback,userId){
+    const normalized=normalizeInformationScopeData(readback?.data||{},userId);
+    return JSON.stringify(informationScopePayload(expected))===JSON.stringify(informationScopePayload(normalized));
+  }
+
+  async function saveInformationScope(){
+    const userId=Number(state.informationScopeUserId);
+    const selected=state.users.find(user=>Number(user.id_SB)===userId);
+    if(!Number.isInteger(userId)||userId<=0||!state.informationScopeDraft||!informationScopeDirty())return;
+    if(state.informationScopeBackendPending){toast('No hay una lectura válida de Alcance de Información. Reintenta antes de guardar.');return;}
+    const payload=informationScopePayload(state.informationScopeDraft);
+    if(!confirm(`¿Guardar el alcance de información de ${selected?.nombre||'este usuario'}?`))return;
+    state.savingInformationScope=true;
+    renderInformationScope();
+    try{
+      await request(informationScopePath(userId),{method:'PUT',body:JSON.stringify(payload)});
+      const readback=await request(`${informationScopePath(userId)}?_=${Date.now()}`,{method:'GET',cache:'no-store'});
+      if(!informationScopeReadbackMatches(state.informationScopeDraft,readback,userId)){
+        throw new Error('La backend respondió, pero la lectura posterior no coincide con el alcance solicitado.');
+      }
+      const data=readback.data||{};
+      state.informationScopeCanManageAdditional=Boolean(data.capacidades?.puede_gestionar_usuarios_adicionales);
+      const normalized=normalizeInformationScopeData(data,userId);
+      state.informationScopeBase=cloneInformationScopeDraft(normalized);
+      state.informationScopeDraft=cloneInformationScopeDraft(normalized);
+      state.informationScopeError='';
+      state.informationScopeBackendPending=false;
+      toast('Alcance de información guardado y verificado correctamente.');
+    }catch(error){
+      state.informationScopeError=error.message||'No se pudo guardar el alcance de información.';
+      toast(state.informationScopeError);
+    }finally{
+      state.savingInformationScope=false;
+      renderInformationScope();
+    }
+  }
+
   async function loadAdminCatalogs(){
     if(state.zones.length&&state.securityQuestions.length)return;
     try{
@@ -1579,6 +2310,8 @@
     const zoneOptions=state.zones.map(z=>`<label class="pc-admin-check"><input type="checkbox" name="zones" value="${z.id_zona}" ${selectedZones.has(Number(z.id_zona))?'checked':''}><span>${esc(z.zona)} · ${esc(z.nombre||'')}</span></label>`).join('');
     const areaOptions=selectOptions(distinctUserValues('area'),d.area,'Selecciona un área');
     const companyOptions=selectOptions(distinctUserValues('empresa'),d.empresa,'Selecciona una empresa');
+    const pendingReset=d.id_SB&&Number(d.must_change_password)===1?readPendingResetCredential(d.id_SB):null;
+    const pendingResetMarkup=pendingReset?`<div class="pc-reset-password-box" role="status" style="margin-top:12px;padding:12px 14px;border:1px solid #f0b8b8;border-radius:12px;background:#fff8f8;display:grid;gap:7px;max-width:620px"><label for="pc-reset-password-value" style="font-size:12px;font-weight:700">Contraseña temporal activa</label><small>Usuario: ${esc(pendingReset.email||d.correo||'')}</small><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><input id="pc-reset-password-value" type="text" readonly value="${esc(pendingReset.password)}" aria-label="Contraseña temporal activa" style="min-width:260px;max-width:420px;flex:1 1 260px;padding:9px 10px;border:1px solid #d8dee8;border-radius:8px;background:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;letter-spacing:.3px"><button type="button" class="pc-btn ghost" id="pc-copy-reset-password">Copiar</button></div><small>Este reseteo es independiente de «Guardar usuario». La contraseña permanecerá visible en esta sesión hasta que el usuario complete correctamente su primer acceso.</small></div>`:'';
     return `<form id="pc-admin-user-form" class="pc-admin-form">
       <div class="pc-admin-head"><div><span class="pc-eyebrow">ADMINISTRACIÓN</span><h2>${d.id_SB?'Editar usuario':'Crear usuario'}</h2><p>Las operaciones conservan todos los datos históricos y relaciones operativas.</p></div><button type="button" class="pc-btn primary" id="pc-new-user">+ Nuevo usuario</button></div>
       <div class="pc-admin-grid">
@@ -1593,7 +2326,7 @@
       </div>
       <section class="pc-admin-section"><h3>Roles asociados</h3><div class="pc-admin-check-grid" id="pc-admin-roles">${roleOptions}</div><label class="pc-admin-principal">Rol principal<select name="rol_id" required><option value="">Selecciona</option>${principalOptions}</select></label></section>
       <section class="pc-admin-section"><h3>Zonas operativas</h3><div class="pc-admin-check-grid">${zoneOptions||'<span class="pc-empty">Sin zonas disponibles.</span>'}</div></section>
-      ${d.id_SB?`<section class="pc-admin-section security"><h3>Seguridad de acceso</h3><div class="pc-security-status"><span>Último acceso: <b>${esc(d.ultimo_acceso||'Sin registro')}</b></span><span>Intentos fallidos: <b>${esc(d.failed_login_attempts||0)}</b></span><span>Bloqueo: <b>${d.locked_until?esc(d.locked_until):'No'}</b></span></div><button type="button" class="pc-btn danger" id="pc-reset-credentials">Resetear credenciales</button></section>`:''}
+      ${d.id_SB?`<section class="pc-admin-section security"><h3>Seguridad de acceso</h3><div class="pc-security-status"><span>Último acceso: <b>${esc(d.ultimo_acceso||'Sin registro')}</b></span><span>Intentos fallidos: <b>${esc(d.failed_login_attempts||0)}</b></span><span>Bloqueo: <b>${d.locked_until?esc(d.locked_until):'No'}</b></span></div><button type="button" class="pc-btn danger" id="pc-reset-credentials">Resetear credenciales</button>${pendingResetMarkup}</section>`:''}
       <div class="pc-admin-actions"><button type="button" class="pc-btn ghost" id="pc-cancel-user">Cancelar</button><button class="pc-btn primary" ${state.adminLoading?'disabled':''}>${state.adminLoading?'Guardando...':'Guardar usuario'}</button></div>
     </form>`;
   }
@@ -1633,17 +2366,30 @@
   }
 
   async function selectAdminUser(id){
+    stopResetCredentialStatusPolling();
     state.adminUserId=Number(id); state.adminLoading=true; renderAdminUsers();
-    try{ const r=await request(`/api/usuarios/${id}/detalle`); state.adminUserDetail=r.data||null; }
+    try{
+      const r=await request(`/api/usuarios/${id}/detalle`);
+      state.adminUserDetail=r.data||null;
+      if(state.adminUserDetail&&Number(state.adminUserDetail.must_change_password)!==1){
+        clearPendingResetCredential(id);
+      }
+    }
     catch(e){toast(e.message||'No se pudo cargar el usuario.');}
-    finally{state.adminLoading=false;renderAdminUsers();}
+    finally{
+      state.adminLoading=false;
+      renderAdminUsers();
+      if(state.adminUserDetail&&Number(state.adminUserDetail.must_change_password)===1&&readPendingResetCredential(id)){
+        startResetCredentialStatusPolling(id);
+      }
+    }
   }
 
   function bindAdminUserEvents(){
     document.getElementById('pc-admin-user-search')?.addEventListener('input',event=>{state.adminUserQuery=event.target.value;renderAdminUserList();});
     document.getElementById('pc-admin-user-company')?.addEventListener('change',event=>{state.adminUserCompany=event.target.value;renderAdminUserList();});
-    document.getElementById('pc-new-user')?.addEventListener('click',()=>{state.adminUserId=null;state.adminUserDetail={};renderAdminUsers();});
-    document.getElementById('pc-cancel-user')?.addEventListener('click',()=>{state.adminUserDetail=null;state.adminUserId=null;renderAdminUsers();});
+    document.getElementById('pc-new-user')?.addEventListener('click',()=>{stopResetCredentialStatusPolling();state.adminUserId=null;state.adminUserDetail={};renderAdminUsers();});
+    document.getElementById('pc-cancel-user')?.addEventListener('click',()=>{stopResetCredentialStatusPolling();state.adminUserDetail=null;state.adminUserId=null;renderAdminUsers();});
     const rolesBox=document.getElementById('pc-admin-roles');
     rolesBox?.addEventListener('change',()=>{
       const sel=document.querySelector('#pc-admin-user-form select[name="rol_id"]'); const current=sel.value;
@@ -1652,6 +2398,22 @@
     });
     document.getElementById('pc-admin-user-form')?.addEventListener('submit',saveAdminUser);
     document.getElementById('pc-reset-credentials')?.addEventListener('click',resetCredentials);
+    document.getElementById('pc-copy-reset-password')?.addEventListener('click',async()=>{
+      const pending=readPendingResetCredential(state.adminUserId);
+      if(!pending?.password)return;
+      try{
+        await navigator.clipboard.writeText(String(pending.password));
+        toast('Contraseña temporal copiada.');
+      }catch(_error){
+        const value=document.getElementById('pc-reset-password-value');
+        if(value&&typeof value.select==='function'){
+          value.focus({preventScroll:true});
+          value.select();
+          value.setSelectionRange?.(0,String(value.value||'').length);
+        }
+        toast('No fue posible copiar automáticamente. La contraseña quedó seleccionada.');
+      }
+    });
   }
 
   async function saveAdminUser(ev){
@@ -1666,10 +2428,25 @@
   }
 
   async function resetCredentials(){
-    const user=state.adminUserDetail;if(!user||!confirm(`¿Resetear únicamente las credenciales de ${user.nombre}?`))return;
-    try{const r=await request(`/api/usuarios/${user.id_SB}/reset-credentials`,{method:'POST',body:'{}'});alert(`Contraseña temporal: ${r.data?.temporary_password||'Generada'}
-Se mostrará una sola vez.`);await selectAdminUser(user.id_SB);}
-    catch(e){toast(e.message||'No se pudieron resetear las credenciales.');}
+    const user=state.adminUserDetail;
+    if(!user||!confirm(`¿Resetear únicamente las credenciales de ${user.nombre}?`))return;
+    const button=document.getElementById('pc-reset-credentials');
+    if(button){button.disabled=true;button.textContent='Reseteando...';}
+    try{
+      const r=await request(`/api/usuarios/${user.id_SB}/reset-credentials`,{method:'POST',body:'{}'});
+      const temporaryPassword=String(r.data?.temporary_password||'').trim();
+      const responseUserId=Number(r.data?.user_id);
+      if(responseUserId!==Number(user.id_SB))throw new Error('El backend devolvió credenciales para un usuario distinto al seleccionado.');
+      if(r.data?.credential_verified!==true)throw new Error('El backend no confirmó que la contraseña temporal coincida con el hash guardado.');
+      if(!temporaryPassword)throw new Error('El backend no devolvió la contraseña temporal generada.');
+      storePendingResetCredential(user.id_SB,temporaryPassword,r.data?.user_email||user.correo);
+      toast(r.message||'Credenciales reseteadas y verificadas correctamente.');
+      await selectAdminUser(user.id_SB);
+    }
+    catch(e){
+      if(button){button.disabled=false;button.textContent='Resetear credenciales';}
+      toast(e.message||'No se pudieron resetear las credenciales.');
+    }
   }
 
   function roleCompanyLabel(value){

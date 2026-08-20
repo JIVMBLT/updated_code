@@ -17,8 +17,14 @@ function cursorFor(subscription) {
 }
 
 function payloadFor(notification) {
+  const baseTitle = notification.titulo_notificacion || 'Mantto Gestor';
+  const emoji = String(notification.icono_notificacion || '').trim();
+  const title = emoji && !String(baseTitle).trim().startsWith(emoji)
+    ? `${emoji} ${baseTitle}`
+    : baseTitle;
+
   return {
-    title: notification.titulo_notificacion || 'Mantto Gestor',
+    title,
     body: notification.mensaje_notificacion || 'Tienes una nueva notificacion.',
     icon: './assets/img/icons/icon-192.png',
     badge: './assets/img/icons/icon-192.png',

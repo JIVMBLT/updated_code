@@ -7,6 +7,7 @@ const apiRouter = require('./routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
 const { getCorsOptions } = require('./config/http.config');
 const { viewerReadOnlyGuard } = require('./middleware/viewer-readonly.middleware');
+const { interactionTrackingMiddleware_gnral } = require('./middleware/interaction-tracking.middleware');
 
 function enabled(value, fallback = true) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -18,7 +19,6 @@ function createApp() {
 
   app.disable('x-powered-by');
   app.use(cors(getCorsOptions()));
-  // [Aster | 2026-08-12 | ASTER-MG | PATCH: FASE_1_BACKEND_M2M_INFRA_V001]
   app.use(express.json({
     limit: process.env.JSON_LIMIT || '12mb',
     verify: captureRawBody
@@ -29,6 +29,7 @@ function createApp() {
     verify: captureRawBody
   }));
   app.use(viewerReadOnlyGuard);
+  app.use(interactionTrackingMiddleware_gnral);
 
   if (enabled(process.env.CFFAA_LEGACY_UPLOADS_ENABLED, true)) {
     app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));

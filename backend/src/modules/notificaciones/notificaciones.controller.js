@@ -13,7 +13,6 @@ async function getNotificaciones(req, res) {
   }
 }
 
-
 async function getEstadoNotificaciones(req, res) {
   try {
     const data = await notificacionesService.getEstadoNotificaciones(req);

@@ -192,7 +192,14 @@
   }
   async function api(path, options){
     const opts = options || {};
-    const headers = Object.assign({ 'Accept':'application/json', 'Content-Type':'application/json' }, opts.headers || {});
+    const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+    const headers = Object.assign({ 'Accept':'application/json' }, opts.headers || {});
+    if(isFormData){
+      delete headers['Content-Type'];
+      delete headers['content-type'];
+    }else if(!headers['Content-Type'] && !headers['content-type']){
+      headers['Content-Type']='application/json';
+    }
     const token = getToken();
     if(token) headers.Authorization = 'Bearer ' + token;
     const deviceToken=window.ManttoDevicePermissions&&window.ManttoDevicePermissions.getDeviceToken

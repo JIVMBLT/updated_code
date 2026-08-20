@@ -1,3 +1,5 @@
+'use strict';
+
 const dashboardOperativoRepository = require('./dashboard-operativo.repository');
 
 function normalizarZona(value) {
@@ -7,10 +9,10 @@ function normalizarZona(value) {
     .replace(/[-\s]/g, '');
 }
 
-async function getPreventivosSupervisor(mes) {
+async function getPreventivosSupervisor(mes, informationAccess = null) {
   const [supervisores, servicios] = await Promise.all([
-    dashboardOperativoRepository.getSupervisoresActivosPorZona(),
-    dashboardOperativoRepository.getPreventivosPorZona(mes)
+    dashboardOperativoRepository.getSupervisoresActivosPorZona(informationAccess),
+    dashboardOperativoRepository.getPreventivosPorZona(mes, informationAccess)
   ]);
 
   const porZona = new Map(

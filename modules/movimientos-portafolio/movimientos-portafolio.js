@@ -1,6 +1,6 @@
 (function(){
-  const MODULE_VERSION = '20260716-v005';
-  const state = { loaded:false, rows:[], filtersLoaded:false, weeklyCatalog:[], weeklyRows:[] };
+  const MODULE_VERSION = '20260817-v006';
+  const state = { loaded:false, rows:[], filtersLoaded:false, weeklyCatalog:[], weeklyRows:[], weeklyCut:null };
 
   const MOV_INLINE_HTML = `<div class="mov-page">
   <section class="mov-card mov-head">
@@ -333,10 +333,12 @@
     if(search) search.value=''; if(type) type.value='';
     if(year && state.weeklyCatalog.length){ year.value=String(state.weeklyCatalog[0].anio_iso); fillWeeksForYear(year.value); }
     state.weeklyRows=[];
+    state.weeklyCut=null;
     renderWeeklyEmpty('Selecciona un año y una semana');
   }
 
   function renderWeeklyEmpty(message){
+    state.weeklyCut=null;
     text('mov-week-title','Semana sin seleccionar'); text('mov-week-count',message || 'Sin información'); text('mov-week-range','Corte semanal: —');
     ['mov-week-total','mov-week-outs','mov-week-returns','mov-week-changes'].forEach(id=>text(id,'—'));
     const body=$('mov-week-body'); if(body) body.innerHTML='<tr><td colspan="8" class="mov-empty">'+esc(message || 'Sin información')+'</td></tr>';
@@ -350,8 +352,10 @@
       const data=await fetchJson('/api/portafolio/movimientos-semanales?'+qs({anio,semana,search:val('mov-week-search'),tipo:val('mov-week-type')}));
       state.weeklyRows=Array.isArray(data.data)?data.data:[];
       const c=data.corte||{};
+      state.weeklyCut=c;
+      const noMovements=c.total_movimientos !== undefined && c.total_movimientos !== null && Number(c.total_movimientos)===0;
       text('mov-week-title','Semana '+c.semana_iso+' de '+c.anio_iso);
-      text('mov-week-count',int(data.total_filtrado)+' movimientos mostrados');
+      text('mov-week-count',noMovements?'SIN MOVIMIENTOS ESTA SEMANA':int(data.total_filtrado)+' movimientos mostrados');
       text('mov-week-range','Del '+fmtDate(c.fecha_inicio)+' al '+fmtDate(c.fecha_fin)+' · Corte: '+fmtDate(c.fecha_corte));
       text('mov-week-total',int(c.total_movimientos)); text('mov-week-outs',int(c.total_salidas)); text('mov-week-returns',int(c.total_regresos)); text('mov-week-changes',int(c.total_cambios));
       renderWeeklyRows();
@@ -360,7 +364,12 @@
 
   function renderWeeklyRows(){
     const body=$('mov-week-body'); if(!body) return;
-    if(!state.weeklyRows.length){ body.innerHTML='<tr><td colspan="8" class="mov-empty">Sin movimientos para los filtros seleccionados</td></tr>'; return; }
+    if(!state.weeklyRows.length){
+      const noMovements=state.weeklyCut && Number(state.weeklyCut.total_movimientos)===0;
+      const message=noMovements?'SIN MOVIMIENTOS ESTA SEMANA':'Sin movimientos para los filtros seleccionados';
+      body.innerHTML='<tr><td colspan="8" class="mov-empty">'+esc(message)+'</td></tr>';
+      return;
+    }
     body.innerHTML=state.weeklyRows.map(row=>{
       const type=String(row.tipo||'CAMBIO').toUpperCase(); const tag=tagFor(type);
       return '<tr>'

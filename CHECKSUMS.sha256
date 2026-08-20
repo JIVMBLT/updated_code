@@ -1,0 +1,10 @@
+a7b57094e301ae1c1ec547cbded3848bf30b671a1516a29d966c86b2f8d9fe3a  ./ADR_FASE_6_ALCANCES_GLOBALES_V001.md
+3ab252aaa25e8466b843e9204859d63ff36be43bbbfa81374810a7ed17aa23b5  ./APLICAR_FASE_6_PANEL_ALCANCES_V001.js
+e56343a76805af237301c6c45832137e8a0bfff1ec1bb82421795197df28521f  ./README_FASE_6_ALCANCES_GLOBALES_V001.md
+4d542b953b597d02e71a9b824e11bd5cfb0651b2bfe7068f1fc4dccf93e4030e  ./backend/scripts/test-fase-6-alcances.js
+8b204da3b332428ff74cbd4610aea4d1b7331c182e40ed90f3b4a64706e613e5  ./backend/src/controllers/panel-control-alcance.controller.js
+2a7b2d925f75bdfda9c4891ff41786dbcaf91c3be43fd43549651651e6b8a217  ./backend/src/middleware/information-access-gnral.middleware.js
+6a5ad33019861d604ddf92d258932863e5ed9d89e1592eae98fbbe76e3cdf95e  ./backend/src/services/alcance/alcance-panel.service.js
+67f83eaf64eab9cebbf97b62fee14b1e9a050cdc8a95474b314edd661ac009ee  ./backend/src/services/alcance/alcance-resolver.service.js
+fda1301cfc4af86b8fc4d9d17e6335aa821f196d3e89abd9d3165fae7c841492  ./backend/src/services/alcance/informacion-cruzada.service.js
+37c53aff8f5c6574fb3c9f45f97f509a16bde3e846b09dd9683302a82893b1fd  ./backend/src/services/information-record-scope-gnral.service.js

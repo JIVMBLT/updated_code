@@ -1,6 +1,7 @@
 'use strict';
 
 const repository = require('./experimental-resumen-dia.repository');
+const informationRecordScope = require('../../services/information-record-scope-gnral.service');
 
 const TIME_ZONE_EXP = 'America/Mexico_City';
 const MAX_ARRIVAL_HOURS_EXP = 744;
@@ -156,11 +157,13 @@ function buildSummary_exp(rows) {
 }
 
 function buildFilters_exp(req, startDateTime, endDateTime) {
+  const ticketScope = informationRecordScope.buildTicketScopeSql_gnral(req, 't');
   const clauses = [
     't.fecha_reporte >= ?',
-    't.fecha_reporte < ?'
+    't.fecha_reporte < ?',
+    ticketScope.sql
   ];
-  const params = [startDateTime, endDateTime];
+  const params = [startDateTime, endDateTime, ...ticketScope.params];
   const estado = normalizeFilter_exp(req.query && req.query.estado);
   const zona = normalizeFilter_exp(req.query && req.query.zona);
 
@@ -189,6 +192,7 @@ async function getResumenDia_exp(req) {
     `${yesterday} 00:00:00`,
     `${tomorrow} 00:00:00`
   );
+  const catalogScope = informationRecordScope.buildTicketScopeSql_gnral(req, 't');
 
   const ticketsSql = `
     SELECT
@@ -211,22 +215,24 @@ async function getResumenDia_exp(req) {
   const filterCatalogSql = `
     SELECT catalogo.tipo, catalogo.valor
     FROM (
-      SELECT 'ESTADO' AS tipo, TRIM(estado) AS valor
-      FROM tickets
-      WHERE estado IS NOT NULL AND TRIM(estado) <> ''
-      GROUP BY TRIM(estado)
+      SELECT 'ESTADO' AS tipo, TRIM(t.estado) AS valor
+      FROM tickets t
+      WHERE ${catalogScope.sql}
+        AND t.estado IS NOT NULL AND TRIM(t.estado) <> ''
+      GROUP BY TRIM(t.estado)
       UNION ALL
-      SELECT 'ZONA' AS tipo, TRIM(zona) AS valor
-      FROM tickets
-      WHERE zona IS NOT NULL AND TRIM(zona) <> ''
-      GROUP BY TRIM(zona)
+      SELECT 'ZONA' AS tipo, TRIM(t.zona) AS valor
+      FROM tickets t
+      WHERE ${catalogScope.sql}
+        AND t.zona IS NOT NULL AND TRIM(t.zona) <> ''
+      GROUP BY TRIM(t.zona)
     ) catalogo
     ORDER BY catalogo.tipo ASC, catalogo.valor ASC
   `;
 
   const [ticketsResult, catalogResult] = await Promise.all([
     repository.query(ticketsSql, filters.params),
-    repository.query(filterCatalogSql, [])
+    repository.query(filterCatalogSql, [...catalogScope.params, ...catalogScope.params])
   ]);
 
   const rows = ticketsResult[0] || [];

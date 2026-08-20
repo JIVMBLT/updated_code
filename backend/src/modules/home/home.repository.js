@@ -81,39 +81,6 @@ async function getNotificaciones(notifWhere, params, leido, limit) {
   return rows;
 }
 
-async function getActividadReciente(userTaskWhere, userTaskParams) {
-  const [rows] = await db.query(`
-    SELECT * FROM (
-      SELECT
-        p.id_pendiente AS id,
-        'tareas' AS modulo,
-        p.pendiente AS titulo,
-        CONCAT('Pendiente ', LOWER(p.estatus), ' · ', p.tipo_pendiente) AS descripcion,
-        p.updated_at AS fecha_creacion,
-        '✅' AS icono,
-        p.id_pendiente AS id_referencia
-      FROM pendientes p
-      WHERE ${userTaskWhere}
-      UNION ALL
-      SELECT
-        pc.id_comentario AS id,
-        'tareas' AS modulo,
-        p.pendiente AS titulo,
-        CONCAT(COALESCE(u.iniciales, 'Usuario'), ' agregó comentario') AS descripcion,
-        pc.fecha AS fecha_creacion,
-        '💬' AS icono,
-        p.id_pendiente AS id_referencia
-      FROM pendientes_comentarios pc
-      INNER JOIN pendientes p ON p.id_pendiente = pc.id_pendiente
-      LEFT JOIN usuarios u ON u.id_SB = pc.id_usuario
-      WHERE ${userTaskWhere}
-    ) x
-    ORDER BY fecha_creacion DESC
-    LIMIT 20
-  `, [...userTaskParams, ...userTaskParams]);
-  return rows;
-}
-
 async function getAreas() {
   const [rows] = await db.query(`
     SELECT DISTINCT area AS value
@@ -163,7 +130,6 @@ module.exports = {
   getAllowedEmpresas,
   getPendientes,
   getNotificaciones,
-  getActividadReciente,
   getAreas,
   getUsuarios,
   getProyectos

@@ -1,6 +1,7 @@
 'use strict';
 
 const repository = require('./experimental-dashboard-call-center.repository');
+const informationRecordScope = require('../../services/information-record-scope-gnral.service');
 
 function clean_uni(value, max = 180) {
   return String(value == null ? '' : value).trim().slice(0, max);
@@ -45,8 +46,9 @@ function buildWhere_uni(req) {
   const from = date_uni(req.query && req.query.desde);
   const to = date_uni(req.query && req.query.hasta);
   const zona = clean_uni(req.query && req.query.zona);
-  const clauses = ['t.fecha_reporte IS NOT NULL'];
-  const params = [];
+  const scope = informationRecordScope.buildTicketScopeSql_gnral(req, 't');
+  const clauses = ['t.fecha_reporte IS NOT NULL', scope.sql];
+  const params = [...scope.params];
   if (from) { clauses.push('t.fecha_reporte >= ?'); params.push(`${from} 00:00:00`); }
   if (to) { clauses.push('t.fecha_reporte < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(`${to} 00:00:00`); }
   if (zona) { clauses.push("TRIM(COALESCE(t.zona,'')) = ?"); params.push(zona); }
@@ -122,6 +124,7 @@ function summarize_uni(rows) {
 
 async function getDashboard_uni(req) {
   const filter = buildWhere_uni(req);
+  const catalogScope = informationRecordScope.buildTicketScopeSql_gnral(req, 't');
   const sql = `
     SELECT
       t.id, t.ticket, t.folio, t.estado_ticket, t.estado, t.ciudad, t.proyecto,
@@ -137,9 +140,17 @@ async function getDashboard_uni(req) {
     ORDER BY t.fecha_reporte DESC, t.id DESC
     LIMIT 10000
   `;
-  const catalogSql = `SELECT TRIM(zona) AS zona FROM tickets WHERE zona IS NOT NULL AND TRIM(zona)<>'' GROUP BY TRIM(zona) ORDER BY zona`;
+  const catalogSql = `
+    SELECT TRIM(t.zona) AS zona
+    FROM tickets t
+    WHERE ${catalogScope.sql}
+      AND t.zona IS NOT NULL
+      AND TRIM(t.zona) <> ''
+    GROUP BY TRIM(t.zona)
+    ORDER BY zona
+  `;
   const [ticketsResult, zonesResult] = await Promise.all([
-    repository.query(sql, filter.params), repository.query(catalogSql, [])
+    repository.query(sql, filter.params), repository.query(catalogSql, catalogScope.params)
   ]);
   const rows = ticketsResult[0] || [];
   return {

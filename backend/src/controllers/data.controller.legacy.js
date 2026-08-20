@@ -1150,38 +1150,6 @@ function normalizeTicketIdentity(value) {
 
 
 const N6_EVENTO_COMENTARIO = 'COMENTARIO';
-const N6_EVENTO_FALLA_EQUIPO_CRITICO = 'FALLA_EQUIPO_CRITICO';
-const N6_EVENTO_PERSONA_ATRAPADA = 'PERSONA_ATRAPADA';
-const N6_EVENTO_NUEVO_EQUIPO_CRITICO = 'NUEVO_EQUIPO_CRITICO';
-const N6_CRITICOS_DIAS = 35;
-const N6_CRITICOS_MIN_FALLAS_BLT = 3;
-const N6_ATRAPADO_KEYWORDS = Object.freeze([
-  'atrapado', 'atrapada', 'encerrado', 'encerrada',
-  'persona atrapada', 'personas atrapadas', 'rescate'
-]);
-
-function n6NormalizeText(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-function n6TicketIsBlt(ticketRow) {
-  return n6NormalizeText(ticketRow && ticketRow.responsabilidad).includes('blt');
-}
-
-function n6TicketIsPersonaAtrapada(ticketRow) {
-  // Reutiliza el clasificador ya usado por Atencion Prioritaria/estados visuales.
-  // La tabla tickets no tiene actualmente una columna dedicada tipo_evento.
-  const blob = [
-    ticketRow && ticketRow.descripcion,
-    ticketRow && ticketRow.causa,
-    ticketRow && ticketRow.accion_en_cierre
-  ].filter(Boolean).join(' ').toLowerCase();
-  return N6_ATRAPADO_KEYWORDS.some(keyword => blob.includes(keyword));
-}
 
 async function n6ResolveRelatedTicketUserIds(executor, ticketRow) {
   const responsibleNames = await ticketResponsibleNames(ticketRow, executor);
@@ -1224,17 +1192,6 @@ async function n6ResolveRelatedTicketUserIds(executor, ticketRow) {
   }
 
   return [...relatedUserIds].filter(id => Number.isInteger(id) && id > 0);
-}
-
-async function n6ListActiveUserIds(executor) {
-  const [rows] = await executor.query(`
-    SELECT id_SB
-    FROM usuarios
-    WHERE estado = 1
-  `);
-  return rows
-    .map(row => Number(row.id_SB || 0))
-    .filter(id => Number.isInteger(id) && id > 0);
 }
 
 async function n6FindZoneId(executor, zoneValue) {
@@ -1334,15 +1291,12 @@ async function n6EmitTicketEvent(executor, {
   actor,
   titulo,
   mensaje,
-  icono,
-  recipientMode = 'zone'
+  icono
 }) {
-  // Comentario: solo usuarios ya relacionados con la entidad.
-  // Eventos criticos: candidatos activos; N3 reduce por Rol Principal + Zona Operativa.
-  // Esto permite que la matriz defina los Roles receptores sin ampliar el acceso zonal.
-  const recipients = recipientMode === 'related'
-    ? await n6ResolveRelatedTicketUserIds(executor, ticketRow)
-    : await n6ListActiveUserIds(executor);
+  // N6 legacy conserva aqui exclusivamente comentarios de Ticket.
+  // Los tres eventos criticos se procesan en ticket-critical-notifications_uni.service.js
+  // desde la fachada data.controller.js para evitar doble emision.
+  const recipients = await n6ResolveRelatedTicketUserIds(executor, ticketRow);
   const zoneId = await n6ResolveTicketZoneId(executor, ticketRow);
   return notificationService.emitWithConnection_gnral(executor, {
     codigoEvento,
@@ -1367,111 +1321,8 @@ async function n6CreateTicketCommentNotification(executor, ticketRow, actor, mes
     actor,
     titulo: 'Nuevo comentario en ticket',
     mensaje: String(message || '').slice(0, 2000),
-    icono: '💬',
-    recipientMode: 'related'
+    icono: '💬'
   });
-}
-
-async function n6ListCriticalEquipmentState(executor, equipmentCodes) {
-  const codes = [...new Set((equipmentCodes || [])
-    .map(value => String(value || '').trim())
-    .filter(Boolean))];
-  if (!codes.length) return new Map();
-
-  const [rows] = await executor.query(`
-    SELECT
-      p.numero_equipo,
-      MAX(p.zona_operativa) AS zona_operativa,
-      MAX(p.proyecto) AS proyecto,
-      COUNT(DISTINCT t.id) AS fallas_blt_periodo
-    FROM portafolio p
-    LEFT JOIN tickets t
-      ON t.codigo_equipo = p.numero_equipo
-     AND t.fecha_reporte IS NOT NULL
-     AND t.fecha_reporte >= DATE_SUB(CURDATE(), INTERVAL ${N6_CRITICOS_DIAS} DAY)
-     AND UPPER(COALESCE(t.responsabilidad, '')) LIKE '%BLT%'
-    WHERE p.numero_equipo IN (?)
-      AND p.estado_registro = 1
-      AND (p.inactivo IS NULL OR UPPER(TRIM(CAST(p.inactivo AS CHAR))) NOT IN ('SI','SÍ','1','TRUE'))
-      AND UPPER(TRIM(COALESCE(p.estatus_servicio,''))) NOT LIKE '%NO EN SERVICIO%'
-    GROUP BY p.numero_equipo
-  `, [codes]);
-
-  return new Map(rows.map(row => [String(row.numero_equipo || '').trim(), {
-    fallas: Number(row.fallas_blt_periodo || 0),
-    zona_operativa: row.zona_operativa || null,
-    proyecto: row.proyecto || null
-  }]));
-}
-
-async function n6ProcessInsertedTicketNotifications(executor, insertedRows, criticalBefore, actor) {
-  const rows = Array.isArray(insertedRows) ? insertedRows : [];
-  const equipmentCodes = rows.map(row => row.codigo_equipo).filter(Boolean);
-  const criticalAfter = await n6ListCriticalEquipmentState(executor, equipmentCodes);
-  const summary = {
-    comentario: 0,
-    falla_equipo_critico: 0,
-    persona_atrapada: 0,
-    nuevo_equipo_critico: 0,
-    eventos: []
-  };
-
-  for (const row of rows) {
-    if (n6TicketIsPersonaAtrapada(row)) {
-      const result = await n6EmitTicketEvent(executor, {
-        codigoEvento: N6_EVENTO_PERSONA_ATRAPADA,
-        ticketRow: row,
-        actor,
-        titulo: 'Ticket de persona atrapada',
-        mensaje: `Se genero el ticket ${row.ticket} relacionado con una persona atrapada.`,
-        icono: '🚨'
-      });
-      summary.persona_atrapada += Number(result.created || 0);
-      summary.eventos.push({ codigo_evento: N6_EVENTO_PERSONA_ATRAPADA, ticket: row.ticket, created: Number(result.created || 0), reason: result.reason || null });
-    }
-
-    const code = String(row.codigo_equipo || '').trim();
-    const before = criticalBefore.get(code);
-    if (code && before && before.fallas >= N6_CRITICOS_MIN_FALLAS_BLT && n6TicketIsBlt(row)) {
-      const result = await n6EmitTicketEvent(executor, {
-        codigoEvento: N6_EVENTO_FALLA_EQUIPO_CRITICO,
-        ticketRow: row,
-        actor,
-        titulo: 'Nueva falla en equipo critico',
-        mensaje: `Se genero el ticket ${row.ticket} con responsabilidad BLT sobre el equipo critico ${code}.`,
-        icono: '💥'
-      });
-      summary.falla_equipo_critico += Number(result.created || 0);
-      summary.eventos.push({ codigo_evento: N6_EVENTO_FALLA_EQUIPO_CRITICO, ticket: row.ticket, created: Number(result.created || 0), reason: result.reason || null });
-    }
-  }
-
-  const newBltByEquipment = new Map();
-  rows.filter(n6TicketIsBlt).forEach(row => {
-    const code = String(row.codigo_equipo || '').trim();
-    if (code && !newBltByEquipment.has(code)) newBltByEquipment.set(code, row);
-  });
-
-  for (const [code, triggerRow] of newBltByEquipment.entries()) {
-    const before = criticalBefore.get(code);
-    const after = criticalAfter.get(code);
-    const beforeCount = Number(before && before.fallas || 0);
-    const afterCount = Number(after && after.fallas || 0);
-    if (beforeCount >= N6_CRITICOS_MIN_FALLAS_BLT || afterCount < N6_CRITICOS_MIN_FALLAS_BLT) continue;
-
-    const result = await n6EmitTicketEvent(executor, {
-      codigoEvento: N6_EVENTO_NUEVO_EQUIPO_CRITICO,
-      ticketRow: triggerRow,
-      actor,
-      titulo: 'Nuevo equipo critico',
-      mensaje: `El equipo ${code} paso a condicion critica al alcanzar ${afterCount} fallas BLT en los ultimos ${N6_CRITICOS_DIAS} dias.`,
-      icono: '💥'
-    });
-    summary.nuevo_equipo_critico += Number(result.created || 0);
-    summary.eventos.push({ codigo_evento: N6_EVENTO_NUEVO_EQUIPO_CRITICO, ticket: triggerRow.ticket, created: Number(result.created || 0), reason: result.reason || null });
-  }
-
-  return summary;
 }
 
 async function createTicketNotifications(executor, ticketRow, actor, type, message) {
@@ -4302,12 +4153,6 @@ async function syncTickets(req, res) {
       existingByTicket.set(normalizeTicket(existing.ticket), existing);
     }
 
-    const n6EquipmentCodes = preparedRows
-      .map(row => String(row.codigo_equipo || '').trim())
-      .filter(Boolean);
-    const n6CriticalBefore = await n6ListCriticalEquipmentState(connection, n6EquipmentCodes);
-    const n6InsertedRows = [];
-
     const insertColumns = ['id', ...syncColumns];
     const insertSql = `
       INSERT INTO tickets (${insertColumns.join(', ')})
@@ -4388,7 +4233,6 @@ async function syncTickets(req, res) {
         if (!sameId) {
           await connection.query(insertSql, [row.id, ...values]);
           inserted += 1;
-          n6InsertedRows.push(row);
           continue;
         }
 
@@ -4411,31 +4255,8 @@ async function syncTickets(req, res) {
       }
     }
 
-    let n6Notificaciones = {
-      falla_equipo_critico: 0,
-      persona_atrapada: 0,
-      nuevo_equipo_critico: 0,
-      eventos: []
-    };
-    let n6NotificationError = null;
-
-    if (n6InsertedRows.length) {
-      await connection.query('SAVEPOINT n6_notificaciones');
-      try {
-        n6Notificaciones = await n6ProcessInsertedTicketNotifications(
-          connection,
-          n6InsertedRows,
-          n6CriticalBefore,
-          currentUserRef(req)
-        );
-        await connection.query('RELEASE SAVEPOINT n6_notificaciones');
-      } catch (notificationError) {
-        n6NotificationError = notificationError.message;
-        console.error('[tickets/sync][N6] Los tickets se conservaran, pero se revirtieron las notificaciones del lote:', notificationError.message);
-        await connection.query('ROLLBACK TO SAVEPOINT n6_notificaciones');
-        await connection.query('RELEASE SAVEPOINT n6_notificaciones');
-      }
-    }
+    // Los eventos criticos se generan una sola vez en la fachada data.controller.js
+    // despues de que este sync operativo termina correctamente.
 
     await connection.commit();
 
@@ -4449,9 +4270,7 @@ async function syncTickets(req, res) {
       omitidos: errores.length,
       errores,
       first_id: ids.length ? Math.min(...ids) : null,
-      last_id: ids.length ? Math.max(...ids) : null,
-      notificaciones_n6: n6Notificaciones,
-      notificaciones_n6_error: n6NotificationError
+      last_id: ids.length ? Math.max(...ids) : null
     });
   } catch (error) {
     if (connection) {

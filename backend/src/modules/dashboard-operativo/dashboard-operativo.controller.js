@@ -1,3 +1,5 @@
+'use strict';
+
 const dashboardOperativoService = require('./dashboard-operativo.service');
 
 async function getPreventivosSupervisor(req, res) {
@@ -11,7 +13,10 @@ async function getPreventivosSupervisor(req, res) {
       });
     }
 
-    const data = await dashboardOperativoService.getPreventivosSupervisor(mes);
+    const data = await dashboardOperativoService.getPreventivosSupervisor(
+      mes,
+      req.informationAccess || null
+    );
 
     return res.json({
       ok: true,
