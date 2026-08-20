@@ -5,8 +5,10 @@ const TZ = process.env.PORTAFOLIO_CIERRE_SEMANAL_TZ || 'America/Mexico_City';
 const HOUR = Number.parseInt(process.env.PORTAFOLIO_CIERRE_SEMANAL_HOUR || '12', 10);
 const MINUTE = Number.parseInt(process.env.PORTAFOLIO_CIERRE_SEMANAL_MINUTE || '0', 10);
 const ENABLED = String(process.env.PORTAFOLIO_CIERRE_SEMANAL_ENABLED || 'true').toLowerCase() !== 'false';
+const RETRY_DELAY_MS = 5 * 60 * 1000;
 
 let lastRunKey = null;
+let lastFailure = null;
 let timer = null;
 
 function zonedParts(date = new Date()) {
@@ -108,6 +110,14 @@ function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch (error) { return fallback; }
 }
 
+function compareEquipmentCode(left, right) {
+  const a = String(left?.equipo || '');
+  const b = String(right?.equipo || '');
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 async function loadCurrentSnapshot() {
   const [rows] = await db.query(`
     SELECT
@@ -122,7 +132,6 @@ async function loadCurrentSnapshot() {
       AND (p.inactivo IS NULL OR UPPER(p.inactivo) NOT IN ('SI','SÍ','1','TRUE','INACTIVO'))
       AND p.numero_equipo IS NOT NULL
       AND TRIM(p.numero_equipo) <> ''
-    ORDER BY p.numero_equipo ASC
   `);
 
   return rows.map(row => ({
@@ -132,7 +141,7 @@ async function loadCurrentSnapshot() {
     proyecto: row.proyecto || row.proyecto_codigo || '',
     zona: row.zona || '',
     supervisor: row.supervisor || ''
-  }));
+  })).sort(compareEquipmentCode);
 }
 
 async function getPreviousClosedCut(anioIso, semanaIso) {
@@ -278,16 +287,34 @@ async function checkWeeklyClose(date = new Date()) {
 
   const due = latestDueSunday(date);
   const runKey = `${due.anio_iso}-${String(due.semana_iso).padStart(2, '0')}`;
+  if (
+    lastFailure
+    && lastFailure.runKey === runKey
+    && (Date.now() - lastFailure.at) < RETRY_DELAY_MS
+  ) {
+    return {
+      skipped: true,
+      reason: 'retry_backoff',
+      retry_in_ms: RETRY_DELAY_MS - (Date.now() - lastFailure.at),
+      due
+    };
+  }
   if (lastRunKey === runKey) {
     return { skipped: true, reason: 'already_ran_in_process', due };
   }
 
   lastRunKey = runKey;
   try {
-    return await runWeeklyClose(date, null, due);
+    const result = await runWeeklyClose(date, null, due);
+    if (lastFailure?.runKey === runKey) lastFailure = null;
+    return result;
   } catch (error) {
     lastRunKey = null;
-    console.error('[Portafolio] Error ejecutando cierre semanal:', error.message);
+    lastFailure = { runKey, at: Date.now() };
+    console.error(
+      `[Portafolio] Error ejecutando cierre semanal. Reintento habilitado en ${Math.round(RETRY_DELAY_MS / 60000)} min:`,
+      error.message
+    );
     return { ok: false, error: error.message, due };
   }
 }
