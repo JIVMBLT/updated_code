@@ -1,17 +1,17 @@
-// [Aster | 2026-08-19 | ASTER-MG | FASE 4: Guard General por modulo]
+// [Aster | 2026-08-20 | ASTER-MG | FASE 2: Portafolio por cuartos UNITED]
 const express = require('express');
 const router = express.Router();
 const portafolioController = require('./portafolio.controller');
 const { requireIntegrationAuthFor } = require('../../middleware/integration-auth.middleware');
 const {
   humanInformationGuard_gnral,
-  dynamicHumanInformationGuard_gnral,
-  requireCompleteInformationDomain_gnral
+  dynamicHumanInformationGuard_gnral
 } = require('../../middleware/information-access-gnral.middleware');
 const {
   requirePortafolioEquipmentScope_gnral,
   requirePortafolioProjectScope_gnral,
   filterPortafolioEquipmentBodyScope_gnral,
+  requireAllUnitedZones_gnral,
   requireContextualEquipmentScope_gnral
 } = require('../../services/information-record-scope-gnral.service');
 
@@ -95,19 +95,20 @@ router.get('/portafolio/filtros', ...portafolioReadGuard, portafolioController.g
 router.get('/portafolio/dashboard', ...portafolioReadGuard, portafolioController.getPortafolioDashboard);
 router.get('/portafolio/movimientos', ...movimientosGuard, portafolioController.getPortafolioMovimientos);
 
-// Los cortes semanales son snapshots globales ya materializados. Para no filtrar
-// parcialmente JSON historico y producir una verdad incompleta, solo se exponen
-// con acceso completo UNITED.
+// Los cortes semanales son snapshots globales ya materializados. La llave
+// maestra UNITED abre la puerta, pero no sustituye los cuartos de usuario_zop.
+// Por eso un snapshot global solo puede abrirse cuando el usuario tiene todos
+// los cuartos UNITED activos asignados.
 router.get(
   '/portafolio/movimientos-semanales/catalogo',
   ...movimientosGuard,
-  requireCompleteInformationDomain_gnral('UNITED'),
+  requireAllUnitedZones_gnral,
   portafolioController.getPortafolioSemanasDisponibles
 );
 router.get(
   '/portafolio/movimientos-semanales',
   ...movimientosGuard,
-  requireCompleteInformationDomain_gnral('UNITED'),
+  requireAllUnitedZones_gnral,
   portafolioController.getPortafolioMovimientosSemanales
 );
 router.get(

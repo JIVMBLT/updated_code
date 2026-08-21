@@ -50,9 +50,8 @@ function normalizeEffectiveUser_uni(source) {
 
 function normalizeOptions_uni(options = {}) {
   return {
-    // La llave maestra NO se detecta dentro de alcance_uni.
-    // Solo una capa superior puede activar esta bandera despues de validar
-    // la llave maestra aplicable al dominio UNITED.
+    // La llave maestra se valida en la capa superior y abre puertas UNITED.
+    // Desde FASE 1 Puertas/Cuartos NO elimina el filtro territorial.
     masterAccess: options.masterAccess === true
   };
 }
@@ -85,11 +84,10 @@ async function resolveUnitedZones_uni(executor, userId) {
   const id = normalizePositiveInteger_uni(userId);
   if (!id) throw userRequiredError_uni();
 
-  // Fuente oficial existente:
-  // usuario_zop = relacion usuario <-> Zona Operativa
-  // z_op = catalogo de Zona Operativa
-  // Se exigen ambas filas activas para evitar dar acceso por relaciones o
-  // catalogos deshabilitados.
+  // Fuente oficial de CUARTOS UNITED:
+  // usuario_zop = asignacion efectiva usuario <-> Zona Operativa.
+  // z_op = catalogo referencial de zonas.
+  // La puerta se resuelve en Alcance; los cuartos siempre se resuelven aqui.
   const [rows] = await db.query(
     `SELECT DISTINCT
        uz.zona_id AS id_zona,
@@ -130,26 +128,8 @@ async function resolveAlcanceUni_uni(executor, source, options = {}) {
 
   if (!user.id) throw userRequiredError_uni();
 
-  if (normalizedOptions.masterAccess) {
-    return {
-      motor: UNITED_ENGINE,
-      empresa: UNITED_COMPANY,
-      modo: 'LLAVE_MAESTRA',
-      llave_maestra: true,
-      effective_user_id: user.id,
-      reglas: {
-        permiso_funcional_requerido: true,
-        zonas_operativas: false,
-        personas_visibles: false,
-        relacion_directa: false
-      },
-      zonas_operativas: null,
-      zona_ids: null,
-      zona_codigos: null,
-      requiere_filtro_zona: false
-    };
-  }
-
+  // IMPORTANTE: incluso con llave maestra se consultan los cuartos del usuario.
+  // La llave maestra abre puertas; usuario_zop sigue limitando registros.
   const zones = await resolveUnitedZones_uni(executor, user.id);
   const zoneIds = normalizePositiveIds_uni(zones.map((zone) => zone.id_zona));
   const zoneCodes = [...new Set(zones
@@ -160,26 +140,22 @@ async function resolveAlcanceUni_uni(executor, source, options = {}) {
   return {
     motor: UNITED_ENGINE,
     empresa: UNITED_COMPANY,
-    modo: UNITED_MODE,
-    llave_maestra: false,
+    modo: normalizedOptions.masterAccess ? 'LLAVE_MAESTRA' : UNITED_MODE,
+    llave_maestra: normalizedOptions.masterAccess,
     effective_user_id: user.id,
     reglas: {
-      // alcance_uni nunca sustituye el permiso funcional. La capa superior
-      // debe haber resuelto primero la pregunta "Tengo permisos?".
       permiso_funcional_requerido: true,
       zonas_operativas: true,
       personas_visibles: false,
-      relacion_directa: false
+      relacion_directa: false,
+      llave_maestra_abre_puertas: true,
+      llave_maestra_ignora_zonas: false
     },
     zonas_operativas: zones,
     zona_ids: zoneIds,
     zona_codigos: zoneCodes,
     requiere_filtro_zona: true
   };
-}
-
-function unrestrictedScopeSql_uni(context) {
-  return { sql: '1 = 1', params: [], alcance: context };
 }
 
 function failClosedScopeSql_uni(context) {
@@ -193,9 +169,6 @@ function placeholders_uni(count) {
 function buildResolvedZoneIdScopeSql_uni(context, columnSql) {
   if (!context || context.motor !== UNITED_ENGINE) {
     throw configurationError_uni('Contexto de alcance UNITED invalido.');
-  }
-  if (context.llave_maestra === true || context.requiere_filtro_zona === false) {
-    return unrestrictedScopeSql_uni(context);
   }
 
   const column = safeColumnReference_uni(columnSql);
@@ -228,35 +201,78 @@ function buildResolvedTicketScopeSql_uni(context, alias = 't') {
   if (!context || context.motor !== UNITED_ENGINE) {
     throw configurationError_uni('Contexto de alcance UNITED invalido.');
   }
-  if (context.llave_maestra === true || context.requiere_filtro_zona === false) {
-    return unrestrictedScopeSql_uni(context);
-  }
 
   const a = safeAlias_uni(alias, 't');
   const zoneIds = normalizePositiveIds_uni(context.zona_ids);
   if (!zoneIds.length) return failClosedScopeSql_uni(context);
 
-  // Tickets no tiene FK directa a z_op en la estructura actual. Para no
-  // interpretar el varchar tickets.zona, la Zona Operativa se resuelve contra
-  // Portafolio, que SI tiene portafolio.zona_id -> z_op.id_zona.
-  // La relacion conserva los tres enlaces que ya usa el backend actual para
-  // asociar Ticket con Portafolio: codigo_equipo, proyecto y proyecto_padre.
+  const zonePlaceholders = placeholders_uni(zoneIds.length);
+
+  // FASE 3 formaliza la frontera territorial de Tickets sin confiar en
+  // tickets.zona, porque la estructura actual no tiene FK directa a z_op.
+  //
+  // Precedencia fail-closed:
+  // 1) Si el Ticket tiene codigo_equipo, SOLO ese equipo puede resolver zona.
+  //    No existe fallback por proyecto para un codigo presente.
+  // 2) Si no tiene codigo_equipo, proyecto/proyecto_padre se consideran como
+  //    referencias alternativas del mismo Ticket. El conjunto completo de
+  //    filas Portafolio que coincida con cualquiera de ambas referencias debe
+  //    resolver a UNA sola zona estructurada y no contener zona_id nula.
+  // 3) tickets.zona permanece informativo y nunca otorga acceso por si solo.
+  //
+  // Esto evita que un Ticket de un equipo fuera de alcance se vuelva visible
+  // solo porque comparte proyecto, y tambien falla cerrado si proyecto y
+  // proyecto_padre apuntan a zonas diferentes.
   return {
-    sql: `EXISTS (
-      SELECT 1
-      FROM portafolio p_scope_uni_ticket
-      WHERE p_scope_uni_ticket.estado_registro = 1
-        AND p_scope_uni_ticket.zona_id IN (${placeholders_uni(zoneIds.length)})
-        AND (
-          (NULLIF(TRIM(COALESCE(${a}.codigo_equipo, '')), '') IS NOT NULL
-            AND TRIM(COALESCE(p_scope_uni_ticket.numero_equipo, '')) = TRIM(COALESCE(${a}.codigo_equipo, '')))
-          OR (NULLIF(TRIM(COALESCE(${a}.proyecto, '')), '') IS NOT NULL
-            AND LOWER(TRIM(COALESCE(p_scope_uni_ticket.proyecto, ''))) = LOWER(TRIM(COALESCE(${a}.proyecto, ''))))
-          OR (NULLIF(TRIM(COALESCE(${a}.proyecto_padre, '')), '') IS NOT NULL
-            AND LOWER(TRIM(COALESCE(p_scope_uni_ticket.proyecto, ''))) = LOWER(TRIM(COALESCE(${a}.proyecto_padre, ''))))
+    sql: `(
+      (
+        NULLIF(TRIM(COALESCE(${a}.codigo_equipo, '')), '') IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM portafolio p_scope_uni_ticket_equipo
+          WHERE p_scope_uni_ticket_equipo.estado_registro = 1
+            AND p_scope_uni_ticket_equipo.zona_id IN (${zonePlaceholders})
+            AND TRIM(COALESCE(p_scope_uni_ticket_equipo.numero_equipo, '')) = TRIM(COALESCE(${a}.codigo_equipo, ''))
         )
+      )
+      OR
+      (
+        NULLIF(TRIM(COALESCE(${a}.codigo_equipo, '')), '') IS NULL
+        AND (
+          NULLIF(TRIM(COALESCE(${a}.proyecto, '')), '') IS NOT NULL
+          OR NULLIF(TRIM(COALESCE(${a}.proyecto_padre, '')), '') IS NOT NULL
+        )
+        AND (
+          SELECT CASE
+            WHEN COUNT(*) > 0
+              AND SUM(CASE WHEN p_scope_uni_ticket_project_check.zona_id IS NULL THEN 1 ELSE 0 END) = 0
+              AND COUNT(DISTINCT p_scope_uni_ticket_project_check.zona_id) = 1
+            THEN 1 ELSE 0
+          END
+          FROM portafolio p_scope_uni_ticket_project_check
+          WHERE p_scope_uni_ticket_project_check.estado_registro = 1
+            AND (
+              (NULLIF(TRIM(COALESCE(${a}.proyecto, '')), '') IS NOT NULL
+                AND LOWER(TRIM(COALESCE(p_scope_uni_ticket_project_check.proyecto, ''))) = LOWER(TRIM(COALESCE(${a}.proyecto, ''))))
+              OR (NULLIF(TRIM(COALESCE(${a}.proyecto_padre, '')), '') IS NOT NULL
+                AND LOWER(TRIM(COALESCE(p_scope_uni_ticket_project_check.proyecto, ''))) = LOWER(TRIM(COALESCE(${a}.proyecto_padre, ''))))
+            )
+        ) = 1
+        AND EXISTS (
+          SELECT 1
+          FROM portafolio p_scope_uni_ticket_project
+          WHERE p_scope_uni_ticket_project.estado_registro = 1
+            AND p_scope_uni_ticket_project.zona_id IN (${zonePlaceholders})
+            AND (
+              (NULLIF(TRIM(COALESCE(${a}.proyecto, '')), '') IS NOT NULL
+                AND LOWER(TRIM(COALESCE(p_scope_uni_ticket_project.proyecto, ''))) = LOWER(TRIM(COALESCE(${a}.proyecto, ''))))
+              OR (NULLIF(TRIM(COALESCE(${a}.proyecto_padre, '')), '') IS NOT NULL
+                AND LOWER(TRIM(COALESCE(p_scope_uni_ticket_project.proyecto, ''))) = LOWER(TRIM(COALESCE(${a}.proyecto_padre, ''))))
+            )
+        )
+      )
     )`,
-    params: zoneIds,
+    params: [...zoneIds, ...zoneIds],
     alcance: context
   };
 }
@@ -269,7 +285,6 @@ async function buildTicketScopeSql_uni(executor, source, alias = 't', options = 
 function alcanceUniAllowsZone_uni(context, zoneId) {
   const id = normalizePositiveInteger_uni(zoneId);
   if (!context || context.motor !== UNITED_ENGINE || !id) return false;
-  if (context.llave_maestra === true || context.requiere_filtro_zona === false) return true;
   return normalizePositiveIds_uni(context.zona_ids).includes(id);
 }
 

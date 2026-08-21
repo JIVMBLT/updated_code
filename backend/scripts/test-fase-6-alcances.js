@@ -82,7 +82,9 @@ async function testPanelContract() {
   });
   assert.equal(payload.general.default, true);
   assert.deepEqual(payload.corellian.usuarios_adicionales, [11, 12]);
-  assert.deepEqual(payload.united.zonas, [2, 3]);
+  assert.deepEqual(payload.united.agrupaciones, [30]);
+  // Alcance ya no administra cuartos UNITED; cualquier zona enviada se ignora.
+  assert.deepEqual(payload.united.zonas, []);
 
   const executor = fakeExecutor((sql) => {
     if (sql.includes('FROM usuarios_alcance_informacion')) {
@@ -112,6 +114,7 @@ async function testPanelContract() {
   assert.equal(read.alcances.corellian.ver_reporta_a, true);
   assert.deepEqual(read.alcances.corellian.usuarios_adicionales, [11]);
   assert.deepEqual(read.alcances.united.agrupaciones, [30]);
+  // La lectura sigue informando los cuartos asignados desde usuario_zop.
   assert.deepEqual(read.alcances.united.zonas, [2]);
   assert.equal(read.alcances.general.default, true);
 }
@@ -133,8 +136,29 @@ function testRecordBridge() {
   assert.ok(p.sql.includes('p.zona_id IN'));
   assert.deepEqual(p.params, [2, 3]);
   const t = buildTicketScopeSql_gnral(unitedReq, 't');
-  assert.ok(t.sql.includes('p_scope_uni_ticket.zona_id IN'));
-  assert.deepEqual(t.params, [2, 3]);
+  assert.ok(t.sql.includes('p_scope_uni_ticket_equipo.zona_id IN'));
+  assert.ok(t.sql.includes('COUNT(DISTINCT p_scope_uni_ticket_project_check.zona_id) = 1'));
+  assert.deepEqual(t.params, [2, 3, 2, 3]);
+
+  const unitedMasterReq = {
+    informationAccess: {
+      motor: 'alcance_uni',
+      alcance: {
+        motor: 'alcance_uni',
+        empresa: 'UNITED',
+        llave_maestra: true,
+        requiere_filtro_zona: true,
+        zona_ids: [2, 3]
+      }
+    }
+  };
+  const pm = buildPortafolioScopeSql_gnral(unitedMasterReq, 'p');
+  assert.ok(pm.sql.includes('p.zona_id IN'));
+  assert.deepEqual(pm.params, [2, 3]);
+  const tm = buildTicketScopeSql_gnral(unitedMasterReq, 't');
+  assert.ok(tm.sql.includes('p_scope_uni_ticket_equipo.zona_id IN'));
+  assert.ok(tm.sql.includes('COUNT(DISTINCT p_scope_uni_ticket_project_check.zona_id) = 1'));
+  assert.deepEqual(tm.params, [2, 3, 2, 3]);
 
   const corReq = {
     informationAccess: {
@@ -194,14 +218,30 @@ async function testCrossLayer() {
   assert.equal(recordCalls, 1);
   assert.equal(loadCalls, 1);
 
-  const masterDefinition = { ...definition, recordScopeCheck: async () => { throw new Error('Master no debe ejecutar recordScopeCheck.'); } };
+  // Llave maestra UNITED abre la puerta, pero NO evita recordScopeCheck.
+  let unitedMasterRecordCalls = 0;
+  const masterDefinition = {
+    ...definition,
+    recordScopeCheck: async () => {
+      unitedMasterRecordCalls += 1;
+      return true;
+    }
+  };
   const master = await resolveCrossInformationBlock_gnral(executor, source, masterDefinition, {
     permissionResolver: async () => true,
     doorResolver: async () => ({ allowed: true, masterAccess: true, grouping: definition.groupingRef, via: 'DOMINIO_COMPLETO' }),
-    scopeResolver: async () => ({ motor: 'alcance_uni', empresa: 'UNITED', llave_maestra: true, agrupacion: definition.groupingRef })
+    scopeResolver: async () => ({
+      motor: 'alcance_uni',
+      empresa: 'UNITED',
+      llave_maestra: true,
+      requiere_filtro_zona: true,
+      zona_ids: [2, 3],
+      agrupacion: definition.groupingRef
+    })
   });
   assert.equal(master.visible, true);
   assert.equal(master.llave_maestra, true);
+  assert.equal(unitedMasterRecordCalls, 1);
 }
 
 (async () => {
@@ -209,7 +249,7 @@ async function testCrossLayer() {
   await testPanelContract();
   testRecordBridge();
   await testCrossLayer();
-  console.log('FASE_6_ALCANCES_GLOBALES_V001: OK');
+  console.log('FASE_6_ALCANCES_GLOBALES_V001 + UNI_PUERTAS_CUARTOS: OK');
 })().catch((error) => {
   console.error(error);
   process.exit(1);

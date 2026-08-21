@@ -3,17 +3,10 @@
 const db = require('../../config/db');
 const informationRecordScope = require('../../services/information-record-scope-gnral.service');
 
-function visibleUserIds_uni(informationAccess) {
-  return informationRecordScope.visibleUserIds_gnral(informationAccess);
-}
-
 async function getSupervisoresActivosPorZona(informationAccess = null) {
-  const ids = visibleUserIds_uni(informationAccess);
-  const userFilter = ids === null
-    ? { sql: '1 = 1', params: [] }
-    : (ids.length
-      ? { sql: 'u.id_SB IN (?)', params: [ids] }
-      : { sql: '1 = 0', params: [] });
+  // FASE 4 UNITED: los supervisores visibles se determinan por los CUARTOS
+  // del usuario (usuario_zop), no por relaciones personales CORELLIAN.
+  const zoneScope = informationRecordScope.buildZoneIdScopeSql_gnral(informationAccess, 'z.id_zona');
 
   const [rows] = await db.query(`
     SELECT DISTINCT
@@ -35,10 +28,10 @@ async function getSupervisoresActivosPorZona(informationAccess = null) {
       ON z.id_zona = uz.zona_id
      AND z.estado = 1
     WHERE u.estado = 1
-      AND ${userFilter.sql}
+      AND ${zoneScope.sql}
       AND UPPER(TRIM(r.rol)) LIKE 'SUPERVISOR MANTENIMIENTO ZONA%'
     ORDER BY supervisor ASC, z.zona ASC
-  `, userFilter.params);
+  `, zoneScope.params);
 
   return rows;
 }

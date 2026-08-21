@@ -1,4 +1,7 @@
 const db = require('../../config/db');
+const {
+  buildPortafolioScopeSql_gnral
+} = require('../../services/information-record-scope-gnral.service');
 
 function positiveInt_uni(value, fallback, min, max) {
   const n = Number.parseInt(value, 10);
@@ -46,11 +49,13 @@ const latestTicketJoin_uni = `
 `;
 
 function portafolioFilters_uni(req, alias = 'p') {
+  const accessScope = buildPortafolioScopeSql_gnral(req, alias);
   const clauses = [
     `${alias}.estado_registro = 1`,
-    `(${alias}.inactivo IS NULL OR UPPER(${alias}.inactivo) NOT IN ('SI','SÍ','1','TRUE','INACTIVO'))`
+    `(${alias}.inactivo IS NULL OR UPPER(${alias}.inactivo) NOT IN ('SI','SÍ','1','TRUE','INACTIVO'))`,
+    accessScope.sql
   ];
-  const params = [];
+  const params = [...(accessScope.params || [])];
 
   const zona = likeParam_uni(req.query.zona);
   const tipo = likeParam_uni(req.query.tipo);
@@ -296,6 +301,7 @@ async function getPortafolioEquipos_uni(req, res) {
 
 module.exports = {
   commercialClassificationSql_uni,
+  portafolioFilters_uni,
   getPortafolioDashboard_uni,
   getPortafolioEquipos_uni
 };

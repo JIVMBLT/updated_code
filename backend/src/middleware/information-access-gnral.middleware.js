@@ -254,7 +254,9 @@ function buildInformationAccessContext_gnral({
     || allowedGrouping?.empresa
     || groupings[0]?.empresa
     || null;
-  const completeDomain = scope?.llave_maestra === true;
+  const masterKey = scope?.llave_maestra === true;
+  const completeDomain = masterKey
+    && !(domain === UNITED_COMPANY && scope?.requiere_filtro_zona === true);
 
   return {
     actor_user_id: actorUserId,
@@ -269,7 +271,7 @@ function buildInformationAccessContext_gnral({
     acceso_puerta: true,
     acceso_puerta_via: door?.via || (domain === GENERAL_COMPANY ? 'GENERAL_DEFAULT' : null),
     acceso_dominio_completo: completeDomain,
-    llave_maestra: completeDomain,
+    llave_maestra: masterKey,
 
     // Compatibilidad CORELLIAN con los filtros ya existentes.
     requiere_filtro_usuario: scope?.requiere_filtro_usuario === true,

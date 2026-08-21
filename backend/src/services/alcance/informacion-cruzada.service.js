@@ -7,6 +7,9 @@ const {
   resolveInformationDoor_gnral,
   resolveAlcanceByGrouping_gnral
 } = require('./alcance-resolver.service');
+const {
+  UNITED_COMPANY
+} = require('./alcance-uni.service');
 
 const CROSS_BLOCK_REASON = Object.freeze({
   ALLOWED: 'ALLOWED',
@@ -175,8 +178,8 @@ function allowedDecision_cross({ block, userId, permissionCode, scope, scopeMeta
  * 4. solo si las tres capas pasan, se autoriza consultar/cargar el bloque.
  *
  * El acceso al padre NO se hereda al hijo.
- * Una llave maestra de alcance elimina el filtro de registro dentro de su
- * dominio, pero NO sustituye el permiso funcional del bloque.
+ * En UNITED la llave maestra abre la puerta, pero NO elimina el filtro de
+ * cuartos definido por usuario_zop. CORELLIAN conserva su semantica vigente.
  */
 async function resolveCrossInformationBlock_gnral(
   executor,
@@ -195,8 +198,6 @@ async function resolveCrossInformationBlock_gnral(
     throw configurationError_cross('Resolver de alcance no disponible para informacion cruzada.');
   }
 
-  // Pregunta 1: ¿Tengo permiso funcional para este bloque?
-  // Si falla, no se resuelve alcance y no se ejecuta ninguna consulta de datos.
   const permissionCode = await resolveAnyEffectivePermission_cross(
     db,
     userId,
@@ -211,7 +212,6 @@ async function resolveCrossInformationBlock_gnral(
     });
   }
 
-  // Pregunta 2: ¿Tengo acceso a la puerta de informacion de ESTE bloque?
   const doorResolver = options.doorResolver || resolveInformationDoor_gnral;
   if (typeof doorResolver !== 'function') {
     throw configurationError_cross('Resolver de puerta no disponible para informacion cruzada.');
@@ -235,9 +235,10 @@ async function resolveCrossInformationBlock_gnral(
     masterAccess: door.masterAccess === true
   });
 
-  // La llave maestra validada por la puerta solo cubre alcance. El permiso
-  // funcional ya fue validado arriba y nunca se omite aqui.
-  if (scope?.llave_maestra === true) {
+  // CORELLIAN conserva el bypass de alcance por llave maestra.
+  // UNITED siempre debe validar el registro/contexto contra sus cuartos.
+  const unitedScope = String(scope?.empresa || '').trim().toUpperCase() === UNITED_COMPANY;
+  if (scope?.llave_maestra === true && !unitedScope) {
     return allowedDecision_cross({
       block,
       userId,
@@ -247,9 +248,6 @@ async function resolveCrossInformationBlock_gnral(
     });
   }
 
-  // Todo bloque cruzado sin llave maestra debe validar el registro/contexto
-  // concreto. No existe fallback abierto: omitir el checker es configuracion
-  // insegura y se rechaza.
   if (!block.recordScopeCheck) {
     throw configurationError_cross(
       `El bloque ${block.codigo} requiere recordScopeCheck para validar el registro concreto.`
@@ -302,7 +300,6 @@ async function loadCrossInformationBlock_gnral(executor, source, definition, opt
     };
   }
 
-  // Pregunta 3: solo ahora se consulta la informacion del bloque.
   const data = await block.load({
     executor,
     source,
@@ -324,8 +321,6 @@ async function loadCrossInformationBlocks_gnral(executor, source, definitions, o
   const items = Array.isArray(definitions) ? definitions : [];
   const results = [];
 
-  // Secuencial por estabilidad y para no disparar consultas de bloques que
-  // puedan depender de contexto resuelto por el detalle padre.
   for (const definition of items) {
     results.push(await loadCrossInformationBlock_gnral(executor, source, definition, options));
   }

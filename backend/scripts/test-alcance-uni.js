@@ -48,6 +48,7 @@ async function run() {
   assert.strictEqual(context.requiere_filtro_zona, true);
   assert.strictEqual(context.reglas.permiso_funcional_requerido, true);
   assert.strictEqual(context.reglas.zonas_operativas, true);
+  assert.strictEqual(context.reglas.llave_maestra_ignora_zonas, false);
   assert.deepStrictEqual(context.zona_ids, [1, 2]);
   assert.deepStrictEqual(context.zona_codigos, ['CNB-01', 'CNB-02']);
   assert.strictEqual(context.zonas_operativas.length, 2);
@@ -63,12 +64,13 @@ async function run() {
   assert.deepStrictEqual(portfolio.params, [1, 2]);
 
   const ticket = alcance.buildResolvedTicketScopeSql_uni(context, 't');
-  assert.ok(ticket.sql.includes('FROM portafolio p_scope_uni_ticket'));
-  assert.ok(ticket.sql.includes('p_scope_uni_ticket.zona_id IN (?, ?)'));
+  assert.ok(ticket.sql.includes('FROM portafolio p_scope_uni_ticket_equipo'));
+  assert.ok(ticket.sql.includes('p_scope_uni_ticket_equipo.zona_id IN (?, ?)'));
+  assert.ok(ticket.sql.includes('COUNT(DISTINCT p_scope_uni_ticket_project_check.zona_id) = 1'));
   assert.ok(ticket.sql.includes('t.codigo_equipo'));
   assert.ok(ticket.sql.includes('t.proyecto'));
   assert.ok(ticket.sql.includes('t.proyecto_padre'));
-  assert.deepStrictEqual(ticket.params, [1, 2]);
+  assert.deepStrictEqual(ticket.params, [1, 2, 1, 2]);
 
   const noZoneExecutor = createExecutor([]);
   const noZoneContext = await alcance.resolveAlcanceUni_uni(noZoneExecutor, req);
@@ -82,6 +84,7 @@ async function run() {
     '1 = 0'
   );
 
+  // La llave maestra abre puertas, pero sigue consultando usuario_zop.
   const masterExecutor = createExecutor();
   const masterContext = await alcance.resolveAlcanceUni_uni(
     masterExecutor,
@@ -89,16 +92,33 @@ async function run() {
     { masterAccess: true }
   );
   assert.strictEqual(masterContext.llave_maestra, true);
-  assert.strictEqual(masterContext.requiere_filtro_zona, false);
-  assert.strictEqual(masterContext.zona_ids, null);
-  assert.strictEqual(masterExecutor.calls.length, 0);
+  assert.strictEqual(masterContext.modo, 'LLAVE_MAESTRA');
+  assert.strictEqual(masterContext.requiere_filtro_zona, true);
+  assert.deepStrictEqual(masterContext.zona_ids, [1, 2]);
+  assert.deepStrictEqual(masterContext.zona_codigos, ['CNB-01', 'CNB-02']);
+  assert.strictEqual(masterExecutor.calls.length, 1);
   assert.strictEqual(
     alcance.buildResolvedPortafolioScopeSql_uni(masterContext, 'p').sql,
-    '1 = 1'
+    'p.zona_id IN (?, ?)'
   );
   assert.strictEqual(
-    alcance.buildResolvedTicketScopeSql_uni(masterContext, 't').sql,
-    '1 = 1'
+    alcance.buildResolvedTicketScopeSql_uni(masterContext, 't').sql.includes('p_scope_uni_ticket_equipo.zona_id IN (?, ?)'),
+    true
+  );
+  assert.strictEqual(alcance.alcanceUniAllowsZone_uni(masterContext, 2), true);
+  assert.strictEqual(alcance.alcanceUniAllowsZone_uni(masterContext, 9), false);
+
+  // Llave maestra sin cuartos no abre registros.
+  const masterWithoutRooms = await alcance.resolveAlcanceUni_uni(
+    createExecutor([]),
+    req,
+    { masterAccess: true }
+  );
+  assert.strictEqual(masterWithoutRooms.llave_maestra, true);
+  assert.strictEqual(masterWithoutRooms.requiere_filtro_zona, true);
+  assert.strictEqual(
+    alcance.buildResolvedPortafolioScopeSql_uni(masterWithoutRooms, 'p').sql,
+    '1 = 0'
   );
 
   assert.throws(
@@ -115,7 +135,7 @@ async function run() {
     /Usuario efectivo no disponible/
   );
 
-  console.log('ALCANCE_UNI_V001: OK');
+  console.log('ALCANCE_UNI_PUERTAS_CUARTOS_V001: OK');
 }
 
 run().catch((error) => {

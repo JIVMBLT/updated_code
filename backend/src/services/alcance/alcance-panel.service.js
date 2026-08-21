@@ -55,9 +55,10 @@ function normalizeDomainConfig_gnral(source, domain) {
     usuarios_adicionales: domain === CORELLIAN_COMPANY
       ? positiveIds_gnral(input.usuarios_adicionales)
       : [],
-    zonas: domain === UNITED_COMPANY
-      ? positiveIds_gnral(input.zonas ?? input.zona_ids ?? input.zonas_operativas)
-      : []
+    // FASE 1 Puertas/Cuartos:
+    // Alcance administra puertas. Los cuartos UNITED se administran
+    // exclusivamente desde Panel de Control > Usuarios y usuario_zop.
+    zonas: []
   };
 }
 
@@ -227,6 +228,7 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
   united.agrupaciones = positiveIds_gnral(united.agrupaciones);
   corellian.usuarios_adicionales = positiveIds_gnral([...additional]);
 
+  // Lectura informativa: Alcance puede mostrar las zonas actuales, pero no las administra.
   const zones = await readUserZones_gnral(db, id);
   united.zonas = positiveIds_gnral(zones.map((zone) => zone.id_zona));
   united.zonas_detalle = zones;
@@ -250,7 +252,6 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
       corellian,
       united
     },
-    // Contrato legacy temporal: permite desplegar backend y frontend en pasos separados.
     dominios_completos: domainsLegacy,
     agrupaciones: groupingsLegacy,
     ver_propio: true,
@@ -305,29 +306,6 @@ async function assertGroupingIdsForDomain_gnral(executor, ids, domain) {
     );
   }
   return normalized;
-}
-
-async function assertZonesActive_gnral(executor, zoneIds) {
-  const db = assertExecutor_gnral(executor);
-  const ids = positiveIds_gnral(zoneIds);
-  if (!ids.length) return [];
-  const [rows] = await db.query(
-    `SELECT id_zona
-       FROM z_op
-      WHERE id_zona IN (?)
-        AND estado = 1`,
-    [ids]
-  );
-  const found = new Set((Array.isArray(rows) ? rows : []).map((row) => Number(row.id_zona)));
-  const missing = ids.filter((id) => !found.has(id));
-  if (missing.length) {
-    throw panelError_gnral(
-      `Una o mas Zonas Operativas no existen o estan inactivas: ${missing.join(', ')}.`,
-      400,
-      'ALCANCE_PANEL_ZONES_NOT_FOUND'
-    );
-  }
-  return ids;
 }
 
 async function replaceScopeRows_gnral(executor, userId, normalized, actorId, options = {}) {
@@ -386,27 +364,10 @@ async function replaceScopeRows_gnral(executor, userId, normalized, actorId, opt
   }
 }
 
-async function replaceUnitedZones_gnral(executor, userId, zoneIds, actorRef) {
-  const db = assertExecutor_gnral(executor);
-  const zones = positiveIds_gnral(zoneIds);
-
-  // La relacion existente usuario_zop es la fuente oficial de alcance territorial UNITED.
-  // Se conserva una sola verdad: no se crea tabla paralela de alcance por zona.
-  await db.query('DELETE FROM usuario_zop WHERE usuario_id = ?', [userId]);
-  for (const zoneId of zones) {
-    await db.query(
-      `INSERT INTO usuario_zop (usuario_id, zona_id, estado, created_by, updated_by)
-       VALUES (?, ?, 1, ?, ?)`,
-      [userId, zoneId, actorRef, actorRef]
-    );
-  }
-}
-
 async function savePanelScope_gnral(executor, userId, body, actor, options = {}) {
   const db = assertExecutor_gnral(executor);
   const id = positiveId_gnral(userId);
   const actorId = positiveId_gnral(actor?.id_SB || actor?.id || actor?.user_id);
-  const actorRef = String(actor?.correo || actor?.email || actorId || '').trim();
   if (!id) throw panelError_gnral('Usuario invalido.', 400, 'ALCANCE_PANEL_USER_INVALID');
   if (!actorId) throw panelError_gnral('Actor invalido.', 401, 'ALCANCE_PANEL_ACTOR_REQUIRED');
 
@@ -421,7 +382,6 @@ async function savePanelScope_gnral(executor, userId, body, actor, options = {})
     normalized.united.agrupaciones,
     UNITED_COMPANY
   );
-  normalized.united.zonas = await assertZonesActive_gnral(db, normalized.united.zonas);
 
   normalized.corellian.usuarios_adicionales = positiveIds_gnral(
     normalized.corellian.usuarios_adicionales
@@ -444,8 +404,9 @@ async function savePanelScope_gnral(executor, userId, body, actor, options = {})
   }
   await assertUsersExist_gnral(db, normalized.corellian.usuarios_adicionales);
 
+  // Alcance guarda exclusivamente puertas/llaves/reglas de informacion.
+  // NO modifica usuario_zop: los cuartos UNITED se administran en Usuarios.
   await replaceScopeRows_gnral(db, id, normalized, actorId, { preserveAdditionalUsers });
-  await replaceUnitedZones_gnral(db, id, normalized.united.zonas, actorRef);
 
   return readPanelScope_gnral(db, id);
 }
@@ -471,10 +432,6 @@ function mergeBulkActivation_gnral(current, activation) {
         agrupaciones: positiveIds_gnral([
           ...(currentScopes.united?.agrupaciones || []),
           ...add.united.agrupaciones
-        ]),
-        zonas: positiveIds_gnral([
-          ...(currentScopes.united?.zonas || []),
-          ...add.united.zonas
         ])
       }
     }
@@ -497,11 +454,10 @@ async function activatePanelScopeBulk_gnral(executor, userIds, activation, actor
     || normalizedActivation.corellian.ver_reporta_a
     || normalizedActivation.corellian.ver_rel_admin
     || normalizedActivation.united.llave_maestra
-    || normalizedActivation.united.agrupaciones.length
-    || normalizedActivation.united.zonas.length;
+    || normalizedActivation.united.agrupaciones.length;
   if (!hasActivation) {
     throw panelError_gnral(
-      'Selecciona al menos una llave, puerta, regla Corellian o Zona Operativa United.',
+      'Selecciona al menos una llave, puerta o regla Corellian.',
       400,
       'ALCANCE_PANEL_BULK_EMPTY'
     );
