@@ -71,7 +71,7 @@ function shiftYmd(year, month, day, deltaDays) {
 function latestDueSunday(date = new Date()) {
   const parts = zonedParts(date);
   const weekdayIndex = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[parts.weekday];
-  if (weekdayIndex === undefined) throw new Error(`Día de semana no reconocido para ${TZ}: ${parts.weekday}`);
+  if (weekdayIndex === undefined) throw new Error(`Dia de semana no reconocido para ${TZ}: ${parts.weekday}`);
 
   const scheduledMinutes = HOUR * 60 + MINUTE;
   const currentMinutes = parts.hour * 60 + parts.minute;
@@ -119,15 +119,23 @@ function compareEquipmentCode(left, right) {
 }
 
 async function loadCurrentSnapshot() {
+  // FASE 9/11: el snapshot semanal deja de persistir zona_operativa como
+  // autoridad. Para cortes nuevos guarda zona_id y z_op.zona canonicos.
+  // zona_legacy se mantiene solo para diagnostico de importaciones historicas.
   const [rows] = await db.query(`
     SELECT
       p.numero_equipo,
       p.proyecto AS proyecto_codigo,
       COALESCE(NULLIF(TRIM(p.proyecto_cc_x_port), ''), p.proyecto) AS proyecto,
-      p.zona_operativa AS zona,
+      p.zona_id,
+      z.zona AS zona,
+      p.zona_operativa AS zona_legacy,
       p.supervisor_zona AS supervisor,
       p.estatus_servicio AS estatus
     FROM portafolio p
+    INNER JOIN z_op z
+      ON z.id_zona = p.zona_id
+     AND z.estado = 1
     WHERE p.estado_registro = 1
       AND (p.inactivo IS NULL OR UPPER(p.inactivo) NOT IN ('SI','SÍ','1','TRUE','INACTIVO'))
       AND p.numero_equipo IS NOT NULL
@@ -139,7 +147,9 @@ async function loadCurrentSnapshot() {
     estatus: row.estatus || '',
     proyecto_codigo: row.proyecto_codigo || '',
     proyecto: row.proyecto || row.proyecto_codigo || '',
+    zona_id: Number(row.zona_id) || null,
     zona: row.zona || '',
+    zona_legacy: row.zona_legacy || '',
     supervisor: row.supervisor || ''
   })).sort(compareEquipmentCode);
 }
@@ -170,7 +180,9 @@ function buildMovements(previousSnapshot, currentSnapshot, timestamp) {
       equipo: current.equipo,
       proyecto_codigo: current.proyecto_codigo,
       proyecto: current.proyecto,
+      zona_id: current.zona_id,
       zona: current.zona,
+      zona_legacy: current.zona_legacy,
       estatus_anterior: previous.estatus,
       estatus_actual: current.estatus,
       supervisor: current.supervisor,
@@ -321,12 +333,12 @@ async function checkWeeklyClose(date = new Date()) {
 
 function startPortafolioCierreSemanalJob() {
   if (!ENABLED) {
-    console.log('[Portafolio] Cierre semanal automático desactivado por variable de entorno.');
+    console.log('[Portafolio] Cierre semanal automatico desactivado por variable de entorno.');
     return null;
   }
   if (timer) return timer;
 
-  console.log(`[Portafolio] Cierre semanal automático activo: domingo ${String(HOUR).padStart(2, '0')}:${String(MINUTE).padStart(2, '0')} (${TZ}), con recuperación del último corte pendiente.`);
+  console.log(`[Portafolio] Cierre semanal automatico activo: domingo ${String(HOUR).padStart(2, '0')}:${String(MINUTE).padStart(2, '0')} (${TZ}), con recuperacion del ultimo corte pendiente.`);
 
   checkWeeklyClose().catch(error => console.error('[Portafolio] Error verificando corte semanal al iniciar:', error.message));
   timer = setInterval(() => {

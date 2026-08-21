@@ -1,4 +1,4 @@
-// [Aster | 2026-08-19 | ASTER-MG | FASE 4: Guard General por modulo]
+// [Fase 8/11 | Portafolio > Proyectos de Mantenimiento | Cuartos UNITED]
 const express = require('express');
 const proyectosController = require('./proyectos.controller');
 const {
@@ -10,8 +10,17 @@ const {
 
 const router = express.Router();
 
+const PROJECT_MAINTENANCE_PERMISSION =
+  'PORTAFOLIO_PROYECTOS_DE_MANTENIMIENTO_ACCESO_VISUAL_MODULO.ACCESO_VISUAL';
+
+const projectMaintenanceGuard = humanInformationGuard_gnral({
+  permissionCodesAny: [PROJECT_MAINTENANCE_PERMISSION],
+  domain: 'UNITED',
+  groupingCodesAny: ['PORTAFOLIO']
+});
+
 const PROJECT_READ_PERMISSIONS = Object.freeze([
-  'PORTAFOLIO_PROYECTOS_DE_MANTENIMIENTO_ACCESO_VISUAL_MODULO.ACCESO_VISUAL',
+  PROJECT_MAINTENANCE_PERMISSION,
   'PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER_PROYECTO',
   'OPERACION_RESUMEN_DEL_DIA_TICKET_PERIODO_TICKETS_DEL_PERIODO.VER_PROYECTO',
   'OPERACION_DASHBOARD_CALL_CENTER_TABLA_PROYECTOS_PROYECTOS_CON_MAS_LLAMADAS_DEL_PERIODO.VER_PROYECTO',
@@ -26,6 +35,10 @@ const projectGuard = humanInformationGuard_gnral({
   groupingCodesAny: ['PORTAFOLIO', 'OPERACION', 'EXPERIMENTAL']
 });
 
+// Primera llamada propia del modulo. No comparte puerta con Operacion/Experimental.
+router.get('/proyectos/inicial', ...projectMaintenanceGuard, proyectosController.getProyectosInicial);
+
+// Rutas compartidas: se conservan para navegacion contextual desde otros modulos.
 router.get('/proyectos/filtros', ...projectGuard, proyectosController.getProyectosFiltros);
 router.get('/proyectos/detalle', ...projectGuard, requirePortafolioProjectScope_gnral, proyectosController.getProyectoDetalle);
 router.get('/proyectos/detalle/:proyecto', ...projectGuard, requirePortafolioProjectScope_gnral, proyectosController.getProyectoDetalle);

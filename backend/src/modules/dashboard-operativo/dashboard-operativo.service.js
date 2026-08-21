@@ -9,6 +9,48 @@ function normalizarZona(value) {
     .replace(/[-\s]/g, '');
 }
 
+function normalizePositiveIds(values) {
+  return [...new Set((Array.isArray(values) ? values : [])
+    .map(Number)
+    .filter((value) => Number.isInteger(value) && value > 0))]
+    .sort((a, b) => a - b);
+}
+
+function normalizeCodes(values) {
+  return [...new Set((Array.isArray(values) ? values : [])
+    .map((value) => String(value || '').trim().toUpperCase())
+    .filter(Boolean))]
+    .sort();
+}
+
+function groupSupervisores(rows) {
+  const map = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const id = Number(row.supervisor_id);
+    if (!Number.isInteger(id) || id <= 0) continue;
+    if (!map.has(id)) {
+      map.set(id, {
+        id_SB: id,
+        nombre: String(row.supervisor || '').trim(),
+        iniciales: String(row.iniciales || '').trim(),
+        roles: ['Supervisor Mantenimiento Zona'],
+        zonas: []
+      });
+    }
+    const item = map.get(id);
+    const zonaId = Number(row.id_zona);
+    const zona = String(row.zona || '').trim();
+    if (zonaId > 0 && zona && !item.zonas.some((z) => z.id_zona === zonaId)) {
+      item.zonas.push({
+        id_zona: zonaId,
+        zona,
+        nombre: String(row.zona_nombre || '').trim()
+      });
+    }
+  }
+  return [...map.values()];
+}
+
 async function getPreventivosSupervisor(mes, informationAccess = null) {
   const [supervisores, servicios] = await Promise.all([
     dashboardOperativoRepository.getSupervisoresActivosPorZona(informationAccess),
@@ -60,6 +102,43 @@ async function getPreventivosSupervisor(mes, informationAccess = null) {
   }));
 }
 
+async function getInitialData(mes, informationAccess = null) {
+  const zoneIds = normalizePositiveIds(informationAccess?.zona_ids);
+  const zoneCodes = normalizeCodes(informationAccess?.zona_codigos);
+
+  if (
+    !informationAccess ||
+    informationAccess.dominio !== 'UNITED' ||
+    informationAccess.requiere_filtro_zona !== true ||
+    !zoneIds.length
+  ) {
+    return {
+      portafolio: [],
+      tickets: [],
+      supervisores: [],
+      preventivos_supervisor: [],
+      alcance: { zona_ids: zoneIds, zonas: zoneCodes }
+    };
+  }
+
+  const [portafolio, tickets, supervisoresRows, preventivosSupervisor] = await Promise.all([
+    dashboardOperativoRepository.getPortafolioInicial(informationAccess),
+    dashboardOperativoRepository.getTicketsInicial(informationAccess),
+    dashboardOperativoRepository.getSupervisoresActivosPorZona(informationAccess),
+    getPreventivosSupervisor(mes, informationAccess)
+  ]);
+
+  return {
+    portafolio,
+    tickets,
+    supervisores: groupSupervisores(supervisoresRows),
+    preventivos_supervisor: preventivosSupervisor,
+    alcance: { zona_ids: zoneIds, zonas: zoneCodes }
+  };
+}
+
 module.exports = {
-  getPreventivosSupervisor
+  getPreventivosSupervisor,
+  getInitialData,
+  groupSupervisores
 };

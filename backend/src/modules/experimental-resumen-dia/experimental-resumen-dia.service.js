@@ -2,6 +2,7 @@
 
 const repository = require('./experimental-resumen-dia.repository');
 const informationRecordScope = require('../../services/information-record-scope-gnral.service');
+const canonicalZoneUni = require('../../services/alcance/united-canonical-zone.service');
 
 const TIME_ZONE_EXP = 'America/Mexico_City';
 const MAX_ARRIVAL_HOURS_EXP = 744;
@@ -156,7 +157,7 @@ function buildSummary_exp(rows) {
   };
 }
 
-function buildFilters_exp(req, startDateTime, endDateTime) {
+function buildFilters_exp(req, startDateTime, endDateTime, zoneAlias) {
   const ticketScope = informationRecordScope.buildTicketScopeSql_gnral(req, 't');
   const clauses = [
     't.fecha_reporte >= ?',
@@ -172,7 +173,7 @@ function buildFilters_exp(req, startDateTime, endDateTime) {
     params.push(estado);
   }
   if (zona) {
-    clauses.push("TRIM(COALESCE(t.zona, '')) = ?");
+    clauses.push(canonicalZoneUni.zoneColumnFilterSql_uni(zoneAlias || 'z_exp_ticket'));
     params.push(zona);
   }
 
@@ -187,12 +188,15 @@ async function getResumenDia_exp(req) {
   const today = dateKeyInTimeZone_exp(new Date());
   const yesterday = shiftDateKey_exp(today, -1);
   const tomorrow = shiftDateKey_exp(today, 1);
+  const zoneAlias = 'z_exp_ticket';
   const filters = buildFilters_exp(
     req,
     `${yesterday} 00:00:00`,
-    `${tomorrow} 00:00:00`
+    `${tomorrow} 00:00:00`,
+    zoneAlias
   );
   const catalogScope = informationRecordScope.buildTicketScopeSql_gnral(req, 't');
+  const zoneJoinSql = canonicalZoneUni.ticketZoneJoinSql_uni('t', zoneAlias);
 
   const ticketsSql = `
     SELECT
@@ -201,38 +205,32 @@ async function getResumenDia_exp(req) {
       t.folio,
       t.estado_ticket,
       t.estado,
-      t.zona,
+      t.zona AS zona_legacy,
+      ${zoneAlias}.zona AS zona,
+      ${zoneAlias}.id_zona AS zona_id_oficial,
       t.codigo_equipo,
       t.estatus_equipo_final,
       t.responsabilidad,
       t.tiempo_llegada,
       DATE_FORMAT(t.fecha_reporte, '%Y-%m-%d') AS fecha_reporte_fecha
     FROM tickets t
+    ${zoneJoinSql}
     WHERE ${filters.where}
     ORDER BY t.fecha_reporte DESC, t.id DESC
   `;
 
   const filterCatalogSql = `
-    SELECT catalogo.tipo, catalogo.valor
-    FROM (
-      SELECT 'ESTADO' AS tipo, TRIM(t.estado) AS valor
-      FROM tickets t
-      WHERE ${catalogScope.sql}
-        AND t.estado IS NOT NULL AND TRIM(t.estado) <> ''
-      GROUP BY TRIM(t.estado)
-      UNION ALL
-      SELECT 'ZONA' AS tipo, TRIM(t.zona) AS valor
-      FROM tickets t
-      WHERE ${catalogScope.sql}
-        AND t.zona IS NOT NULL AND TRIM(t.zona) <> ''
-      GROUP BY TRIM(t.zona)
-    ) catalogo
-    ORDER BY catalogo.tipo ASC, catalogo.valor ASC
+    SELECT TRIM(t.estado) AS valor
+    FROM tickets t
+    WHERE ${catalogScope.sql}
+      AND t.estado IS NOT NULL AND TRIM(t.estado) <> ''
+    GROUP BY TRIM(t.estado)
+    ORDER BY valor ASC
   `;
 
   const [ticketsResult, catalogResult] = await Promise.all([
     repository.query(ticketsSql, filters.params),
-    repository.query(filterCatalogSql, [...catalogScope.params, ...catalogScope.params])
+    repository.query(filterCatalogSql, catalogScope.params)
   ]);
 
   const rows = ticketsResult[0] || [];
@@ -247,6 +245,8 @@ async function getResumenDia_exp(req) {
     estado_ticket: String(row.estado_ticket || '').trim(),
     estado: String(row.estado || '').trim(),
     zona: String(row.zona || '').trim(),
+    zona_legacy: String(row.zona_legacy || '').trim() || null,
+    zona_id_oficial: row.zona_id_oficial == null ? null : Number(row.zona_id_oficial),
     codigo_equipo: String(row.codigo_equipo || '').trim(),
     responsabilidad: String(row.responsabilidad || '').trim(),
     estatus_equipo_final: String(row.estatus_equipo_final || '').trim(),
@@ -255,13 +255,9 @@ async function getResumenDia_exp(req) {
   }));
 
   const estados = catalogRows
-    .filter((row) => row.tipo === 'ESTADO')
     .map((row) => String(row.valor || '').trim())
     .filter(Boolean);
-  const zonas = catalogRows
-    .filter((row) => row.tipo === 'ZONA')
-    .map((row) => String(row.valor || '').trim())
-    .filter(Boolean);
+  const zonas = informationRecordScope.zoneCodes_gnral(req);
 
   return {
     ok: true,
@@ -272,6 +268,10 @@ async function getResumenDia_exp(req) {
       yesterday
     },
     selected_filters: filters.selected,
+    alcance: {
+      zona_ids: informationRecordScope.zoneIds_gnral(req),
+      zonas
+    },
     filters: {
       estados,
       zonas

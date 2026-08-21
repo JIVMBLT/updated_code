@@ -1,4 +1,4 @@
-// [Aster | 2026-08-20 | ASTER-MG | FASE 2: Portafolio por cuartos UNITED]
+// [Aster | 2026-08-21 | ASTER-MG | FASE 9/11: Movimientos Portafolio por cuartos UNITED]
 const express = require('express');
 const router = express.Router();
 const portafolioController = require('./portafolio.controller');
@@ -11,7 +11,6 @@ const {
   requirePortafolioEquipmentScope_gnral,
   requirePortafolioProjectScope_gnral,
   filterPortafolioEquipmentBodyScope_gnral,
-  requireAllUnitedZones_gnral,
   requireContextualEquipmentScope_gnral
 } = require('../../services/information-record-scope-gnral.service');
 
@@ -57,19 +56,28 @@ const portafolioReadGuard = humanInformationGuard_gnral({
   groupingCodesAny: UNITED_GROUPINGS
 });
 
+// FASE 7/11: la carga inicial de Dashboard Portafolio no puede abrirse por
+// una puerta OPERACION/EXPERIMENTAL. Debe resolver especificamente PORTAFOLIO.
+const dashboardPortafolioGuard = humanInformationGuard_gnral({
+  permissionCodesAny: [
+    'PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER'
+  ],
+  domain: 'UNITED',
+  groupingCode: 'PORTAFOLIO'
+});
+
 const portafolioDetailGuard = humanInformationGuard_gnral({
   permissionCodesAny: PORTAFOLIO_DETAIL_PERMISSIONS,
   domain: 'UNITED',
   groupingCodesAny: UNITED_GROUPINGS
 });
 
+// FASE 9/11: Movimientos tiene puerta funcional propia. No se hereda acceso
+// desde Dashboard Portafolio, Operacion ni Experimental.
 const movimientosGuard = humanInformationGuard_gnral({
-  permissionCodesAny: [
-    'PORTAFOLIO_MOVIMIENTOS_PORTAFOLIO_ACCESO_VISUAL_MODULO.ACCESO_VISUAL',
-    'PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER'
-  ],
+  permissionCode: 'PORTAFOLIO_MOVIMIENTOS_PORTAFOLIO_ACCESO_VISUAL_MODULO.ACCESO_VISUAL',
   domain: 'UNITED',
-  groupingCodesAny: ['PORTAFOLIO']
+  groupingCode: 'PORTAFOLIO'
 });
 
 const contextualEquipmentGuard = dynamicHumanInformationGuard_gnral((req) => {
@@ -91,24 +99,37 @@ const contextualEquipmentGuard = dynamicHumanInformationGuard_gnral((req) => {
   };
 });
 
+router.get(
+  '/portafolio/dashboard/inicial',
+  ...dashboardPortafolioGuard,
+  portafolioController.getPortafolioDashboardInicial
+);
+router.get(
+  '/portafolio/dashboard/equipos',
+  ...dashboardPortafolioGuard,
+  portafolioController.getPortafolioEquipos
+);
 router.get('/portafolio/filtros', ...portafolioReadGuard, portafolioController.getPortafolioFiltros);
 router.get('/portafolio/dashboard', ...portafolioReadGuard, portafolioController.getPortafolioDashboard);
+router.get(
+  '/portafolio/movimientos/inicial',
+  ...movimientosGuard,
+  portafolioController.getPortafolioMovimientosInicial
+);
 router.get('/portafolio/movimientos', ...movimientosGuard, portafolioController.getPortafolioMovimientos);
 
-// Los cortes semanales son snapshots globales ya materializados. La llave
-// maestra UNITED abre la puerta, pero no sustituye los cuartos de usuario_zop.
-// Por eso un snapshot global solo puede abrirse cuando el usuario tiene todos
-// los cuartos UNITED activos asignados.
+// FASE 9/11: los snapshots JSON semanales no tienen FK territorial propia.
+// El handler filtra cada renglon por numero de equipo contra Portafolio actual
+// ya limitado por usuario_zop y canoniza la zona con z_op. No se exige acceso
+// a todos los cuartos y nunca se autoriza por el texto historico row.zona.
 router.get(
   '/portafolio/movimientos-semanales/catalogo',
   ...movimientosGuard,
-  requireAllUnitedZones_gnral,
   portafolioController.getPortafolioSemanasDisponibles
 );
 router.get(
   '/portafolio/movimientos-semanales',
   ...movimientosGuard,
-  requireAllUnitedZones_gnral,
   portafolioController.getPortafolioMovimientosSemanales
 );
 router.get(
