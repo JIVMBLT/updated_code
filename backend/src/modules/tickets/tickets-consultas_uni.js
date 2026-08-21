@@ -138,7 +138,12 @@ async function getTicketDetalle_uni(req, res) {
           ON p_ticket_code.estado_registro = 1
          AND NULLIF(TRIM(COALESCE(t.codigo_equipo, '')), '') IS NOT NULL
          AND TRIM(COALESCE(p_ticket_code.numero_equipo, '')) = TRIM(COALESCE(t.codigo_equipo, ''))
-        WHERE (t.ticket = ? OR t.folio = ?)
+        WHERE (
+          TRIM(COALESCE(t.ticket, '')) = ?
+          OR CAST(t.id AS CHAR) = ?
+          OR TRIM(COALESCE(t.folio, '')) = ?
+          OR TRIM(COALESCE(t.id_interno, '')) = ?
+        )
           AND ${scope.sql}
         ORDER BY t.id DESC
         LIMIT 1
@@ -147,7 +152,7 @@ async function getTicketDetalle_uni(req, res) {
         ON z_ticket_official.id_zona = scoped_ticket.zona_id_oficial
        AND z_ticket_official.estado = 1
       LIMIT 1
-    `, [ticket, ticket, ...scope.params]);
+    `, [ticket, ticket, ticket, ticket, ...scope.params]);
 
     if (!rows.length) {
       return res.status(404).json({ ok: false, message: 'Ticket no encontrado.' });

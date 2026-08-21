@@ -60,24 +60,91 @@ function normalizePositiveIntegerList_gnral(values) {
   return [...new Set(source.map(normalizePositiveInteger_gnral).filter(Boolean))];
 }
 
+function normalizeGroupingPermissionPairs_gnral(values) {
+  const source = Array.isArray(values) ? values : [];
+
+  return source.map((pair, index) => {
+    if (!pair || typeof pair !== 'object' || Array.isArray(pair)) {
+      throw guardConfigurationError_gnral(
+        `groupingPermissionPairsAny[${index}] debe ser un objeto de configuracion.`
+      );
+    }
+
+    const groupingId = pair.groupingId == null
+      ? null
+      : normalizePositiveInteger_gnral(pair.groupingId);
+    const groupingCode = String(pair.groupingCode || '').trim() || null;
+
+    if (pair.groupingId != null && !groupingId) {
+      throw guardConfigurationError_gnral(
+        `groupingPermissionPairsAny[${index}].groupingId debe ser un entero positivo.`
+      );
+    }
+    if ((groupingId && groupingCode) || (!groupingId && !groupingCode)) {
+      throw guardConfigurationError_gnral(
+        `groupingPermissionPairsAny[${index}] requiere exactamente groupingId o groupingCode.`
+      );
+    }
+
+    const permissionCodesAny = normalizeStringList_gnral([
+      pair.permissionCode,
+      ...(Array.isArray(pair.permissionCodesAny) ? pair.permissionCodesAny : [])
+    ]);
+    if (!permissionCodesAny.length) {
+      throw guardConfigurationError_gnral(
+        `groupingPermissionPairsAny[${index}] requiere permissionCode o permissionCodesAny.`
+      );
+    }
+
+    return { groupingId, groupingCode, permissionCodesAny };
+  });
+}
+
 function normalizeGuardConfiguration_gnral(options = {}) {
-  const permissionCodesAny = normalizeStringList_gnral([
+  const directPermissionCodesAny = normalizeStringList_gnral([
     options.permissionCode,
     ...(Array.isArray(options.permissionCodesAny) ? options.permissionCodesAny : [])
   ]);
-  if (!permissionCodesAny.length) {
-    throw guardConfigurationError_gnral('Guard General requiere permissionCode o permissionCodesAny.');
+  const groupingPermissionPairsAny = normalizeGroupingPermissionPairs_gnral(
+    options.groupingPermissionPairsAny
+  );
+
+  if (!directPermissionCodesAny.length && !groupingPermissionPairsAny.length) {
+    throw guardConfigurationError_gnral(
+      'Guard General requiere permissionCode, permissionCodesAny o groupingPermissionPairsAny.'
+    );
+  }
+  if (directPermissionCodesAny.length && groupingPermissionPairsAny.length) {
+    throw guardConfigurationError_gnral(
+      'Guard General no permite mezclar permisos globales con groupingPermissionPairsAny.'
+    );
+  }
+
+  const hasDirectGroupingConfiguration = Boolean(
+    options.groupingId != null
+    || options.groupingCode != null
+    || (Array.isArray(options.groupingIdsAny) && options.groupingIdsAny.length)
+    || (Array.isArray(options.groupingCodesAny) && options.groupingCodesAny.length)
+  );
+  if (groupingPermissionPairsAny.length && hasDirectGroupingConfiguration) {
+    throw guardConfigurationError_gnral(
+      'Guard General no permite mezclar agrupaciones globales con groupingPermissionPairsAny.'
+    );
   }
 
   const domain = normalizeDomain_gnral(options.domain);
-  const groupingIdsAny = normalizePositiveIntegerList_gnral([
-    options.groupingId,
-    ...(Array.isArray(options.groupingIdsAny) ? options.groupingIdsAny : [])
-  ]);
-  const groupingCodesAny = normalizeStringList_gnral([
-    options.groupingCode,
-    ...(Array.isArray(options.groupingCodesAny) ? options.groupingCodesAny : [])
-  ]);
+  const groupingIdsAny = groupingPermissionPairsAny.length
+    ? normalizePositiveIntegerList_gnral(groupingPermissionPairsAny.map((pair) => pair.groupingId))
+    : normalizePositiveIntegerList_gnral([
+      options.groupingId,
+      ...(Array.isArray(options.groupingIdsAny) ? options.groupingIdsAny : [])
+    ]);
+  const groupingCodesAny = groupingPermissionPairsAny.length
+    ? normalizeStringList_gnral(groupingPermissionPairsAny.map((pair) => pair.groupingCode))
+    : normalizeStringList_gnral([
+      options.groupingCode,
+      ...(Array.isArray(options.groupingCodesAny) ? options.groupingCodesAny : [])
+    ]);
 
   if (options.groupingId != null && !normalizePositiveInteger_gnral(options.groupingId)) {
     throw guardConfigurationError_gnral('groupingId debe ser un entero positivo.');
@@ -89,9 +156,15 @@ function normalizeGuardConfiguration_gnral(options = {}) {
     );
   }
 
+  const permissionCodesAny = groupingPermissionPairsAny.length
+    ? normalizeStringList_gnral(groupingPermissionPairsAny.flatMap((pair) => pair.permissionCodesAny))
+    : directPermissionCodesAny;
+
   return {
     permissionCode: permissionCodesAny[0],
     permissionCodesAny,
+    directPermissionCodesAny,
+    groupingPermissionPairsAny,
     domain,
     groupingId: groupingIdsAny[0] || null,
     groupingCode: groupingCodesAny[0] || null,
@@ -391,31 +464,52 @@ function buildInformationAccessGuard_gnral(options = {}) {
 
       connection = await db.getConnection();
 
-      // Pregunta 1: permiso funcional.
-      const grantedPermissionCode = await resolveEffectivePermission_gnral(
-        connection,
-        effectiveUserId,
-        configuration.permissionCodesAny
-      );
-      if (!grantedPermissionCode) return denyFunctionalPermission_gnral(res);
-
       const groupings = await resolveGuardGroupings_gnral(connection, configuration);
+      let grantedPermissionCode = null;
       let allowedGrouping = null;
       let door = null;
       let scope = null;
 
-      if (groupings.length) {
-        // Pregunta 2: puerta de informacion. La primera agrupacion autorizada
-        // determina el motor por perm_agrupaciones.empresa.
-        for (const grouping of groupings) {
-          const candidateDoor = await resolveInformationDoor_gnral(connection, req, grouping);
-          if (candidateDoor.allowed) {
-            allowedGrouping = candidateDoor.grouping || grouping;
-            door = candidateDoor;
-            break;
+      if (configuration.groupingPermissionPairsAny.length) {
+        // Modo emparejado: el permiso funcional y la puerta deben pertenecer
+        // a la misma agrupacion. No se permite combinar permiso de una puerta
+        // con acceso informativo de otra.
+        let hasFunctionalPermissionInAnyPair = false;
+
+        for (const pair of configuration.groupingPermissionPairsAny) {
+          const grouping = groupings.find((candidate) => (
+            pair.groupingId
+              ? Number(candidate.id_agrupacion) === Number(pair.groupingId)
+              : String(candidate.codigo || '').trim() === String(pair.groupingCode || '').trim()
+          ));
+          if (!grouping) {
+            throw guardConfigurationError_gnral(
+              `No fue posible resolver la agrupacion emparejada ${pair.groupingCode || pair.groupingId}.`
+            );
           }
+
+          const pairPermission = await resolveEffectivePermission_gnral(
+            connection,
+            effectiveUserId,
+            pair.permissionCodesAny
+          );
+          if (!pairPermission) continue;
+          hasFunctionalPermissionInAnyPair = true;
+
+          const candidateDoor = await resolveInformationDoor_gnral(connection, req, grouping);
+          if (!candidateDoor.allowed) continue;
+
+          grantedPermissionCode = pairPermission;
+          allowedGrouping = candidateDoor.grouping || grouping;
+          door = candidateDoor;
+          break;
         }
-        if (!door?.allowed) return denyGeneralInformationAccess_gnral(res);
+
+        if (!grantedPermissionCode) {
+          return hasFunctionalPermissionInAnyPair
+            ? denyGeneralInformationAccess_gnral(res)
+            : denyFunctionalPermission_gnral(res);
+        }
 
         scope = await resolveAlcanceByGrouping_gnral(
           connection,
@@ -424,15 +518,44 @@ function buildInformationAccessGuard_gnral(options = {}) {
           { masterAccess: door.masterAccess === true }
         );
       } else {
-        const domain = configuration.domain;
-        if (!domain) {
-          throw guardConfigurationError_gnral('No fue posible resolver empresa/agrupacion del Guard General.');
+        // Modo historico: permiso funcional global seguido de puerta.
+        grantedPermissionCode = await resolveEffectivePermission_gnral(
+          connection,
+          effectiveUserId,
+          configuration.permissionCodesAny
+        );
+        if (!grantedPermissionCode) return denyFunctionalPermission_gnral(res);
+
+        if (groupings.length) {
+          // Pregunta 2: puerta de informacion. La primera agrupacion autorizada
+          // determina el motor por perm_agrupaciones.empresa.
+          for (const grouping of groupings) {
+            const candidateDoor = await resolveInformationDoor_gnral(connection, req, grouping);
+            if (candidateDoor.allowed) {
+              allowedGrouping = candidateDoor.grouping || grouping;
+              door = candidateDoor;
+              break;
+            }
+          }
+          if (!door?.allowed) return denyGeneralInformationAccess_gnral(res);
+
+          scope = await resolveAlcanceByGrouping_gnral(
+            connection,
+            req,
+            allowedGrouping,
+            { masterAccess: door.masterAccess === true }
+          );
+        } else {
+          const domain = configuration.domain;
+          if (!domain) {
+            throw guardConfigurationError_gnral('No fue posible resolver empresa/agrupacion del Guard General.');
+          }
+          const resolved = await resolveDomainOnlyScope_gnral(connection, req, domain);
+          if (!resolved.door?.allowed) return denyGeneralInformationAccess_gnral(res);
+          door = resolved.door;
+          allowedGrouping = resolved.grouping;
+          scope = resolved.scope;
         }
-        const resolved = await resolveDomainOnlyScope_gnral(connection, req, domain);
-        if (!resolved.door?.allowed) return denyGeneralInformationAccess_gnral(res);
-        door = resolved.door;
-        allowedGrouping = resolved.grouping;
-        scope = resolved.scope;
       }
 
       if (!scope?.motor || !scope?.empresa) {
