@@ -7,9 +7,6 @@ const {
   resolveInformationDoor_gnral,
   resolveAlcanceByGrouping_gnral
 } = require('./alcance-resolver.service');
-const {
-  UNITED_COMPANY
-} = require('./alcance-uni.service');
 
 const CROSS_BLOCK_REASON = Object.freeze({
   ALLOWED: 'ALLOWED',
@@ -178,8 +175,8 @@ function allowedDecision_cross({ block, userId, permissionCode, scope, scopeMeta
  * 4. solo si las tres capas pasan, se autoriza consultar/cargar el bloque.
  *
  * El acceso al padre NO se hereda al hijo.
- * En UNITED la llave maestra abre la puerta, pero NO elimina el filtro de
- * cuartos definido por usuario_zop. CORELLIAN conserva su semantica vigente.
+ * Una llave DOMINIO_COMPLETO validada conserva el permiso funcional como
+ * requisito, pero elimina el filtro interno de registros de su propio dominio.
  */
 async function resolveCrossInformationBlock_gnral(
   executor,
@@ -235,10 +232,10 @@ async function resolveCrossInformationBlock_gnral(
     masterAccess: door.masterAccess === true
   });
 
-  // CORELLIAN conserva el bypass de alcance por llave maestra.
-  // UNITED siempre debe validar el registro/contexto contra sus cuartos.
-  const unitedScope = String(scope?.empresa || '').trim().toUpperCase() === UNITED_COMPANY;
-  if (scope?.llave_maestra === true && !unitedScope) {
+  // DOMINIO_COMPLETO ya fue validado por la capa de puerta/resolver.
+  // Mantiene el permiso funcional, pero no debe reintroducir un filtro de
+  // registro dentro del mismo dominio, incluido UNITED.
+  if (scope?.llave_maestra === true) {
     return allowedDecision_cross({
       block,
       userId,

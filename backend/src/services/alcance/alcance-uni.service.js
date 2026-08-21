@@ -50,8 +50,9 @@ function normalizeEffectiveUser_uni(source) {
 
 function normalizeOptions_uni(options = {}) {
   return {
-    // La llave maestra se valida en la capa superior y abre puertas UNITED.
-    // Desde FASE 1 Puertas/Cuartos NO elimina el filtro territorial.
+    // La llave maestra se valida en la capa superior.
+    // DOMINIO_COMPLETO UNITED abre las puertas y elimina el filtro territorial
+    // exclusivamente dentro del dominio UNITED.
     masterAccess: options.masterAccess === true
   };
 }
@@ -84,10 +85,10 @@ async function resolveUnitedZones_uni(executor, userId) {
   const id = normalizePositiveInteger_uni(userId);
   if (!id) throw userRequiredError_uni();
 
-  // Fuente oficial de CUARTOS UNITED:
+  // Fuente oficial de CUARTOS UNITED para usuarios sin llave maestra:
   // usuario_zop = asignacion efectiva usuario <-> Zona Operativa.
   // z_op = catalogo referencial de zonas.
-  // La puerta se resuelve en Alcance; los cuartos siempre se resuelven aqui.
+  // La puerta se resuelve en Alcance; los cuartos se resuelven aqui.
   const [rows] = await db.query(
     `SELECT DISTINCT
        uz.zona_id AS id_zona,
@@ -128,8 +129,31 @@ async function resolveAlcanceUni_uni(executor, source, options = {}) {
 
   if (!user.id) throw userRequiredError_uni();
 
-  // IMPORTANTE: incluso con llave maestra se consultan los cuartos del usuario.
-  // La llave maestra abre puertas; usuario_zop sigue limitando registros.
+  // DOMINIO_COMPLETO UNITED significa dominio completo dentro de UNITED.
+  // La llave ya fue validada por la capa superior, por lo que usuario_zop no
+  // debe limitar registros ni ser requisito para este usuario.
+  if (normalizedOptions.masterAccess) {
+    return {
+      motor: UNITED_ENGINE,
+      empresa: UNITED_COMPANY,
+      modo: 'LLAVE_MAESTRA',
+      llave_maestra: true,
+      effective_user_id: user.id,
+      reglas: {
+        permiso_funcional_requerido: true,
+        zonas_operativas: false,
+        personas_visibles: false,
+        relacion_directa: false,
+        llave_maestra_abre_puertas: true,
+        llave_maestra_ignora_zonas: true
+      },
+      zonas_operativas: null,
+      zona_ids: null,
+      zona_codigos: null,
+      requiere_filtro_zona: false
+    };
+  }
+
   const zones = await resolveUnitedZones_uni(executor, user.id);
   const zoneIds = normalizePositiveIds_uni(zones.map((zone) => zone.id_zona));
   const zoneCodes = [...new Set(zones
@@ -140,8 +164,8 @@ async function resolveAlcanceUni_uni(executor, source, options = {}) {
   return {
     motor: UNITED_ENGINE,
     empresa: UNITED_COMPANY,
-    modo: normalizedOptions.masterAccess ? 'LLAVE_MAESTRA' : UNITED_MODE,
-    llave_maestra: normalizedOptions.masterAccess,
+    modo: UNITED_MODE,
+    llave_maestra: false,
     effective_user_id: user.id,
     reglas: {
       permiso_funcional_requerido: true,
@@ -158,6 +182,10 @@ async function resolveAlcanceUni_uni(executor, source, options = {}) {
   };
 }
 
+function unrestrictedScopeSql_uni(context) {
+  return { sql: '1 = 1', params: [], alcance: context };
+}
+
 function failClosedScopeSql_uni(context) {
   return { sql: '1 = 0', params: [], alcance: context };
 }
@@ -172,6 +200,8 @@ function buildResolvedZoneIdScopeSql_uni(context, columnSql) {
   }
 
   const column = safeColumnReference_uni(columnSql);
+  if (context.llave_maestra === true) return unrestrictedScopeSql_uni(context);
+
   const zoneIds = normalizePositiveIds_uni(context.zona_ids);
   if (!zoneIds.length) return failClosedScopeSql_uni(context);
 
@@ -203,6 +233,8 @@ function buildResolvedTicketScopeSql_uni(context, alias = 't') {
   }
 
   const a = safeAlias_uni(alias, 't');
+  if (context.llave_maestra === true) return unrestrictedScopeSql_uni(context);
+
   const zoneIds = normalizePositiveIds_uni(context.zona_ids);
   if (!zoneIds.length) return failClosedScopeSql_uni(context);
 
@@ -211,7 +243,7 @@ function buildResolvedTicketScopeSql_uni(context, alias = 't') {
   // FASE 3 formaliza la frontera territorial de Tickets sin confiar en
   // tickets.zona, porque la estructura actual no tiene FK directa a z_op.
   //
-  // Precedencia fail-closed:
+  // Precedencia fail-closed para usuarios SIN llave maestra:
   // 1) Si el Ticket tiene codigo_equipo, SOLO ese equipo puede resolver zona.
   //    No existe fallback por proyecto para un codigo presente.
   // 2) Si no tiene codigo_equipo, proyecto/proyecto_padre se consideran como
@@ -285,6 +317,7 @@ async function buildTicketScopeSql_uni(executor, source, alias = 't', options = 
 function alcanceUniAllowsZone_uni(context, zoneId) {
   const id = normalizePositiveInteger_uni(zoneId);
   if (!context || context.motor !== UNITED_ENGINE || !id) return false;
+  if (context.llave_maestra === true) return true;
   return normalizePositiveIds_uni(context.zona_ids).includes(id);
 }
 
