@@ -464,16 +464,17 @@ function buildInformationAccessGuard_gnral(options = {}) {
 
       connection = await db.getConnection();
 
-      const groupings = await resolveGuardGroupings_gnral(connection, configuration);
+      let groupings = [];
       let grantedPermissionCode = null;
       let allowedGrouping = null;
       let door = null;
       let scope = null;
 
       if (configuration.groupingPermissionPairsAny.length) {
-        // Modo emparejado: el permiso funcional y la puerta deben pertenecer
-        // a la misma agrupacion. No se permite combinar permiso de una puerta
-        // con acceso informativo de otra.
+        // Modo emparejado: conserva el flujo introducido por F3/F4.
+        // Se resuelven las agrupaciones necesarias para poder evaluar cada
+        // par permiso + puerta de manera atomica.
+        groupings = await resolveGuardGroupings_gnral(connection, configuration);
         let hasFunctionalPermissionInAnyPair = false;
 
         for (const pair of configuration.groupingPermissionPairsAny) {
@@ -518,13 +519,17 @@ function buildInformationAccessGuard_gnral(options = {}) {
           { masterAccess: door.masterAccess === true }
         );
       } else {
-        // Modo historico: permiso funcional global seguido de puerta.
+        // Modo historico: restaurar exactamente el orden previo al FIX F3/F4.
+        // Pregunta 1: permiso funcional. Si falla, no se consulta la
+        // configuracion de agrupaciones ni las puertas de informacion.
         grantedPermissionCode = await resolveEffectivePermission_gnral(
           connection,
           effectiveUserId,
           configuration.permissionCodesAny
         );
         if (!grantedPermissionCode) return denyFunctionalPermission_gnral(res);
+
+        groupings = await resolveGuardGroupings_gnral(connection, configuration);
 
         if (groupings.length) {
           // Pregunta 2: puerta de informacion. La primera agrupacion autorizada
