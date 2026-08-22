@@ -1,7 +1,7 @@
 (function(){
   'use strict';
 
-  const VERSION_COR = '20260819-documentacion-selector-rol-v002';
+  const VERSION_COR = '20260821-pendientes-supervisor-v001';
   const API_BASE = (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
   const PAGE_SIZE_COR = 30;
   const STATUS_NAMES_COR = Object.freeze({
@@ -288,13 +288,18 @@
     const item = doc || {};
     const value = raw(item.valor);
     if(item.generado === true){
-      const display = type === 'date' ? (fmtDate_cor(value) || 'Generado') : (value || 'Generado');
-      return '<span class="idoc-cor-doc idoc-cor-doc-ok" title="' + esc(value || 'Generado') + '">' + esc(display) + '</span>';
+      const hasDate = /^(\d{4})-(\d{2})-(\d{2})/.test(value) ||
+        /^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(value) ||
+        /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/.test(value);
+      const display = type === 'date'
+        ? (hasDate ? fmtDate_cor(value) : 'Entregado')
+        : (value || 'Entregado');
+      return '<span class="idoc-cor-doc idoc-cor-doc-ok" title="' + esc(value || 'Entregado') + '">' + esc(display) + '</span>';
     }
     if(value){
-      return '<span class="idoc-cor-doc idoc-cor-doc-missing" title="' + esc(value) + '">' + esc(value) + '</span>';
+      return '<span class="idoc-cor-doc idoc-cor-doc-missing" title="' + esc(value) + '">Falta</span>';
     }
-    return '<span class="idoc-cor-doc idoc-cor-doc-neutral">Pendiente</span>';
+    return '<span class="idoc-cor-doc idoc-cor-doc-neutral">Falta</span>';
   }
 
   function openProject_cor(row){

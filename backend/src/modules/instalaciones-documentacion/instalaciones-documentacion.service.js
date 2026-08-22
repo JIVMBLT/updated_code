@@ -465,8 +465,7 @@ async function getBootstrap_cor(req) {
       estatus_incluidos: [...repository.ESTATUS_DOCUMENTACION_COR],
       documentos_requeridos_04_m: 6,
       documentos_requeridos_otras_etapas: 9,
-      marcadores_historicos_normalizados_a_null: ['-', '.', 'N/A', 'VACIO'],
-      certificado_pendiente_si: ['NULL', 'FALTA', 'FALTA.'],
+      documento_pendiente_si: ['NULL', 'VACIO', '-', 'FALTA', 'FALTA.'],
       tendencia_historica_disponible: false
     }
   };

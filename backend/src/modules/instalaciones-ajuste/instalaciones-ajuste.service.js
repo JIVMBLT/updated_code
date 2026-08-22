@@ -159,6 +159,18 @@ function compareYears_cor(a, b) {
   return String(b).localeCompare(String(a), 'es', { sensitivity: 'base', numeric: true });
 }
 
+function compareYearsAscending_cor(a, b) {
+  if (a === SIN_ANIO_VALUE_COR) return 1;
+  if (b === SIN_ANIO_VALUE_COR) return -1;
+
+  const aNumber = Number(a);
+  const bNumber = Number(b);
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) {
+    return aNumber - bNumber;
+  }
+  return String(a).localeCompare(String(b), 'es', { sensitivity: 'base', numeric: true });
+}
+
 function average_cor(metricsList, field) {
   const values = metricsList
     .map(metrics => metrics[field])
@@ -282,7 +294,7 @@ async function getBehavior_cor(query) {
   }
 
   const porAnio = [...grouped.entries()]
-    .sort(([a], [b]) => compareYears_cor(a, b))
+    .sort(([a], [b]) => compareYearsAscending_cor(a, b))
     .map(([anio, metricsList]) => ({
       anio,
       etiqueta_anio: yearLabel_cor(anio),
@@ -305,9 +317,7 @@ async function getBehavior_cor(query) {
 
 function normalizeYearFilter_cor(query = {}) {
   const rawYear = cleanText_cor(query.anio);
-  if (!rawYear) {
-    throw validationError_cor('anio es obligatorio.', 'anio', query.anio);
-  }
+  if (!rawYear) return null;
   if (rawYear.length > 255) {
     throw validationError_cor('anio excede la longitud permitida.', 'anio', query.anio);
   }
@@ -315,6 +325,13 @@ function normalizeYearFilter_cor(query = {}) {
   return rawYear === SIN_ANIO_VALUE_COR
     ? { valor: SIN_ANIO_VALUE_COR, sin_anio: true }
     : { valor: rawYear, sin_anio: false };
+}
+
+function normalizeDetailTypeFilter_cor(query = {}) {
+  const numeroPisos = rawText_cor(query.numero_pisos);
+  const capacidadKg = rawText_cor(query.capacidad_kg);
+  if (!numeroPisos && !capacidadKg) return null;
+  return normalizeTypeQuery_cor(query);
 }
 
 function inverted_cor(currentValue, previousValue) {
@@ -363,16 +380,22 @@ function mapDetailRow_cor(item) {
 
 async function getDetail_cor(query = {}) {
   const yearFilter = normalizeYearFilter_cor(query);
+  const typeFilter = normalizeDetailTypeFilter_cor(query);
   const limit = positiveInteger_cor(query.limit, 'limit', DEFAULT_LIMIT_COR, MAX_LIMIT_COR);
   const offset = nonNegativeInteger_cor(query.offset, 'offset', 0);
 
-  const rows = await repository.listYearSource_cor(yearFilter);
+  const rows = await repository.listYearSource_cor(yearFilter, typeFilter);
   const qualifiedRows = qualifyRows_cor(rows);
   const pagedRows = qualifiedRows.slice(offset, offset + limit).map(mapDetailRow_cor);
 
   return {
-    anio: yearFilter.valor,
-    etiqueta_anio: yearLabel_cor(yearFilter.valor),
+    anio: yearFilter ? yearFilter.valor : null,
+    etiqueta_anio: yearFilter ? yearLabel_cor(yearFilter.valor) : 'Todos los años',
+    tipo: typeFilter ? {
+      clave: `${typeFilter.numeroPisos}|${typeFilter.capacidadKg}`,
+      numero_pisos: typeFilter.numeroPisos,
+      capacidad_kg: typeFilter.capacidadKg
+    } : null,
     pagination: {
       limit,
       offset,

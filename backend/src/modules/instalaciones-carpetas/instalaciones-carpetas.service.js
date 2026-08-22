@@ -91,15 +91,16 @@ async function getBootstrap_cor(userId) {
   const permissionRows = await repository.getEffectivePermissionsBulk_cor(userId, codesWithoutAccess);
   const permissions = permissionObject_cor(permissionRows, true);
 
-  const needsFolders = permissions.carpetas_ver || permissions.relacionador_ver;
+  const needsFolders = permissions.carpetas_ver;
   const needsProjects = permissions.proyectos_ver || permissions.relacionador_ver;
 
-  const [folderRows, projectRows] = await Promise.all([
+  const [folderRows, projectRows, availableFolderRows] = await Promise.all([
     needsFolders ? repository.listRegisteredFolders_cor() : Promise.resolve([]),
-    needsProjects ? repository.listProjectsWithoutFolder_cor() : Promise.resolve([])
+    needsProjects ? repository.listProjectsWithoutFolder_cor() : Promise.resolve([]),
+    permissions.relacionador_ver
+      ? repository.listAvailableFolders_cor()
+      : Promise.resolve([])
   ]);
-
-  const availableFolders = folderRows.filter(row => !row.id_proyecto_drive);
 
   return {
     generated_at: new Date().toISOString(),
@@ -110,7 +111,7 @@ async function getBootstrap_cor(userId) {
       ? projectRows.map(projectForList_cor)
       : [],
     carpetas_disponibles: permissions.relacionador_ver
-      ? availableFolders.map(folderForSelector_cor)
+      ? availableFolderRows.map(folderForSelector_cor)
       : [],
     permissions
   };

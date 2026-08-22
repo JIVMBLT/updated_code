@@ -1,23 +1,23 @@
 (function(){
   'use strict';
 
-  const VERSION_COR = '20260818-pdf-desarrollo-v009';
+  const VERSION_COR = '20260821-orden-vistas-v002';
   const API_BASE = (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
-  const PAGE_SIZE = 12;
+  const PAGE_SIZE = 30;
   const API_LIMIT = 5000;
 
   const STAGES = Object.freeze([
-    { code:'01-SUS', name:'Equipos Suspendidos', short:'Suspendidos', color:'#e85b50' },
-    { code:'02-OC', name:'Equipos en Obra Civil', short:'Obra Civil', color:'#f28c28' },
     { code:'03-PM', name:'Equipos Próximos a Montar', short:'Próx. Montar', color:'#eab308' },
     { code:'04-M', name:'Equipos en Montaje', short:'Montaje', color:'#2583d8' },
     { code:'05-PA', name:'Equipos Próximos a Ajustar', short:'Próx. Ajustar', color:'#6f58c9' },
     { code:'06-A', name:'Equipos en Ajuste', short:'Ajuste', color:'#32a6ae' },
     { code:'07-PE', name:'Equipos Próximos a Entregar', short:'Próx. Entregar', color:'#2f96a8' },
+    { code:'01-SUS', name:'Equipos Suspendidos', short:'Suspendidos', color:'#e85b50' },
     { code:'08-T', name:'Equipos Entregados', short:'Entregados', color:'#3aa65a' }
   ]);
 
   const STAGE_BY_CODE = new Map(STAGES.map(stage => [stage.code, stage]));
+  const FULL_VIEW_STATUSES = new Set(['01-SUS', '08-T']);
   const state = {
     ready:false,
     bound:false,
@@ -29,8 +29,12 @@
     summary:new Map(),
     visualCatalog:new Map(),
     visualByStatus:new Map(),
-    openStatus:'01-SUS',
-    pageByStatus:Object.fromEntries(STAGES.map(stage => [stage.code, 1]))
+    openStatus:'03-PM',
+    pageByStatus:Object.fromEntries(STAGES.map(stage => [stage.code, 1])),
+    tableModeByStatus:{
+      '01-SUS':'paged',
+      '08-T':'paged'
+    }
   };
 
   const $ = id => document.getElementById(id);
@@ -230,9 +234,15 @@
           ' (' + formatNumber_cor(row.total) + ')</option>';
       }).filter(Boolean);
 
-    const statusOptions = (Array.isArray(filters.estatus) ? filters.estatus : [])
-      .map(row => '<option value="' + esc(row.codigo) + '">' + esc(row.codigo + ' · ' + row.nombre) +
-        ' (' + formatNumber_cor(row.total) + ')</option>');
+    const statusRows = new Map(
+      (Array.isArray(filters.estatus) ? filters.estatus : [])
+        .map(row => [raw(row && row.codigo).toUpperCase(), row])
+    );
+    const statusOptions = STAGES.map(stage => {
+      const row = statusRows.get(stage.code) || {};
+      return '<option value="' + esc(stage.code) + '">' + esc(stage.code + ' · ' + stage.name) +
+        ' (' + formatNumber_cor(row.total || 0) + ')</option>';
+    });
 
     setSelectOptions_cor($('ir-cor-supervisor'), supervisorOptions, 'Todos', selected.supervisor);
     setSelectOptions_cor($('ir-cor-asesor'), advisorOptions, 'Todos', selected.asesor);
@@ -286,7 +296,7 @@
     if(selectedStatus && STAGE_BY_CODE.has(selectedStatus)) state.openStatus = selectedStatus;
     else if(!STAGE_BY_CODE.has(state.openStatus) || Number(state.summary.get(state.openStatus) || 0) === 0){
       const firstWithData = STAGES.find(stage => Number(state.summary.get(stage.code) || 0) > 0);
-      state.openStatus = firstWithData ? firstWithData.code : '01-SUS';
+      state.openStatus = firstWithData ? firstWithData.code : '03-PM';
     }
   }
 
@@ -296,6 +306,10 @@
 
   function stageRows_cor(code){
     return state.rows.filter(row => raw(row.estatus).toUpperCase() === code);
+  }
+
+  function reportTotal_cor(){
+    return STAGES.reduce((total, stage) => total + stageTotal_cor(stage.code), 0);
   }
 
   function renderStages_cor(){
@@ -325,7 +339,7 @@
         '<span class="ir-cor-bar-value">' + formatNumber_cor(total) + '</span>' +
         '</div>';
     }).join('');
-    const total = state.response && state.response.summary ? Number(state.response.summary.total || 0) : 0;
+    const total = reportTotal_cor();
     if($('ir-cor-total')) $('ir-cor-total').textContent = formatNumber_cor(total) + ' equipo(s)';
     if($('ir-cor-side-total')) $('ir-cor-side-total').textContent = formatNumber_cor(total) + ' equipo(s)';
   }
@@ -458,25 +472,40 @@
   function tableHtml_cor(stage){
     const rows = stageRows_cor(stage.code);
     const columns = baseColumns_cor(stage.code).concat(stageColumns_cor(stage.code));
+    const supportsFullView = FULL_VIEW_STATUSES.has(stage.code);
+    const tableMode = supportsFullView && state.tableModeByStatus[stage.code] === 'full'
+      ? 'full'
+      : 'paged';
+    const showAll = tableMode === 'full';
     const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
     const currentPage = Math.min(Math.max(Number(state.pageByStatus[stage.code] || 1), 1), pageCount);
     state.pageByStatus[stage.code] = currentPage;
     const start = (currentPage - 1) * PAGE_SIZE;
-    const pageRows = rows.slice(start, start + PAGE_SIZE);
+    const pageRows = showAll ? rows : rows.slice(start, start + PAGE_SIZE);
     const body = pageRows.length
       ? pageRows.map(row => '<tr>' + columns.map(column => rowCell_cor(column, row)).join('') + '</tr>').join('')
       : '<tr><td class="ir-cor-empty-cell" colspan="' + columns.length + '">Sin registros cargados para esta etapa.</td></tr>';
+    const modeToolbar = supportsFullView
+      ? '<div class="ir-cor-table-toolbar"><span>Vista de tabla</span><div class="ir-cor-table-mode" role="group" aria-label="Vista de ' + esc(stage.code) + '">' +
+        '<button type="button" data-ir-table-mode="paged" data-ir-table-status="' + esc(stage.code) + '" class="' + (showAll ? '' : 'active') + '">30 por página</button>' +
+        '<button type="button" data-ir-table-mode="full" data-ir-table-status="' + esc(stage.code) + '" class="' + (showAll ? 'active' : '') + '">Tabla completa</button>' +
+        '</div></div>'
+      : '';
+    const pager = showAll
+      ? '<div class="ir-cor-pager"><strong>Vista completa</strong></div>'
+      : '<div class="ir-cor-pager">' +
+        '<button type="button" data-ir-page-prev="' + esc(stage.code) + '"' + (currentPage <= 1 ? ' disabled' : '') + '>‹</button>' +
+        '<strong>' + currentPage + ' / ' + pageCount + '</strong>' +
+        '<button type="button" data-ir-page-next="' + esc(stage.code) + '"' + (currentPage >= pageCount ? ' disabled' : '') + '>›</button>' +
+        '</div>';
 
-    return stageVisualLegendHtml_cor(stage.code) +
+    return stageVisualLegendHtml_cor(stage.code) + modeToolbar +
       '<div class="ir-cor-table-wrap"><table class="ir-cor-table"><thead><tr>' +
       columns.map(column => '<th>' + esc(column.label) + '</th>').join('') +
       '</tr></thead><tbody>' + body + '</tbody></table></div>' +
       '<div class="ir-cor-table-footer"><span>Mostrando ' + formatNumber_cor(pageRows.length) + ' de ' + formatNumber_cor(rows.length) +
-      ' registro(s) cargados</span><div class="ir-cor-pager">' +
-      '<button type="button" data-ir-page-prev="' + esc(stage.code) + '"' + (currentPage <= 1 ? ' disabled' : '') + '>‹</button>' +
-      '<strong>' + currentPage + ' / ' + pageCount + '</strong>' +
-      '<button type="button" data-ir-page-next="' + esc(stage.code) + '"' + (currentPage >= pageCount ? ' disabled' : '') + '>›</button>' +
-      '</div></div>';
+      ' registro(s)</span>' + pager +
+      '<span class="ir-cor-page-size">' + (showAll ? 'Todos los registros' : '30 por página') + '</span></div>';
   }
 
   function renderSections_cor(){
@@ -497,7 +526,7 @@
   }
 
   function renderEmpty_cor(){
-    const total = state.response && state.response.summary ? Number(state.response.summary.total || 0) : 0;
+    const total = reportTotal_cor();
     const empty = $('ir-cor-empty');
     if(empty) empty.hidden = total !== 0;
   }
@@ -916,7 +945,7 @@
       if(element) element.value = '';
     });
     resetPages_cor();
-    state.openStatus = '01-SUS';
+    state.openStatus = '03-PM';
     refresh_cor();
   }
 
@@ -988,6 +1017,17 @@
       const next = event.target.closest('[data-ir-page-next]');
       if(next){
         movePage_cor(next.dataset.irPageNext, 1);
+        return;
+      }
+      const tableMode = event.target.closest('[data-ir-table-mode]');
+      if(tableMode){
+        const code = raw(tableMode.dataset.irTableStatus).toUpperCase();
+        const mode = raw(tableMode.dataset.irTableMode);
+        if(FULL_VIEW_STATUSES.has(code) && (mode === 'paged' || mode === 'full')){
+          state.tableModeByStatus[code] = mode;
+          state.pageByStatus[code] = 1;
+          renderSections_cor();
+        }
         return;
       }
       const toggle = event.target.closest('[data-ir-toggle]');

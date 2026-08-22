@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const db = require('../config/db');
 const { validatePasswordRules } = require('../utils/passwordRules');
 const { resetUserPasswordById } = require('../../scripts/reset-user-id-password');
+const { hasGlobalProgrammerRole } = require('../services/permissions/global-programmer.service');
 
 const PUBLIC_USER_SELECT = `
   u.id_SB,
@@ -36,35 +37,8 @@ function normalizeText(value) {
   return value === undefined || value === null ? null : String(value).trim();
 }
 
-function roleNames(user) {
-  return [user?.rol, ...(user?.roles || [])].filter(Boolean);
-}
-
-async function userHasPermission(userId, permissionColumn) {
-  const allowed = new Set(['usuarios', 'crear_usuario', 'editar_usuario', 'eliminar_usuario', 'programador']);
-  if (!allowed.has(permissionColumn)) return false;
-
-  const [rows] = await db.query(
-    `SELECT 1
-     FROM usuarios u
-     LEFT JOIN usuario_roles ur
-       ON ur.id_usuario = u.id_SB
-      AND ur.activo = 1
-     INNER JOIN permisos p
-       ON p.rol_id IN (u.rol_id, ur.id_rol)
-      AND p.estado = 1
-     WHERE u.id_SB = ?
-       AND (p.programador = 1 OR p.${permissionColumn} = 1)
-     LIMIT 1`,
-    [userId]
-  );
-  return rows.length > 0;
-}
-
-async function canManageUsers(req, permissionColumn) {
-  const names = roleNames(req.user);
-  if (names.includes('Programador')) return true;
-  return userHasPermission(req.user.id_SB, permissionColumn);
+function canManageUsers(req) {
+  return hasGlobalProgrammerRole(req.actorUser || req.user);
 }
 
 async function audit(conn, actorId, eventType, details, ipAddress) {
@@ -221,7 +195,7 @@ async function zonasUsuario(req, res) {
 }
 
 async function createUsuario(req, res) {
-  if (!(await canManageUsers(req, 'crear_usuario'))) {
+  if (!canManageUsers(req)) {
     return res.status(403).json({ ok: false, message: 'No tienes permisos para crear usuarios.' });
   }
 
@@ -301,7 +275,7 @@ async function createUsuario(req, res) {
 }
 
 async function updateUsuario(req, res) {
-  if (!(await canManageUsers(req, 'editar_usuario'))) {
+  if (!canManageUsers(req)) {
     return res.status(403).json({ ok: false, message: 'No tienes permisos para editar usuarios.' });
   }
 
@@ -552,7 +526,7 @@ async function supervisoresMantenimiento(req, res) {
 
 
 async function resetCredentials(req, res) {
-  if (!(await canManageUsers(req, 'editar_usuario'))) {
+  if (!canManageUsers(req)) {
     return res.status(403).json({ ok: false, message: 'No tienes permisos para resetear credenciales.' });
   }
 

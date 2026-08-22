@@ -15,14 +15,11 @@ function normalizedTextExpr_cor(alias, field) {
   return `NULLIF(TRIM(${alias}.${field}), '')`;
 }
 
-function generatedExpr_cor(alias, field, certificate = false) {
+function generatedExpr_cor(alias, field) {
   const normalized = normalizedTextExpr_cor(alias, field);
-  if (!certificate) {
-    return `CASE WHEN ${normalized} IS NOT NULL THEN 1 ELSE 0 END`;
-  }
   return `CASE
     WHEN ${normalized} IS NULL THEN 0
-    WHEN UPPER(${normalized}) IN ('FALTA', 'FALTA.') THEN 0
+    WHEN UPPER(${normalized}) IN ('-', 'FALTA', 'FALTA.') THEN 0
     ELSE 1
   END`;
 }
@@ -41,7 +38,7 @@ function generatedCountExpr_cor(alias) {
     ${generatedExpr_cor(alias, 'fecha_revision_supervisor')} +
     ${generatedExpr_cor(alias, 'evaluacion_subcontrato')} +
     ${generatedExpr_cor(alias, 'minuta_interfon')} +
-    ${generatedExpr_cor(alias, 'certificado_regulador', true)}
+    ${generatedExpr_cor(alias, 'certificado_regulador')}
   )`;
 }
 
@@ -80,10 +77,7 @@ function supervisorWhere_cor(supervisor, alias = 'f') {
     return {
       sql: `(
         ${alias}.id_sup = ?
-        OR (
-          ${alias}.id_sup IS NULL
-          AND UPPER(TRIM(COALESCE(${alias}.supervisor_fl, ''))) = UPPER(?)
-        )
+        OR UPPER(TRIM(COALESCE(${alias}.supervisor_fl, ''))) = UPPER(?)
       )`,
       params: [supervisorId, initials]
     };
@@ -171,7 +165,7 @@ function dataset_cor(supervisor, filters = {}) {
       ${generatedExpr_cor('f', 'fecha_revision_supervisor')} AS doc_revision_supervisor_generado,
       ${generatedExpr_cor('f', 'evaluacion_subcontrato')} AS doc_evaluacion_montaje_generado,
       ${generatedExpr_cor('f', 'minuta_interfon')} AS doc_minuta_interfon_generado,
-      ${generatedExpr_cor('f', 'certificado_regulador', true)} AS doc_certificado_regulador_generado,
+      ${generatedExpr_cor('f', 'certificado_regulador')} AS doc_certificado_regulador_generado,
       ${required} AS documentos_requeridos,
       ${generated} AS documentos_generados,
       ${generatedForProgress} AS documentos_generados_progreso,

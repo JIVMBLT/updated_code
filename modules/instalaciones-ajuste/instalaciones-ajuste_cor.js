@@ -1,9 +1,9 @@
 (function(){
   'use strict';
 
-  const VERSION_COR = '20260818-fase2-v001';
+  const VERSION_COR = '20260821-paginacion-30-v002';
   const API_BASE = (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
-  const DEFAULT_PAGE_SIZE_COR = 25;
+  const DEFAULT_PAGE_SIZE_COR = 30;
 
   const PERMISSIONS_COR = Object.freeze({
     selector_ver:'INSTALACIONES_AJUSTE_COMPORTAMIENTO_TIPO_SELECTOR.VER',
@@ -168,7 +168,7 @@
     if(!select) return;
 
     const current = state.selectedType;
-    select.innerHTML = '<option value="">Selecciona un tipo...</option>' + state.types.map(item => {
+    select.innerHTML = '<option value="">Todos</option>' + state.types.map(item => {
       const levels = raw(item.numero_pisos) || '—';
       const capacity = raw(item.capacidad_kg) || '—';
       return '<option value="' + esc(item.clave) + '">' +
@@ -189,18 +189,16 @@
     if(!select) return;
 
     const current = state.selectedYear;
-    select.innerHTML = state.years.length
-      ? state.years.map(item => '<option value="' + esc(item.valor) + '">' +
-          esc(item.etiqueta) + ' (' + formatNumber_cor(item.total_equipos) + ')</option>').join('')
-      : '<option value="">Sin años disponibles</option>';
+    const total = state.years.reduce((sum, item) => sum + (Number(item.total_equipos) || 0), 0);
+    select.innerHTML = '<option value="">Todos los años (' + formatNumber_cor(total) + ')</option>' +
+      state.years.map(item => '<option value="' + esc(item.valor) + '">' +
+        esc(item.etiqueta) + ' (' + formatNumber_cor(item.total_equipos) + ')</option>').join('');
 
     if(current && state.years.some(item => item.valor === current)){
       select.value = current;
-    }else if(state.years.length){
-      state.selectedYear = state.years[0].valor;
-      select.value = state.selectedYear;
     }else{
       state.selectedYear = '';
+      select.value = '';
     }
   }
 
@@ -333,8 +331,8 @@
     if(selectedBox) selectedBox.hidden = true;
     if(empty){
       empty.hidden = false;
-      empty.innerHTML = '<span aria-hidden="true">📊</span><strong>Selecciona un tipo de equipo</strong>' +
-        '<p>El resumen mostrará los promedios por año para Inicio → Real, Inicio → Calidad e Inicio → Cliente.</p>';
+      empty.innerHTML = '<span aria-hidden="true">📊</span><strong>Todos los tipos</strong>' +
+        '<p>El listado muestra todos los equipos. Selecciona un tipo para mostrar su gráfica histórica.</p>';
     }
   }
 
@@ -464,7 +462,9 @@
     const end = Math.min(total, offset + rows.length);
     const page = limit > 0 ? Math.floor(offset / limit) + 1 : 1;
 
-    if(totalLabel) totalLabel.textContent = formatNumber_cor(total) + ' equipos · ' + esc(response.etiqueta_anio || response.anio || '');
+    const type = response && response.tipo;
+    const typeLabel = type ? (' · ' + raw(type.numero_pisos) + ' niveles, ' + raw(type.capacidad_kg) + ' kg') : ' · Todos los tipos';
+    if(totalLabel) totalLabel.textContent = formatNumber_cor(total) + ' equipos · ' + esc(response.etiqueta_anio || response.anio || 'Todos los años') + typeLabel;
     if(summary) summary.textContent = formatNumber_cor(start) + '-' + formatNumber_cor(end) + ' de ' + formatNumber_cor(total) + ' registros';
     if(pageNumber) pageNumber.textContent = String(page);
     if(prev) prev.disabled = offset <= 0;
@@ -473,7 +473,7 @@
     if(body){
       body.innerHTML = rows.length
         ? rows.map(detailRow_cor).join('')
-        : '<tr><td colspan="13" class="iaj-cor-empty-cell">Sin equipos calificados para este año.</td></tr>';
+        : '<tr><td colspan="13" class="iaj-cor-empty-cell">Sin equipos calificados para los filtros seleccionados.</td></tr>';
     }
     bindDetailRows_cor();
   }
@@ -488,18 +488,21 @@
   }
 
   async function loadDetail_cor(){
-    if(!state.selectedYear || !hasPermission_cor('detalle_ver')) return;
+    if(!hasPermission_cor('detalle_ver')) return;
 
     renderDetailLoading_cor();
     const yearSelect = $('iaj-cor-year-select');
-    const sizeSelect = $('iaj-cor-page-size');
     if(yearSelect) yearSelect.disabled = true;
-    if(sizeSelect) sizeSelect.disabled = true;
     setStatus_cor('Actualizando detalle...', 'loading');
 
     try{
       const params = new URLSearchParams();
-      params.set('anio', state.selectedYear);
+      if(state.selectedYear) params.set('anio', state.selectedYear);
+      const type = behaviorType_cor();
+      if(type){
+        params.set('numero_pisos', raw(type.numero_pisos));
+        params.set('capacidad_kg', raw(type.capacidad_kg));
+      }
       params.set('limit', String(state.detailLimit));
       params.set('offset', String(state.detailOffset));
       const response = await fetchJson_cor('/api/instalaciones/ajuste/detalle?' + params.toString());
@@ -511,7 +514,6 @@
       setStatus_cor(error.message, 'error');
     }finally{
       if(yearSelect) yearSelect.disabled = false;
-      if(sizeSelect) sizeSelect.disabled = false;
     }
   }
 
@@ -537,7 +539,7 @@
       }else{
         resetBehavior_cor();
       }
-      if(state.selectedYear && hasPermission_cor('detalle_ver')){
+      if(hasPermission_cor('detalle_ver')){
         state.detailOffset = 0;
         tasks.push(loadDetail_cor());
       }
@@ -565,18 +567,13 @@
 
     $('iaj-cor-type-select')?.addEventListener('change', event => {
       state.selectedType = event.target.value || '';
+      state.detailOffset = 0;
       loadBehavior_cor();
+      loadDetail_cor();
     });
 
     $('iaj-cor-year-select')?.addEventListener('change', event => {
       state.selectedYear = event.target.value || '';
-      state.detailOffset = 0;
-      loadDetail_cor();
-    });
-
-    $('iaj-cor-page-size')?.addEventListener('change', event => {
-      const value = Number(event.target.value);
-      state.detailLimit = [25, 50, 100].includes(value) ? value : DEFAULT_PAGE_SIZE_COR;
       state.detailOffset = 0;
       loadDetail_cor();
     });
@@ -615,8 +612,6 @@
     state.detailOffset = 0;
     state.loaded = false;
 
-    const pageSize = $('iaj-cor-page-size');
-    if(pageSize) pageSize.value = String(DEFAULT_PAGE_SIZE_COR);
     resetBehavior_cor();
   }
 

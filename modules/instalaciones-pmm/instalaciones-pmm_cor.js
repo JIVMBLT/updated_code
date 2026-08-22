@@ -1,27 +1,24 @@
 (function(){
   'use strict';
 
-  const VERSION_COR = '20260819-fase3-v001';
-  const STAGES = Object.freeze({
-    '03-PM':Object.freeze({
-      key:'03',
-      path:'/api/instalaciones/pmm/03-pm',
-      label:'Equipos Proximos a Montar'
-    }),
-    '04-M':Object.freeze({
-      key:'04',
-      path:'/api/instalaciones/pmm/04-m',
-      label:'Equipos en Montaje'
-    })
+  const VERSION_COR = '20260821-tabla-unificada-v003';
+  const PAGE_SIZE_COR = 30;
+  const STAGE_ORDER_COR = Object.freeze(['03-PM', '04-M']);
+  const STAGES_COR = Object.freeze({
+    '03-PM':Object.freeze({ path:'/api/instalaciones/pmm/03-pm', label:'Próximos a montar' }),
+    '04-M':Object.freeze({ path:'/api/instalaciones/pmm/04-m', label:'En montaje' })
   });
 
   const state = {
     ready:false,
     bound:false,
-    loadingAll:false,
+    loading:false,
+    page:1,
+    statusFilter:'',
+    supervisorFilter:'',
     stages:{
-      '03-PM':{ page:1, loading:false, forbidden:false, error:null, response:null, visualCatalog:new Map() },
-      '04-M':{ page:1, loading:false, forbidden:false, error:null, response:null, visualCatalog:new Map() }
+      '03-PM':{ forbidden:false, error:null, response:null, visualCatalog:new Map() },
+      '04-M':{ forbidden:false, error:null, response:null, visualCatalog:new Map() }
     }
   };
 
@@ -40,7 +37,6 @@
     const view = getView_cor();
     if(!view) throw new Error('No existe la vista view-instalaciones-pmm.');
     if(view.dataset.ipmmCorReady === '1') return view;
-
     const response = await fetch(
       './modules/instalaciones-pmm/instalaciones-pmm_cor.html?v=' + VERSION_COR,
       { cache:'no-store' }
@@ -66,7 +62,7 @@
     const text = await response.text();
     let json = null;
     try{ json = text ? JSON.parse(text) : null; }
-    catch(_error){ throw new Error('El backend respondio contenido no JSON.'); }
+    catch(_error){ throw new Error('El backend respondió contenido no JSON.'); }
     if(!response.ok || (json && json.ok === false)){
       const error = new Error((json && (json.message || json.error)) || ('Error HTTP ' + response.status));
       error.status = response.status;
@@ -76,9 +72,17 @@
     return json || {};
   }
 
+  function formatTimestamp_cor(value){
+    const date = value ? new Date(value) : new Date();
+    if(Number.isNaN(date.getTime())) return '';
+    const pad = number => String(number).padStart(2,'0');
+    return pad(date.getDate()) + '/' + pad(date.getMonth() + 1) + '/' + date.getFullYear() +
+      ' - ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
   function formatDate_cor(value){
     const text = raw(value);
-    if(!text || ['-','.','N/A'].includes(text.toUpperCase())) return '\u2014';
+    if(!text || ['-','.','N/A'].includes(text.toUpperCase())) return '—';
     const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if(iso) return iso[3] + '/' + iso[2] + '/' + iso[1];
     const slash = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
@@ -95,58 +99,88 @@
     return text;
   }
 
-  function formatTimestamp_cor(value){
-    const date = value ? new Date(value) : new Date();
-    if(Number.isNaN(date.getTime())) return '';
-    const pad = number => String(number).padStart(2,'0');
-    return pad(date.getDate()) + '/' + pad(date.getMonth() + 1) + '/' + date.getFullYear() +
-      ' - ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  function dateSortValue_cor(value){
+    const text = raw(value);
+    if(!text || text === '-' || text === '.') return null;
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(iso) return Number(iso[1] + iso[2] + iso[3]);
+    const slash = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if(slash) return Number(slash[3] + String(slash[2]).padStart(2,'0') + String(slash[1]).padStart(2,'0'));
+    const months = {JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12'};
+    const legacy = text.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
+    if(legacy){
+      const month = months[String(legacy[2]).toUpperCase()];
+      if(month){
+        const year = legacy[3].length === 2 ? ('20' + legacy[3]) : legacy[3];
+        return Number(year + month + String(legacy[1]).padStart(2,'0'));
+      }
+    }
+    return null;
   }
 
   function formatPercent_cor(value){
-    if(value === null || value === undefined || raw(value) === '') return '\u2014';
+    if(value === null || value === undefined || raw(value) === '') return '—';
     const number = Number(String(value).replace('%','').replace(',','.'));
-    if(!Number.isFinite(number)) return raw(value) || '\u2014';
+    if(!Number.isFinite(number)) return raw(value) || '—';
     const percent = Math.abs(number) <= 1 ? number * 100 : number;
     return Math.round(percent) + '%';
   }
 
-  function textOrDash_cor(value){ return raw(value) || '\u2014'; }
+  function textOrDash_cor(value){ return raw(value) || '—'; }
 
   function safeColor_cor(value, fallback){
     const text = raw(value);
     return /^#[0-9a-fA-F]{6}$/.test(text) ? text : fallback;
   }
 
-  function stageState_cor(code){ return state.stages[code]; }
-  function stageConfig_cor(code){ return STAGES[code]; }
+  function stableCompare_cor(a,b){
+    const project = raw(a.proyecto).localeCompare(raw(b.proyecto),'es',{sensitivity:'base',numeric:true});
+    if(project !== 0) return project;
+    const reference = raw(a.referencia_sitio).localeCompare(raw(b.referencia_sitio),'es',{sensitivity:'base',numeric:true});
+    if(reference !== 0) return reference;
+    return Number(a.id_ins_fl || 0) - Number(b.id_ins_fl || 0);
+  }
+
+  function rowCompare_cor(a,b){
+    const statusCompare = STAGE_ORDER_COR.indexOf(raw(a.estatus)) - STAGE_ORDER_COR.indexOf(raw(b.estatus));
+    if(statusCompare !== 0) return statusCompare;
+    if(raw(a.estatus) === '03-PM'){
+      const aDate = dateSortValue_cor(a.fecha_posible_recepcion_cubo);
+      const bDate = dateSortValue_cor(b.fecha_posible_recepcion_cubo);
+      if(aDate !== null && bDate === null) return -1;
+      if(aDate === null && bDate !== null) return 1;
+      if(aDate !== null && bDate !== null && aDate !== bDate) return aDate - bDate;
+    }
+    return stableCompare_cor(a,b);
+  }
 
   function updateVisualCatalog_cor(code, response){
-    const stage = stageState_cor(code);
+    const stage = state.stages[code];
     stage.visualCatalog = new Map();
     const visual = response && response.estados_visuales ? response.estados_visuales : {};
     const catalog = Array.isArray(visual.catalogo) ? visual.catalogo : [];
-    const statusRows = visual.por_estatus && Array.isArray(visual.por_estatus[code])
+    const byStatus = visual.por_estatus && Array.isArray(visual.por_estatus[code])
       ? visual.por_estatus[code]
       : [];
-    catalog.concat(statusRows).forEach(item => {
+    catalog.concat(byStatus).forEach(item => {
       const key = raw(item && item.codigo);
       if(key && !stage.visualCatalog.has(key)) stage.visualCatalog.set(key,item);
     });
   }
 
-  function visualItemsForRow_cor(code, row){
-    const catalog = stageState_cor(code).visualCatalog;
+  function visualItemsForRow_cor(row){
+    const stage = state.stages[raw(row && row.estatus)];
+    if(!stage) return [];
     const codes = Array.isArray(row && row.estados_visuales_codigos) ? row.estados_visuales_codigos : [];
-    return codes.map(item => catalog.get(raw(item))).filter(Boolean);
+    return codes.map(code => stage.visualCatalog.get(raw(code))).filter(Boolean);
   }
 
   function visualBadge_cor(item, withName){
     if(!item) return '';
-    const emoji = raw(item.emoji) || '\u2022';
+    const emoji = raw(item.emoji) || '•';
     const name = raw(item.nombre) || raw(item.codigo) || 'Alerta';
     const description = raw(item.descripcion);
-    const title = description ? (name + ' \u00b7 ' + description) : name;
+    const title = description ? (name + ' · ' + description) : name;
     const text = safeColor_cor(item.color_texto,'#0f172a');
     const background = safeColor_cor(item.color_fondo,'#f8fafc');
     const border = safeColor_cor(item.color_borde,'#cbd5e1');
@@ -156,22 +190,41 @@
       '<span aria-hidden="true">' + esc(emoji) + '</span>' + (withName ? '<span>' + esc(name) + '</span>' : '') + '</span>';
   }
 
-  function visualCell_cor(code, row){
-    const items = visualItemsForRow_cor(code,row);
-    if(!items.length) return '<span class="ipmm-cor-no-visual-state">\u2014</span>';
+  function visualCell_cor(row){
+    const items = visualItemsForRow_cor(row);
+    if(!items.length) return '<span class="ipmm-cor-no-visual-state">—</span>';
     return '<div class="ipmm-cor-visual-list">' + items.map(item => visualBadge_cor(item,false)).join('') + '</div>';
   }
 
-  function renderLegend_cor(code){
-    const key = stageConfig_cor(code).key;
-    const root = $('ipmm-cor-legend-' + key);
+  function renderLegend_cor(){
+    const root = $('ipmm-cor-legend');
     if(!root) return;
-    const items = Array.from(stageState_cor(code).visualCatalog.values());
+    const selectedStatuses = state.statusFilter ? [state.statusFilter] : STAGE_ORDER_COR;
+    const items = [];
+    const seen = new Set();
+    selectedStatuses.forEach(code => {
+      state.stages[code].visualCatalog.forEach(item => {
+        const key = raw(item && item.codigo);
+        if(key && !seen.has(key)){
+          seen.add(key);
+          items.push(item);
+        }
+      });
+    });
+    items.sort((a,b)=>(Number(a.prioridad)||100)-(Number(b.prioridad)||100));
     root.hidden = !items.length;
     root.innerHTML = items.length
       ? '<strong>Alertas Reporte Instalaciones</strong><div class="ipmm-cor-visual-legend-items">' +
         items.map(item => visualBadge_cor(item,true)).join('') + '</div>'
       : '';
+  }
+
+  function projectButton_cor(row){
+    const id = raw(row && row.id_proyecto);
+    const project = raw(row && row.proyecto);
+    if(!project) return '—';
+    return '<button type="button" class="ipmm-cor-link" data-ipmm-project-link="1"' +
+      ' data-ipmm-project-id="' + esc(id) + '" data-ipmm-project-name="' + esc(project) + '">' + esc(project) + '</button>';
   }
 
   function equipmentButton_cor(row){
@@ -182,17 +235,14 @@
       ' data-ipmm-project="' + esc(project) + '" data-ipmm-reference="' + esc(reference) + '">' + esc(reference) + '</button>';
   }
 
-  function projectButton_cor(row){
-    const id = raw(row && row.id_proyecto);
-    const project = raw(row && row.proyecto);
-    if(!project) return '\u2014';
-    return '<button type="button" class="ipmm-cor-link" data-ipmm-project-link="1"' +
-      ' data-ipmm-project-id="' + esc(id) + '" data-ipmm-project-name="' + esc(project) + '">' + esc(project) + '</button>';
+  function statusChip_cor(status){
+    const code = raw(status);
+    return '<span class="ipmm-cor-status-chip ipmm-cor-status-' + (code === '04-M' ? '04' : '03') + '">' + esc(code || '—') + '</span>';
   }
 
   function daysCell_cor(value){
     const text = raw(value);
-    if(!text) return '\u2014';
+    if(!text) return '—';
     const number = Number(text.replace(',','.'));
     let className = 'ipmm-cor-days';
     if(Number.isFinite(number) && number < 0) className += ' is-late';
@@ -200,26 +250,18 @@
     return '<span class="' + className + '">' + esc(text) + '</span>';
   }
 
-  function row03_cor(row){
+  function unifiedRow_cor(row){
+    const is03 = raw(row.estatus) === '03-PM';
+    const progress = is03 ? row.avance_oc : row.avance_mo;
+    const keyDate = is03 ? row.fecha_posible_recepcion_cubo : row.fecha_ccr;
     return '<tr>' +
+      '<td>' + statusChip_cor(row.estatus) + '</td>' +
       '<td>' + esc(textOrDash_cor(row.supervisor_fl)) + '</td>' +
-      '<td>' + visualCell_cor('03-PM',row) + '</td>' +
-      '<td><span class="ipmm-cor-percent">' + esc(formatPercent_cor(row.avance_oc)) + '</span></td>' +
-      '<td class="ipmm-cor-date">' + esc(formatDate_cor(row.fecha_posible_recepcion_cubo)) + '</td>' +
+      '<td>' + visualCell_cor(row) + '</td>' +
+      '<td><span class="ipmm-cor-percent">' + esc(formatPercent_cor(progress)) + '</span></td>' +
+      '<td class="ipmm-cor-date">' + esc(formatDate_cor(keyDate)) + '</td>' +
       '<td>' + projectButton_cor(row) + '</td>' +
       '<td>' + equipmentButton_cor(row) + '</td>' +
-      '<td class="ipmm-cor-comment">' + esc(textOrDash_cor(row.comentarios_fl)) + '</td>' +
-      '</tr>';
-  }
-
-  function row04_cor(row){
-    return '<tr>' +
-      '<td>' + esc(textOrDash_cor(row.supervisor_fl)) + '</td>' +
-      '<td>' + visualCell_cor('04-M',row) + '</td>' +
-      '<td><span class="ipmm-cor-percent">' + esc(formatPercent_cor(row.avance_mo)) + '</span></td>' +
-      '<td>' + projectButton_cor(row) + '</td>' +
-      '<td>' + equipmentButton_cor(row) + '</td>' +
-      '<td class="ipmm-cor-date">' + esc(formatDate_cor(row.fecha_ccr)) + '</td>' +
       '<td>' + esc(textOrDash_cor(row.subcontratista)) + '</td>' +
       '<td class="ipmm-cor-date">' + esc(formatDate_cor(row.fecha_inicio_montaje)) + '</td>' +
       '<td class="ipmm-cor-date">' + esc(formatDate_cor(row.fecha_fin_montaje_planeado)) + '</td>' +
@@ -230,123 +272,146 @@
       '</tr>';
   }
 
-  function renderStage_cor(code){
-    const config = stageConfig_cor(code);
-    const stage = stageState_cor(code);
-    const response = stage.response || {};
-    const pagination = response.pagination || {};
-    const rows = Array.isArray(response.data) ? response.data : [];
-    const total = Number(pagination.total || 0);
-    const page = Math.max(1,Number(pagination.page || stage.page || 1));
-    const totalPages = Math.max(1,Number(pagination.total_pages || 0) || 1);
-    const key = config.key;
-    const body = $('ipmm-cor-body-' + key);
-    const loading = $('ipmm-cor-loading-' + key);
-    const error = $('ipmm-cor-error-' + key);
-    const wrap = $('ipmm-cor-table-wrap-' + key);
-    const footer = $('ipmm-cor-footer-' + key);
-    const totalLabel = $('ipmm-cor-total-' + key);
-
-    if(loading) loading.hidden = !stage.loading;
-    if(error){
-      error.hidden = !stage.error;
-      error.dataset.type = stage.error ? 'error' : '';
-      error.textContent = stage.error || '';
-    }
-    if(totalLabel) totalLabel.textContent = total.toLocaleString('es-MX') + ' equipo(s)';
-    if(wrap) wrap.hidden = stage.loading || !!stage.error;
-    if(footer) footer.hidden = stage.loading || !!stage.error;
-    if(body){
-      body.innerHTML = rows.length
-        ? rows.map(code === '03-PM' ? row03_cor : row04_cor).join('')
-        : '<tr><td class="ipmm-cor-empty" colspan="' + (code === '03-PM' ? 7 : 13) + '">Sin equipos en este estatus.</td></tr>';
-    }
-
-    renderLegend_cor(code);
-
-    const range = $('ipmm-cor-range-' + key);
-    const pageText = $('ipmm-cor-page-' + key);
-    const prev = $('ipmm-cor-prev-' + key);
-    const next = $('ipmm-cor-next-' + key);
-    const start = total ? ((page - 1) * 30 + 1) : 0;
-    const end = total ? Math.min((page - 1) * 30 + rows.length,total) : 0;
-    if(range) range.textContent = total ? ('Mostrando ' + start + '-' + end + ' de ' + total.toLocaleString('es-MX')) : '0 registros';
-    if(pageText) pageText.textContent = page + ' / ' + totalPages;
-    if(prev) prev.disabled = stage.loading || page <= 1;
-    if(next) next.disabled = stage.loading || page >= totalPages;
+  function allRows_cor(){
+    return STAGE_ORDER_COR.flatMap(code => {
+      const response = state.stages[code].response || {};
+      const rows = Array.isArray(response.data) ? response.data : [];
+      return rows.map(row => Object.assign({ estatus:code }, row));
+    }).sort(rowCompare_cor);
   }
 
-  function renderGlobal_cor(){
-    const allowed = Object.keys(STAGES).filter(code => !stageState_cor(code).forbidden);
-    Object.keys(STAGES).forEach(code => {
-      const card = $('ipmm-cor-card-' + stageConfig_cor(code).key);
-      if(card) card.hidden = stageState_cor(code).forbidden;
+  function filteredRows_cor(){
+    return allRows_cor().filter(row => {
+      if(state.statusFilter && raw(row.estatus) !== state.statusFilter) return false;
+      if(state.supervisorFilter && raw(row.supervisor_fl) !== state.supervisorFilter) return false;
+      return true;
     });
+  }
+
+  function populateSupervisorFilter_cor(){
+    const select = $('ipmm-cor-filter-supervisor');
+    if(!select) return;
+    const current = state.supervisorFilter;
+    const values = [...new Set(allRows_cor().map(row => raw(row.supervisor_fl)).filter(Boolean))]
+      .sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base',numeric:true}));
+    select.innerHTML = '<option value="">Todos</option>' + values.map(value =>
+      '<option value="' + esc(value) + '">' + esc(value) + '</option>'
+    ).join('');
+    if(current && values.includes(current)) select.value = current;
+    else{
+      state.supervisorFilter = '';
+      select.value = '';
+    }
+  }
+
+  function stageTotal_cor(code){
+    const stage = state.stages[code];
+    if(stage.forbidden || !stage.response) return 0;
+    return Number(stage.response.pagination && stage.response.pagination.total) || 0;
+  }
+
+  function renderKpis_cor(){
+    const total03 = stageTotal_cor('03-PM');
+    const total04 = stageTotal_cor('04-M');
+    if($('ipmm-cor-kpi-03')) $('ipmm-cor-kpi-03').textContent = total03.toLocaleString('es-MX');
+    if($('ipmm-cor-kpi-04')) $('ipmm-cor-kpi-04').textContent = total04.toLocaleString('es-MX');
+    if($('ipmm-cor-kpi-total')) $('ipmm-cor-kpi-total').textContent = (total03 + total04).toLocaleString('es-MX');
+  }
+
+  function render_cor(){
+    const allowed = STAGE_ORDER_COR.filter(code => !state.stages[code].forbidden);
+    const errors = STAGE_ORDER_COR.map(code => state.stages[code].error).filter(Boolean);
     const global = $('ipmm-cor-global-message');
+    const listCard = getView_cor() && getView_cor().querySelector('.ipmm-cor-list-card');
+    const kpis = $('ipmm-cor-kpis');
+    const loading = $('ipmm-cor-loading');
+    const error = $('ipmm-cor-error');
+    const wrap = $('ipmm-cor-table-wrap');
+    const footer = $('ipmm-cor-footer');
+
     if(global){
       global.hidden = allowed.length > 0;
-      global.textContent = allowed.length ? '' : 'No tienes permiso para consultar las tablas de PM&M.';
+      global.textContent = allowed.length ? '' : 'No tienes permiso para consultar 03-PM ni 04-M.';
     }
+    if(listCard) listCard.hidden = allowed.length === 0;
+    if(kpis) kpis.hidden = allowed.length === 0;
+    if(allowed.length === 0) return;
+
+    if(loading) loading.hidden = !state.loading;
+    if(error){
+      error.hidden = !errors.length;
+      error.dataset.type = errors.length ? 'error' : '';
+      error.textContent = errors.join(' · ');
+    }
+    if(wrap) wrap.hidden = state.loading;
+    if(footer) footer.hidden = state.loading;
+
+    const rows = filteredRows_cor();
+    const total = rows.length;
+    const totalPages = Math.max(1,Math.ceil(total / PAGE_SIZE_COR));
+    state.page = Math.max(1,Math.min(state.page,totalPages));
+    const startIndex = (state.page - 1) * PAGE_SIZE_COR;
+    const pageRows = rows.slice(startIndex,startIndex + PAGE_SIZE_COR);
+    const body = $('ipmm-cor-body');
+    if(body){
+      body.innerHTML = pageRows.length
+        ? pageRows.map(unifiedRow_cor).join('')
+        : '<tr><td class="ipmm-cor-empty" colspan="14">Sin equipos para los filtros seleccionados.</td></tr>';
+    }
+
+    if($('ipmm-cor-list-total')) $('ipmm-cor-list-total').textContent = total.toLocaleString('es-MX') + ' equipo(s)';
+    if($('ipmm-cor-range')){
+      const start = total ? startIndex + 1 : 0;
+      const end = total ? Math.min(startIndex + pageRows.length,total) : 0;
+      $('ipmm-cor-range').textContent = total ? ('Mostrando ' + start + '-' + end + ' de ' + total.toLocaleString('es-MX')) : '0 registros';
+    }
+    if($('ipmm-cor-page')) $('ipmm-cor-page').textContent = state.page + ' / ' + totalPages;
+    if($('ipmm-cor-prev')) $('ipmm-cor-prev').disabled = state.loading || state.page <= 1;
+    if($('ipmm-cor-next')) $('ipmm-cor-next').disabled = state.loading || state.page >= totalPages;
+
+    renderKpis_cor();
+    renderLegend_cor();
   }
 
-  async function loadStage_cor(code, options){
-    const config = stageConfig_cor(code);
-    const stage = stageState_cor(code);
-    const nextPage = Number(options && options.page) || stage.page || 1;
-    stage.page = Math.max(1,nextPage);
-    stage.loading = true;
+  async function loadStage_cor(code){
+    const stage = state.stages[code];
     stage.error = null;
     stage.forbidden = false;
-    renderStage_cor(code);
-
     try{
-      const response = await apiGet_cor(config.path + '?page=' + encodeURIComponent(stage.page));
+      const response = await apiGet_cor(STAGES_COR[code].path + '?page=1&page_size=5000');
       stage.response = response || {};
-      stage.page = Number(response && response.pagination && response.pagination.page) || stage.page;
       updateVisualCatalog_cor(code,response);
     }catch(error){
-      const status = Number(error && error.status);
-      if(status === 403 || error && error.code === 'INSTALACIONES_PMM_FORBIDDEN'){
+      if(Number(error && error.status) === 403){
         stage.forbidden = true;
         stage.response = null;
+        stage.visualCatalog = new Map();
       }else{
-        stage.error = error && error.message ? error.message : 'No fue posible cargar la tabla.';
+        stage.error = (STAGES_COR[code].label + ': ' + (error && error.message ? error.message : 'no fue posible cargar los datos'));
+        stage.response = null;
+        stage.visualCatalog = new Map();
       }
-    }finally{
-      stage.loading = false;
-      renderStage_cor(code);
-      renderGlobal_cor();
     }
   }
 
   async function loadAll_cor(){
-    if(state.loadingAll) return;
-    state.loadingAll = true;
+    if(state.loading) return;
+    state.loading = true;
     const refresh = $('ipmm-cor-refresh');
-    if(refresh) refresh.disabled = true;
     const status = $('ipmm-cor-status');
+    if(refresh) refresh.disabled = true;
     if(status) status.textContent = 'Actualizando...';
+    render_cor();
 
-    await Promise.all([
-      loadStage_cor('03-PM',{page:stageState_cor('03-PM').page}),
-      loadStage_cor('04-M',{page:stageState_cor('04-M').page})
-    ]);
+    await Promise.all(STAGE_ORDER_COR.map(loadStage_cor));
+    populateSupervisorFilter_cor();
+    state.loading = false;
+    render_cor();
 
-    const responses = Object.keys(STAGES).map(code => stageState_cor(code).response).filter(Boolean);
+    const responses = STAGE_ORDER_COR.map(code => state.stages[code].response).filter(Boolean);
     const generatedAt = responses.map(item => item.generated_at).filter(Boolean).sort().pop();
     if(status) status.textContent = generatedAt ? ('Actualizado ' + formatTimestamp_cor(generatedAt)) : '';
     if(refresh) refresh.disabled = false;
-    state.loadingAll = false;
-  }
-
-  function changePage_cor(code, delta){
-    const stage = stageState_cor(code);
-    const pagination = stage.response && stage.response.pagination ? stage.response.pagination : {};
-    const current = Number(pagination.page || stage.page || 1);
-    const totalPages = Math.max(1,Number(pagination.total_pages || 1));
-    const target = Math.min(Math.max(current + delta,1),totalPages);
-    if(target === current) return;
-    loadStage_cor(code,{page:target});
   }
 
   function openProject_cor(target){
@@ -354,11 +419,7 @@
     const id = raw(target && target.dataset.ipmmProjectId) || project;
     if(!id || !window.ManttoRouter || typeof window.ManttoRouter.open !== 'function') return;
     window.ManttoRouter.open('detalle',{
-      type:'proyecto',
-      id,
-      projectName:project,
-      source:'instalaciones-pmm',
-      template:'cliente-unificado'
+      type:'proyecto', id, projectName:project, source:'instalaciones-pmm', template:'cliente-unificado'
     });
   }
 
@@ -367,11 +428,8 @@
     const reference = raw(target && target.dataset.ipmmReference);
     if(!project || !reference || !window.ManttoRouter || typeof window.ManttoRouter.open !== 'function') return;
     window.ManttoRouter.open('detalle',{
-      type:'equipo',
-      id:project + '|||' + reference,
-      source:'instalaciones-pmm',
-      projectName:project,
-      referencia_sitio:reference
+      type:'equipo', id:project + '|||' + reference, source:'instalaciones-pmm',
+      projectName:project, referencia_sitio:reference
     });
   }
 
@@ -379,10 +437,27 @@
     if(state.bound) return;
     state.bound = true;
     $('ipmm-cor-refresh')?.addEventListener('click',loadAll_cor);
-    $('ipmm-cor-prev-03')?.addEventListener('click',()=>changePage_cor('03-PM',-1));
-    $('ipmm-cor-next-03')?.addEventListener('click',()=>changePage_cor('03-PM',1));
-    $('ipmm-cor-prev-04')?.addEventListener('click',()=>changePage_cor('04-M',-1));
-    $('ipmm-cor-next-04')?.addEventListener('click',()=>changePage_cor('04-M',1));
+    $('ipmm-cor-filter-status')?.addEventListener('change',event => {
+      state.statusFilter = raw(event.target.value);
+      state.page = 1;
+      render_cor();
+    });
+    $('ipmm-cor-filter-supervisor')?.addEventListener('change',event => {
+      state.supervisorFilter = raw(event.target.value);
+      state.page = 1;
+      render_cor();
+    });
+    $('ipmm-cor-prev')?.addEventListener('click',()=>{
+      if(state.page <= 1) return;
+      state.page -= 1;
+      render_cor();
+    });
+    $('ipmm-cor-next')?.addEventListener('click',()=>{
+      const totalPages = Math.max(1,Math.ceil(filteredRows_cor().length / PAGE_SIZE_COR));
+      if(state.page >= totalPages) return;
+      state.page += 1;
+      render_cor();
+    });
     getView_cor()?.addEventListener('click',event => {
       const project = event.target.closest('[data-ipmm-project-link]');
       if(project){ openProject_cor(project); return; }
@@ -395,13 +470,12 @@
     try{
       await loadHtml_cor();
       bind_cor();
-      renderGlobal_cor();
       await loadAll_cor();
       state.ready = true;
     }catch(error){
       const view = getView_cor();
       if(view){
-        view.innerHTML = '<div class="ipmm-cor-page"><section class="ipmm-cor-card ipmm-cor-head"><div><p class="ipmm-cor-eyebrow">Instalaciones</p><h1>PM&amp;M</h1><p>No fue posible inicializar el modulo.</p></div></section><div class="ipmm-cor-message">' + esc(error && error.message ? error.message : 'Error de inicializacion.') + '</div></div>';
+        view.innerHTML = '<div class="ipmm-cor-page"><section class="ipmm-cor-card ipmm-cor-head"><div><p class="ipmm-cor-eyebrow">Instalaciones</p><h1>PM&amp;M</h1><p>No fue posible inicializar el módulo.</p></div></section><div class="ipmm-cor-message">' + esc(error && error.message ? error.message : 'Error de inicialización.') + '</div></div>';
       }
       console.error('[PMM_cor]',error);
     }

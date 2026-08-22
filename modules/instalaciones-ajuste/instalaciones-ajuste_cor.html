@@ -39,7 +39,7 @@
         <select id="iaj-cor-type-select"
                 data-permission-code="INSTALACIONES_AJUSTE_COMPORTAMIENTO_TIPO_SELECTOR.FILTRAR"
                 data-permission-behavior="disable">
-          <option value="">Selecciona un tipo...</option>
+          <option value="">Todos</option>
         </select>
       </label>
       <div class="iaj-cor-selected-type" id="iaj-cor-selected-type" hidden>
@@ -53,8 +53,8 @@
          data-permission-code="INSTALACIONES_AJUSTE_COMPORTAMIENTO_TIPO_RESUMEN.VER">
       <div class="iaj-cor-empty-state" id="iaj-cor-behavior-empty">
         <span aria-hidden="true">📊</span>
-        <strong>Selecciona un tipo de equipo</strong>
-        <p>El resumen mostrará los promedios por año para Inicio → Real, Inicio → Calidad e Inicio → Cliente.</p>
+        <strong>Todos los tipos</strong>
+        <p>Selecciona un tipo de equipo para mostrar su comportamiento histórico.</p>
       </div>
 
       <div id="iaj-cor-behavior-content" hidden>
@@ -97,22 +97,14 @@
       <div>
         <span class="iaj-cor-step">2</span>
         <div>
-          <h2>Detalle completo por año</h2>
-          <p>Histórico 08-T con fechas y días entre cada paso del proceso de ajuste.</p>
+          <h2>Listado de equipos</h2>
+          <p>Histórico 08-T filtrado por el tipo de equipo y año seleccionados.</p>
         </div>
       </div>
       <div class="iaj-cor-detail-controls">
         <label class="iaj-cor-field iaj-cor-field-compact" for="iaj-cor-year-select">
           <span>Año</span>
           <select id="iaj-cor-year-select"><option value="">Cargando...</option></select>
-        </label>
-        <label class="iaj-cor-field iaj-cor-field-compact" for="iaj-cor-page-size">
-          <span>Mostrar</span>
-          <select id="iaj-cor-page-size">
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
         </label>
       </div>
     </div>
@@ -148,13 +140,14 @@
       </table>
     </div>
 
-    <div class="iaj-cor-pager">
+    <div class="iaj-cor-pager" style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center">
       <span id="iaj-cor-page-summary">0-0 de 0 registros</span>
-      <div>
+      <div style="grid-column:2;width:auto;justify-content:center">
         <button id="iaj-cor-prev" type="button" aria-label="Página anterior">‹</button>
         <strong id="iaj-cor-page-number">1</strong>
         <button id="iaj-cor-next" type="button" aria-label="Página siguiente">›</button>
       </div>
+      <span class="iaj-cor-page-size-note" style="justify-self:end">30 por página</span>
     </div>
   </section>
 </div>

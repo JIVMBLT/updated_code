@@ -63,9 +63,11 @@
 .idb-cor-doc-missing{background:#fff1f2;color:#be123c;border:1px solid #ffe4e6}
 .idb-cor-doc-neutral{background:#f4f6f9;color:#7b8798;border:1px solid #e5eaf1}
 .idb-cor-doc-pct{display:inline-flex;min-width:48px;justify-content:center;font-weight:950}.idb-cor-doc-pct.good{color:var(--idb-success)}.idb-cor-doc-pct.mid{color:var(--idb-warning)}.idb-cor-doc-pct.low{color:var(--idb-danger)}
-.idb-cor-documentation-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;color:#667085;font-size:10px;font-weight:800;flex-wrap:wrap}
+.idb-cor-documentation-foot{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;margin-top:10px;color:#667085;font-size:10px;font-weight:800}
+.idb-cor-documentation-foot>span:last-child{justify-self:end}
+.idb-cor-documentation-pages{justify-content:center}
 .idb-cor-documentation-pages{display:flex;align-items:center;gap:6px}.idb-cor-documentation-pages button{width:30px;height:30px;border:1px solid #cfd8e8;border-radius:9px;background:#fff;color:#344054;font-weight:900;cursor:pointer}.idb-cor-documentation-pages button.active{background:var(--idb-blue);border-color:var(--idb-blue);color:#fff}.idb-cor-documentation-pages button:disabled{opacity:.4;cursor:not-allowed}
-@media(max-width:900px){.idb-cor-documentation-title{align-items:stretch}.idb-cor-documentation-summary{justify-content:flex-start}}
+@media(max-width:900px){.idb-cor-documentation-title{align-items:stretch}.idb-cor-documentation-summary{justify-content:flex-start}.idb-cor-documentation-foot{grid-template-columns:1fr;justify-items:center;text-align:center}.idb-cor-documentation-foot>span:last-child{justify-self:center}}
 
 /* Modo Junta · celdas fantasma reactivas V003 */
 .idb-cor-edit-hint{display:inline-flex;align-items:center;color:#667085;font-weight:800}

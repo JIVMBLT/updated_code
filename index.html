@@ -24,9 +24,9 @@
 <link href="./modules/equipos-criticos/equipos-criticos.css?v=20260717-fix5" rel="stylesheet"/>
 <link href="./modules/portafolio/portafolio.css?v=20260817-lote-cobranza-uni-v001" rel="stylesheet"/>
 <link href="./modules/proyectos/proyectos.css?v=20260706-v001" rel="stylesheet"/>
-<link href="./modules/instalaciones-proyectos/instalaciones-proyectos.css?v=20260713-desarrollo-aiven" rel="stylesheet"/>
-<link href="./modules/instalaciones-dashboard/instalaciones-dashboard_cor.css?v=20260819-dashboard-modo-junta-orden-v002" rel="stylesheet"/>
-<link href="./modules/instalaciones-cerrados/instalaciones-cerrados.css?v=20260725-v001" rel="stylesheet"/>
+<link href="./modules/instalaciones-proyectos/instalaciones-proyectos.css?v=20260821-activos-paginados-v004" rel="stylesheet"/>
+<link href="./modules/instalaciones-dashboard/instalaciones-dashboard_cor.css?v=20260821-paginador-centrado-v003" rel="stylesheet"/>
+<link href="./modules/instalaciones-cerrados/instalaciones-cerrados.css?v=20260821-paginacion-v002" rel="stylesheet"/>
 <link href="./modules/ventas-fotos-mapa/ventas-fotos-mapa.css?v=20260726-fix-tabs-estados-v002" rel="stylesheet"/>
 <link href="./modules/ventas-clientes/ventas-clientes.css?v=20260729-fase3-v003" rel="stylesheet"/>
 <link href="./modules/ventas-clientes-nuevo/ventas-clientes-nuevo.css?v=20260729-v009" rel="stylesheet"/>
@@ -40,11 +40,11 @@
 <link href="./modules/ventas-proyeccion/ventas-proyeccion.css?v=20260804-paginado-f2-v001" rel="stylesheet"/>
 <link href="./modules/ventas-perdidos/ventas-perdidos.css?v=20260804-paginado-f2-v001" rel="stylesheet"/>
 <link href="./modules/instalaciones-concentrado-cliente/instalaciones-concentrado-cliente.css?v=20260713-v001" rel="stylesheet"/>
-<link href="./modules/instalaciones-reporte/instalaciones-reporte_cor.css?v=20260818-pdf-desarrollo-v014-encabezados" rel="stylesheet"/>
-<link href="./modules/instalaciones-ajuste/instalaciones-ajuste_cor.css?v=20260818-fase2-v001" rel="stylesheet"/>
-<link href="./modules/instalaciones-carpetas/instalaciones-carpetas_cor.css?v=20260818-carpetas-observaciones-v002" rel="stylesheet"/>
+<link href="./modules/instalaciones-reporte/instalaciones-reporte_cor.css?v=20260821-orden-vistas-v002" rel="stylesheet"/>
+<link href="./modules/instalaciones-ajuste/instalaciones-ajuste_cor.css?v=20260821-paginacion-30-v002" rel="stylesheet"/>
+<link href="./modules/instalaciones-carpetas/instalaciones-carpetas_cor.css?v=20260821-carpetas-disponibles-v002" rel="stylesheet"/>
 <link href="./modules/instalaciones-documentacion/instalaciones-documentacion_cor.css?v=20260818-documentacion-fase2-v001" rel="stylesheet"/>
-<link href="./modules/instalaciones-pmm/instalaciones-pmm_cor.css?v=20260819-fase3-v001" rel="stylesheet"/>
+<link href="./modules/instalaciones-pmm/instalaciones-pmm_cor.css?v=20260821-tabla-unificada-v003" rel="stylesheet"/>
 <link href="./modules/callcenter/callcenter.css?v=cc-v005" rel="stylesheet"/>
 <link href="./modules/dashboard-operativo/dashboard-operativo.css?v=20260707-v001" rel="stylesheet"/>
 <link href="./modules/movimientos-portafolio/movimientos-portafolio.css?v=20260707-v003" rel="stylesheet"/>
@@ -311,7 +311,7 @@
 <button class="side-item" data-permission="instalaciones_cerrados" data-route="instalaciones-cerrados" type="button"><span>✅</span><b>Proyectos Cerrados</b></button>
 </div>
 </section>
-<section class="side-group" data-group="cobranza">
+<section class="side-group" data-company="CORELLIAN" data-group="cobranza">
 <button aria-controls="side-group-cobranza" aria-expanded="false" class="side-group-toggle" type="button">
 <span class="side-group-icon">💰</span><b>Cobranza</b><i>⌄</i>
 </button>
@@ -756,15 +756,15 @@
 <script src="./core/data-sync.js?v=20260805-sync-silenciosa-visor-v008"></script>
 <script src="./core/router.js?v=20260819-instalaciones-pmm-fase3-v001"></script>
 <script src="./core/estados-visuales.js?v=20260723-v031-2a"></script>
-<script src="./core/pdf/pdf-engine.js?v=20260716-v003"></script>
+<script src="./core/pdf/pdf-engine.js?v=20260821-emojis-v001"></script>
 <script src="./modules/home/home.js?v=20260819-session-refresh-home-v001"></script>
 <script src="./modules/resumen-dia/resumen-dia.js?v=20260814-project-name-v010"></script>
-<script src="./modules/equipos-criticos/equipos-criticos.js?v=20260804-columnas-v001"></script>
+<script src="./modules/equipos-criticos/equipos-criticos.js?v=20260821-pdf-emojis-v001"></script>
 <script src="./modules/portafolio/portafolio.js?v=20260817-lote-cobranza-uni-v001"></script>
 <script src="./modules/proyectos/proyectos.js?v=20260717-proyectos-responsabilidad-v001"></script>
 <script src="./modules/instalaciones-dashboard/instalaciones-dashboard_cor.js?v=20260819-dashboard-modo-junta-orden-v002"></script>
-<script src="./modules/instalaciones-proyectos/instalaciones-proyectos.js?v=20260726-fix-tabs-activos-v003"></script>
-<script src="./modules/instalaciones-cerrados/instalaciones-cerrados.js?v=20260726-fix-tabs-estados-v002"></script>
+<script src="./modules/instalaciones-proyectos/instalaciones-proyectos.js?v=20260821-activos-paginados-v004"></script>
+<script src="./modules/instalaciones-cerrados/instalaciones-cerrados.js?v=20260821-paginacion-v002"></script>
 <script src="./modules/ventas-dashboard/ventas-dashboard-pdf.js?v=20260805-b4-v001"></script>
 <script src="./modules/ventas-dashboard/ventas-dashboard.js?v=20260805-b3-v001"></script>
 <script src="./modules/ventas-fotos-mapa/ventas-fotos-mapa.js?v=20260817-fase5-fotos-mapa-carrusel-v001"></script>
@@ -787,11 +787,11 @@
 <script src="./modules/ventas-asignacion-redes-detalle/ventas-asignacion-redes-detalle.js?v=20260819-permisos-alcance-v001"></script>
 <script src="./modules/ventas-asignacion-redes-formulario/ventas-asignacion-redes-formulario.js?v=20260819-permisos-alcance-v001"></script>
 <script src="./modules/instalaciones-concentrado-cliente/instalaciones-concentrado-cliente.js?v=20260713-v001"></script>
-<script src="./modules/instalaciones-reporte/instalaciones-reporte_cor.js?v=20260818-pdf-desarrollo-v011-landscape"></script>
-<script src="./modules/instalaciones-ajuste/instalaciones-ajuste_cor.js?v=20260818-fase3-v001"></script>
-<script src="./modules/instalaciones-carpetas/instalaciones-carpetas_cor.js?v=20260818-carpetas-observaciones-v002"></script>
-<script src="./modules/instalaciones-documentacion/instalaciones-documentacion_cor.js?v=20260818-documentacion-fase2-v001"></script>
-<script src="./modules/instalaciones-pmm/instalaciones-pmm_cor.js?v=20260819-fase3-v001"></script>
+<script src="./modules/instalaciones-reporte/instalaciones-reporte_cor.js?v=20260821-orden-vistas-v002"></script>
+<script src="./modules/instalaciones-ajuste/instalaciones-ajuste_cor.js?v=20260821-paginacion-30-v002"></script>
+<script src="./modules/instalaciones-carpetas/instalaciones-carpetas_cor.js?v=20260821-carpetas-disponibles-v002"></script>
+<script src="./modules/instalaciones-documentacion/instalaciones-documentacion_cor.js?v=20260821-pendientes-supervisor-v001"></script>
+<script src="./modules/instalaciones-pmm/instalaciones-pmm_cor.js?v=20260821-tabla-unificada-v003"></script>
 <script src="./modules/callcenter/callcenter.js?v=cc-v006"></script>
 <script src="./modules/dashboard-operativo/dashboard-operativo.js?v=20260718-v004"></script>
 <script src="./modules/movimientos-portafolio/movimientos-portafolio.js?v=20260817-fase6-cortes-semanales-v001"></script>
@@ -810,7 +810,7 @@
 <script src="./modules/experimental/experimental.js?v=20260806-fase7-2-v001"></script>
 <script src="./modules/cobranza-uni/cobranza-uni.js?v=20260817-lote-cobranza-uni-v001"></script>
 <script src="./core/details.js?v=20260817-fase5-fotos-mapa-carrusel-v001"></script>
-<script src="./core/user-viewer.js?v=20260805-visor-completo-v001"></script>
+<script src="./core/user-viewer.js?v=20260821-cobranza-empresa-v001"></script>
 <script src="./core/app.js?v=20260817-notif-sync30-v001"></script>
 </body>
 </html>

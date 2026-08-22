@@ -145,13 +145,18 @@
             <option value="">Selecciona una carpeta...</option>
           </select>
         </label>
-        <button class="icarp-cor-btn icarp-cor-btn-primary"
-                id="icarp-cor-save"
-                type="submit"
-                data-viewer-mutation="true"
-                data-permission-code="INSTALACIONES_CARPETAS_RELACIONADOR_FORMULARIO.CREAR">
-          Guardar relacion
-        </button>
+        <div class="icarp-cor-relation-actions">
+          <button class="icarp-cor-btn icarp-cor-btn-secondary" id="icarp-cor-relation-clear" type="button">
+            Limpiar
+          </button>
+          <button class="icarp-cor-btn icarp-cor-btn-primary"
+                  id="icarp-cor-save"
+                  type="submit"
+                  data-viewer-mutation="true"
+                  data-permission-code="INSTALACIONES_CARPETAS_RELACIONADOR_FORMULARIO.CREAR">
+            Guardar relacion
+          </button>
+        </div>
       </form>
 
       <p class="icarp-cor-relation-note">Al guardar, la relacion se registra en Aiven y los tres paneles se actualizan de forma selectiva, sin recargar el modulo completo.</p>

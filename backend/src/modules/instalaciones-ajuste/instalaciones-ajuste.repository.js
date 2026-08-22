@@ -48,15 +48,21 @@ async function listTypeSource_cor(numeroPisos, capacidadKg) {
   return rows;
 }
 
-async function listYearSource_cor(yearFilter) {
+async function listYearSource_cor(yearFilter, typeFilter) {
   const params = [];
   const extra = [];
 
   if (yearFilter && yearFilter.sin_anio) {
     extra.push("NULLIF(TRIM(COALESCE(f.anio_termino, '')), '') IS NULL");
-  } else {
+  } else if (yearFilter) {
     extra.push("TRIM(COALESCE(f.anio_termino, '')) = ?");
     params.push(yearFilter.valor);
+  }
+
+  if (typeFilter) {
+    extra.push("COALESCE(f.numero_pisos, '') = ?");
+    extra.push("COALESCE(f.capacidad_kg, '') = ?");
+    params.push(typeFilter.numeroPisos, typeFilter.capacidadKg);
   }
 
   const [rows] = await db.query(

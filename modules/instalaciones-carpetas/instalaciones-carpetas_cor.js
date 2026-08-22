@@ -1,7 +1,7 @@
 (function(){
   'use strict';
 
-  const VERSION_COR = '20260818-carpetas-observaciones-v002';
+  const VERSION_COR = '20260821-carpetas-disponibles-v002';
   const API_BASE = (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
   const TABLE_PAGE_SIZE_COR = 30;
 
@@ -396,6 +396,7 @@
     const projectSelect = $('icarp-cor-project-select');
     const folderSelect = $('icarp-cor-folder-select');
     const save = $('icarp-cor-save');
+    const clear = $('icarp-cor-relation-clear');
     const blocked = state.loading || state.saving || !canCreate;
 
     if(projectSelect) projectSelect.disabled = blocked || state.projects.length === 0;
@@ -404,6 +405,18 @@
       save.disabled = blocked || !state.selectedProject || !state.selectedFolder || state.projects.length === 0 || state.availableFolders.length === 0;
       save.textContent = state.saving ? 'Guardando relacion...' : 'Guardar relacion';
     }
+    if(clear) clear.disabled = state.loading || state.saving || (!state.selectedProject && !state.selectedFolder);
+  }
+
+  function clearRelation_cor(){
+    state.selectedProject = '';
+    state.selectedFolder = '';
+    const projectSelect = $('icarp-cor-project-select');
+    const folderSelect = $('icarp-cor-folder-select');
+    if(projectSelect) projectSelect.value = '';
+    if(folderSelect) folderSelect.value = '';
+    setFeedback_cor('', 'ready');
+    updateRelationControls_cor();
   }
 
   function applyPermissionUi_cor(){
@@ -614,6 +627,7 @@
       setFeedback_cor('', 'ready');
       updateRelationControls_cor();
     });
+    $('icarp-cor-relation-clear')?.addEventListener('click', clearRelation_cor);
     $('icarp-cor-relation-form')?.addEventListener('submit', saveRelation_cor);
   }
 

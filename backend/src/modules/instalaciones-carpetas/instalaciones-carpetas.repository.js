@@ -100,6 +100,26 @@ async function listRegisteredFolders_cor(executor) {
   return rows;
 }
 
+async function listAvailableFolders_cor(executor) {
+  const conn = executor_cor(executor);
+  const [rows] = await conn.query(
+    `SELECT
+       c.id_carpeta,
+       c.nombre_carpeta,
+       c.carpeta_id
+     FROM instalaciones_drive_carpetas c
+     WHERE c.activo = 1
+       AND NOT EXISTS (
+         SELECT 1
+         FROM instalaciones_proyecto_drive r
+         WHERE r.id_carpeta = c.id_carpeta
+           AND r.activo = 1
+       )
+     ORDER BY c.nombre_carpeta ASC, c.id_carpeta ASC`
+  );
+  return rows;
+}
+
 async function listProjectsWithoutFolder_cor(executor) {
   const conn = executor_cor(executor);
   const [rows] = await conn.query(
@@ -133,23 +153,12 @@ async function listProjectsWithoutFolder_cor(executor) {
          ELSE 1
        END AS proyecto_activo
      FROM proyectos p
-     WHERE NOT EXISTS (
-       SELECT 1
-       FROM instalaciones_drive_carpetas c
-       WHERE c.activo = 1
-         AND (
-           UPPER(TRIM(c.nombre_carpeta)) COLLATE utf8mb4_unicode_ci =
-             UPPER(TRIM(COALESCE(p.nombre_proyecto, ''))) COLLATE utf8mb4_unicode_ci
-           OR UPPER(TRIM(c.nombre_carpeta)) COLLATE utf8mb4_unicode_ci =
-             UPPER(TRIM(p.id_proyecto)) COLLATE utf8mb4_unicode_ci
-         )
-     )
-       AND NOT EXISTS (
-         SELECT 1
-         FROM instalaciones_proyecto_drive r
-         WHERE r.id_proyecto = p.id_proyecto
-           AND r.activo = 1
-       )
+      WHERE NOT EXISTS (
+          SELECT 1
+          FROM instalaciones_proyecto_drive r
+          WHERE r.id_proyecto = p.id_proyecto
+            AND r.activo = 1
+        )
      ORDER BY p.nombre_proyecto ASC, p.id_proyecto ASC`
   );
   return rows;
@@ -299,6 +308,7 @@ module.exports = {
   getConnection_cor,
   getEffectivePermissionsBulk_cor,
   listRegisteredFolders_cor,
+  listAvailableFolders_cor,
   listProjectsWithoutFolder_cor,
   findProjectByIdForUpdate_cor,
   findFolderByIdForUpdate_cor,
