@@ -20,6 +20,11 @@ function resolvedScope_gnral(source) {
   return context?.alcance || context || null;
 }
 
+function hasUnrestrictedUnitedScope_gnral(source) {
+  const scope = resolvedScope_gnral(source);
+  return Boolean(scope && scope.motor === UNITED_ENGINE && scope.llave_maestra === true);
+}
+
 function visibleUserIds_gnral(source) {
   const context = informationAccessContext_gnral(source);
   if (!context) return [];
@@ -35,9 +40,10 @@ function visibleUserIds_gnral(source) {
 function zoneIds_gnral(source) {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return [];
+  if (scope.llave_maestra === true) return null;
 
-  // UNITED nunca omite los cuartos por tener llave maestra.
-  // usuario_zop sigue siendo la autoridad territorial.
+  // Para usuarios normales, usuario_zop sigue siendo la autoridad territorial.
+  // null se reserva para llave maestra; [] significa fail-closed sin zonas.
   return [...new Set((Array.isArray(scope.zona_ids) ? scope.zona_ids : [])
     .map(Number)
     .filter((id) => Number.isInteger(id) && id > 0))]
@@ -47,6 +53,7 @@ function zoneIds_gnral(source) {
 function zoneCodes_gnral(source) {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return [];
+  if (scope.llave_maestra === true) return null;
   return [...new Set((Array.isArray(scope.zona_codigos) ? scope.zona_codigos : [])
     .map((value) => String(value || '').trim().toUpperCase())
     .filter(Boolean))]
@@ -82,6 +89,7 @@ function safeColumnReference_gnral(columnSql) {
 function buildZoneIdScopeSql_gnral(source, columnSql) {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return failClosedScopeSql_gnral();
+  if (scope.llave_maestra === true) return { sql: '1 = 1', params: [] };
   const ids = zoneIds_gnral(scope);
   if (!ids.length) return failClosedScopeSql_gnral();
   const column = safeColumnReference_gnral(columnSql);
@@ -94,6 +102,7 @@ function buildZoneIdScopeSql_gnral(source, columnSql) {
 function buildZoneCodeScopeSql_gnral(source, columnSql) {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return failClosedScopeSql_gnral();
+  if (scope.llave_maestra === true) return { sql: '1 = 1', params: [] };
   const codes = zoneCodes_gnral(scope);
   if (!codes.length) return failClosedScopeSql_gnral();
   const column = safeColumnReference_gnral(columnSql);
@@ -106,6 +115,7 @@ function buildZoneCodeScopeSql_gnral(source, columnSql) {
 function buildZoneCodeScopeSqlInline_gnral(source, columnSql) {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return failClosedScopeSql_gnral();
+  if (scope.llave_maestra === true) return { sql: '1 = 1', params: [] };
   const codes = zoneCodes_gnral(scope);
   if (!codes.length) return failClosedScopeSql_gnral();
   const column = safeColumnReference_gnral(columnSql);
@@ -126,6 +136,7 @@ function buildPortafolioScopeSql_gnral(source, alias = 'p') {
 function buildPortafolioScopeSqlInline_gnral(source, alias = 'p') {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return failClosedScopeSql_gnral();
+  if (scope.llave_maestra === true) return { sql: '1 = 1', params: [] };
   const ids = zoneIds_gnral(scope);
   if (!ids.length) return failClosedScopeSql_gnral();
   const a = safeAlias_gnral(alias, 'p');
@@ -142,6 +153,7 @@ function buildTicketScopeSql_gnral(source, alias = 't') {
 function buildTicketScopeSqlInline_gnral(source, alias = 't') {
   const scope = resolvedScope_gnral(source);
   if (!scope || scope.motor !== UNITED_ENGINE) return failClosedScopeSql_gnral();
+  if (scope.llave_maestra === true) return { sql: '1 = 1', params: [] };
   const ids = zoneIds_gnral(scope);
   if (!ids.length) return failClosedScopeSql_gnral();
   const a = safeAlias_gnral(alias, 't');
@@ -332,6 +344,8 @@ async function requireAllUnitedZones_gnral(req, res, next) {
     });
   }
 
+  if (scope.llave_maestra === true) return next();
+
   const assignedIds = zoneIds_gnral(scope);
   if (!assignedIds.length) {
     return res.status(403).json({
@@ -408,6 +422,7 @@ async function requireContextualEquipmentScope_gnral(req, res, next) {
 }
 
 module.exports = {
+  hasUnrestrictedUnitedScope_gnral,
   visibleUserIds_gnral,
   zoneIds_gnral,
   zoneCodes_gnral,

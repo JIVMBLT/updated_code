@@ -29,6 +29,7 @@ assert(consultasSource.includes("OR TRIM(COALESCE(t.id_interno, '')) = ?"), 'Det
 const originalLoad = Module._load;
 let permissionSet = new Set();
 let doorMap = new Map();
+let unitedMaster = false;
 
 const groupingRows = {
   OPERACION: { id_agrupacion: 1, codigo: 'OPERACION', nombre: 'Operacion', empresa: 'UNITED', orden: 1, activo: 1 },
@@ -77,19 +78,19 @@ Module._load = function patchedLoad(request, parent, isMain) {
       return {
         normalizeGroupingCompany_gnral: (value) => String(value || '').trim().toUpperCase(),
         resolveInformationDoor_gnral: async (conn, req, grouping) => ({
-          allowed: doorMap.get(grouping.codigo) === true,
-          masterAccess: false,
-          via: doorMap.get(grouping.codigo) === true ? 'DIRECT' : null,
+          allowed: unitedMaster || doorMap.get(grouping.codigo) === true,
+          masterAccess: unitedMaster,
+          via: unitedMaster ? 'DOMINIO_COMPLETO' : (doorMap.get(grouping.codigo) === true ? 'DIRECT' : null),
           grouping
         }),
-        resolveMasterAccess_gnral: async () => ({ enabled: false }),
+        resolveMasterAccess_gnral: async () => ({ enabled: unitedMaster }),
         resolveAlcanceByGrouping_gnral: async (conn, req, grouping, options) => ({
           motor: 'UNITED',
           empresa: 'UNITED',
           llave_maestra: options && options.masterAccess === true,
-          requiere_filtro_zona: true,
-          zona_ids: [4, 5, 6],
-          zona_codigos: ['CNA-01', 'CNA-02', 'CNA-03'],
+          requiere_filtro_zona: !(options && options.masterAccess === true),
+          zona_ids: options && options.masterAccess === true ? null : [4, 5, 6],
+          zona_codigos: options && options.masterAccess === true ? null : ['CNA-01', 'CNA-02', 'CNA-03'],
           agrupacion: grouping.codigo
         })
       };
@@ -131,6 +132,7 @@ const pairedOptions = {
   // Caso critico del fix: permiso PORTAFOLIO + puerta OPERACION no se pueden cruzar.
   permissionSet = new Set(['PORT.VER']);
   doorMap = new Map([['OPERACION', true], ['PORTAFOLIO', false]]);
+  unitedMaster = false;
   let result = await runGuard(pairedOptions);
   assert(result.nextCalled === false, 'Permiso PORTAFOLIO + puerta OPERACION debe fallar cerrado.');
   assert(result.res.statusCode === 403, 'El cruce permiso/puerta debe responder 403.');
@@ -151,6 +153,18 @@ const pairedOptions = {
   assert(result.nextCalled === true, 'Permiso OPERACION + puerta OPERACION debe pasar.');
   assert(result.req.informationAccess.agrupacion.codigo === 'OPERACION', 'El contexto debe conservar OPERACION.');
 
+  // La llave UNITED abre la puerta del mismo par y elimina solo el filtro territorial.
+  permissionSet = new Set(['PORT.VER']);
+  doorMap = new Map([['OPERACION', false], ['PORTAFOLIO', false]]);
+  unitedMaster = true;
+  result = await runGuard(pairedOptions);
+  assert(result.nextCalled === true, 'DOMINIO_COMPLETO UNITED debe abrir la puerta PORTAFOLIO del permiso concedido.');
+  assert(result.req.informationAccess.permission_code === 'PORT.VER', 'La llave no debe cambiar el permiso funcional utilizado.');
+  assert(result.req.informationAccess.agrupacion.codigo === 'PORTAFOLIO', 'La llave debe conservar el emparejamiento PORTAFOLIO.');
+  assert(result.req.informationAccess.llave_maestra === true, 'El contexto debe conservar DOMINIO_COMPLETO UNITED.');
+  assert(result.req.informationAccess.requiere_filtro_zona === false, 'La llave UNITED no debe conservar filtro territorial.');
+  assert(result.req.informationAccess.zona_ids === null, 'La llave UNITED no debe depender de zonas asignadas.');
+
   // Puerta sin permiso funcional: denegacion funcional.
   permissionSet = new Set();
   doorMap = new Map([['OPERACION', true], ['PORTAFOLIO', true]]);
@@ -158,7 +172,14 @@ const pairedOptions = {
   assert(result.nextCalled === false, 'Ninguna puerta debe sustituir el permiso funcional.');
   assert(result.res.payload && result.res.payload.code === 'FUNCTIONAL_PERMISSION_DENIED', 'Sin permiso debe responder FUNCTIONAL_PERMISSION_DENIED.');
 
+  // La misma denegacion funcional aplica aunque DOMINIO_COMPLETO este activo.
+  unitedMaster = true;
+  result = await runGuard(pairedOptions);
+  assert(result.nextCalled === false, 'DOMINIO_COMPLETO no debe autorizar sin permiso funcional.');
+  assert(result.res.payload && result.res.payload.code === 'FUNCTIONAL_PERMISSION_DENIED', 'La llave sin permiso debe fallar por permiso funcional.');
+
   // Compatibilidad: el modo historico sigue funcionando para rutas no migradas.
+  unitedMaster = false;
   permissionSet = new Set(['LEGACY.VER']);
   doorMap = new Map([['OPERACION', true]]);
   result = await runGuard({

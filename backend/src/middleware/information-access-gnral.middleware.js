@@ -412,10 +412,16 @@ function informationAccessZoneIds_gnral(source) {
 
 async function resolveDomainOnlyScope_gnral(connection, req, domain) {
   if (domain === GENERAL_COMPANY) {
+    const master = await resolveMasterAccess_gnral(connection, req, GENERAL_COMPANY);
     return {
-      door: { allowed: true, masterAccess: false, via: 'GENERAL_DEFAULT', grouping: null },
+      door: {
+        allowed: true,
+        masterAccess: master.enabled,
+        via: master.enabled ? (master.source || 'DOMINIO_COMPLETO') : 'GENERAL_DEFAULT',
+        grouping: null
+      },
       grouping: null,
-      scope: resolveAlcanceGnral_gnral(req)
+      scope: resolveAlcanceGnral_gnral(req, { masterAccess: master.enabled })
     };
   }
 

@@ -1,6 +1,15 @@
 'use strict';
 
 const assert = require('assert');
+
+// Los resolvers de permisos cargan el pool por compatibilidad. La prueba usa
+// dobles y no establece conexiones reales.
+process.env.DB_HOST ||= 'localhost';
+process.env.DB_PORT ||= '3306';
+process.env.DB_USER ||= 'test';
+process.env.DB_PASSWORD ||= 'test';
+process.env.DB_NAME ||= 'test';
+process.env.DB_SSL ||= 'false';
 const {
   CROSS_BLOCK_REASON,
   resolveCrossInformationBlock_gnral,
@@ -10,8 +19,21 @@ const {
 
 function mockExecutor() {
   return {
-    async query() {
-      throw new Error('La prueba no esperaba SQL directo del executor.');
+    async query(sql, params = []) {
+      const text = String(sql);
+      if (text.includes('FROM perm_agrupaciones')) {
+        const code = String(params[0] || '').trim().toUpperCase();
+        if (code === 'OPERACION') {
+          return [[{ id_agrupacion: 30, codigo: 'OPERACION', nombre: 'Operacion', empresa: 'UNITED', activo: 1 }]];
+        }
+        if (code === 'GENERAL') {
+          return [[{ id_agrupacion: 1, codigo: 'GENERAL', nombre: 'General', empresa: 'GENERAL', activo: 1 }]];
+        }
+        return [[]];
+      }
+      if (text.includes("tipo_alcance = 'DOMINIO_COMPLETO'")) return [[]];
+      if (text.includes("tipo_alcance = 'AGRUPACION'")) return [[{ id_alcance: 1 }]];
+      throw new Error(`SQL no contemplado por la prueba: ${text}`);
     }
   };
 }

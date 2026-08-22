@@ -90,9 +90,12 @@ function samePositiveIdSet_gnral(left, right) {
 }
 
 function panelResponseData_gnral(req, scope, user) {
+  const general = scope?.alcances?.general || {};
   const corellian = scope?.alcances?.corellian || {};
   const united = scope?.alcances?.united || {};
-  const registros = Number(corellian.llave_maestra ? 1 : 0)
+  const registros = Number(general.llave_maestra ? 1 : 0)
+    + (general.agrupaciones || []).length
+    + Number(corellian.llave_maestra ? 1 : 0)
     + Number(united.llave_maestra ? 1 : 0)
     + (corellian.agrupaciones || []).length
     + (united.agrupaciones || []).length

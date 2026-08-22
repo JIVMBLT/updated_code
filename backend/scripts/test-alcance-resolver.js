@@ -32,6 +32,7 @@ function mockExecutor() {
         const [userId, domain] = params;
         if (Number(userId) === 900 && domain === 'CORELLIAN') return [[{ id_alcance: 1 }]];
         if (Number(userId) === 901 && domain === 'UNITED') return [[{ id_alcance: 2 }]];
+        if (Number(userId) === 902 && domain === 'GENERAL') return [[{ id_alcance: 3 }]];
         return [[]];
       }
 
@@ -77,6 +78,8 @@ async function main() {
   assert.strictEqual(normalizeGroupingCompany_gnral('BLT'), 'GENERAL');
   assert.strictEqual(normalizeGroupingCompany_gnral('United Elevadores'), 'UNITED');
   assert.strictEqual(normalizeGroupingCompany_gnral('Corellian SA de CV'), 'CORELLIAN');
+  assert.strictEqual(normalizeGroupingCompany_gnral('NOT UNITED'), null);
+  assert.strictEqual(normalizeGroupingCompany_gnral('GENERAL SERVICES'), null);
   assert.strictEqual(normalizeGroupingCompany_gnral('otra'), null);
 
   const general = await resolveAlcanceByGrouping_gnral(
@@ -88,6 +91,14 @@ async function main() {
   assert.strictEqual(general.empresa, 'GENERAL');
   assert.strictEqual(general.llave_maestra, false);
   assert.strictEqual(general.agrupacion.empresa_origen, 'BLT');
+
+  const generalMaster = await resolveAlcanceByGrouping_gnral(
+    db,
+    { user: { id_SB: 902, correo: 'master@blt.mx', iniciales: 'GM' } },
+    'SOPORTE'
+  );
+  assert.strictEqual(generalMaster.llave_maestra, true);
+  assert.strictEqual(generalMaster.resolver.llave_maestra_fuente, 'DOMINIO_COMPLETO');
 
   const corellian = await resolveAlcanceByGrouping_gnral(
     db,
@@ -124,6 +135,21 @@ async function main() {
   assert.strictEqual(unitedMaster.llave_maestra, true);
   assert.strictEqual(unitedMaster.resolver.llave_maestra_fuente, 'DOMINIO_COMPLETO');
   assert.strictEqual(unitedMaster.requiere_filtro_zona, false);
+
+  const corellianKeyDoesNotOpenUnited = await resolveAlcanceByGrouping_gnral(
+    db,
+    { user: { id_SB: 900 } },
+    'OPERACION'
+  );
+  assert.strictEqual(corellianKeyDoesNotOpenUnited.llave_maestra, false);
+  assert.deepStrictEqual(corellianKeyDoesNotOpenUnited.zona_ids, []);
+
+  const unitedKeyDoesNotOpenGeneral = await resolveAlcanceByGrouping_gnral(
+    db,
+    { user: { id_SB: 901, correo: 'united@blt.mx', iniciales: 'UM' } },
+    'SOPORTE'
+  );
+  assert.strictEqual(unitedKeyDoesNotOpenGeneral.llave_maestra, false);
 
   const explicitGeneralMaster = await resolveAlcanceByGrouping_gnral(
     db,

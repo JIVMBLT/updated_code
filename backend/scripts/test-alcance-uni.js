@@ -84,7 +84,7 @@ async function run() {
     '1 = 0'
   );
 
-  // La llave maestra abre puertas, pero sigue consultando usuario_zop.
+  // La llave maestra elimina el alcance territorial y no consulta usuario_zop.
   const masterExecutor = createExecutor();
   const masterContext = await alcance.resolveAlcanceUni_uni(
     masterExecutor,
@@ -93,32 +93,39 @@ async function run() {
   );
   assert.strictEqual(masterContext.llave_maestra, true);
   assert.strictEqual(masterContext.modo, 'LLAVE_MAESTRA');
-  assert.strictEqual(masterContext.requiere_filtro_zona, true);
-  assert.deepStrictEqual(masterContext.zona_ids, [1, 2]);
-  assert.deepStrictEqual(masterContext.zona_codigos, ['CNB-01', 'CNB-02']);
-  assert.strictEqual(masterExecutor.calls.length, 1);
+  assert.strictEqual(masterContext.requiere_filtro_zona, false);
+  assert.strictEqual(masterContext.zona_ids, null);
+  assert.strictEqual(masterContext.zona_codigos, null);
+  assert.strictEqual(masterExecutor.calls.length, 0);
   assert.strictEqual(
     alcance.buildResolvedPortafolioScopeSql_uni(masterContext, 'p').sql,
-    'p.zona_id IN (?, ?)'
+    '1 = 1'
   );
   assert.strictEqual(
-    alcance.buildResolvedTicketScopeSql_uni(masterContext, 't').sql.includes('p_scope_uni_ticket_equipo.zona_id IN (?, ?)'),
-    true
+    alcance.buildResolvedTicketScopeSql_uni(masterContext, 't').sql,
+    '1 = 1'
   );
   assert.strictEqual(alcance.alcanceUniAllowsZone_uni(masterContext, 2), true);
-  assert.strictEqual(alcance.alcanceUniAllowsZone_uni(masterContext, 9), false);
+  assert.strictEqual(alcance.alcanceUniAllowsZone_uni(masterContext, 9), true);
 
-  // Llave maestra sin cuartos no abre registros.
+  // Llave maestra sin cuartos sigue abriendo todos los registros UNITED.
+  const masterWithoutRoomsExecutor = createExecutor([]);
   const masterWithoutRooms = await alcance.resolveAlcanceUni_uni(
-    createExecutor([]),
+    masterWithoutRoomsExecutor,
     req,
     { masterAccess: true }
   );
   assert.strictEqual(masterWithoutRooms.llave_maestra, true);
-  assert.strictEqual(masterWithoutRooms.requiere_filtro_zona, true);
+  assert.strictEqual(masterWithoutRooms.requiere_filtro_zona, false);
+  assert.strictEqual(masterWithoutRooms.zona_ids, null);
+  assert.strictEqual(masterWithoutRoomsExecutor.calls.length, 0);
   assert.strictEqual(
     alcance.buildResolvedPortafolioScopeSql_uni(masterWithoutRooms, 'p').sql,
-    '1 = 0'
+    '1 = 1'
+  );
+  assert.strictEqual(
+    alcance.buildResolvedTicketScopeSql_uni(masterWithoutRooms, 't').sql,
+    '1 = 1'
   );
 
   assert.throws(

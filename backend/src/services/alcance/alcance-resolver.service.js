@@ -65,10 +65,11 @@ function assertExecutor_gnral(executor) {
 function normalizeGroupingCompany_gnral(value) {
   const raw = String(value || '').trim();
   const upper = raw.toUpperCase();
+  const canonical = upper.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
 
-  if (upper === 'GENERAL' || upper === 'BLT') return GENERAL_COMPANY;
-  if (upper === 'UNITED' || upper.includes('UNITED')) return UNITED_COMPANY;
-  if (upper === 'CORELLIAN' || upper.includes('CORELLIAN')) return CORELLIAN_COMPANY;
+  if (canonical === 'GENERAL' || canonical === 'BLT') return GENERAL_COMPANY;
+  if (canonical === 'UNITED' || canonical === 'UNITED ELEVADORES') return UNITED_COMPANY;
+  if (canonical === 'CORELLIAN' || canonical === 'CORELLIAN SA DE CV') return CORELLIAN_COMPANY;
   return null;
 }
 
@@ -170,10 +171,9 @@ async function hasStoredCompleteDomain_gnral(executor, source, company) {
     );
   }
 
-  // La implementacion vigente de DOMINIO_COMPLETO contempla UNITED y CORELLIAN.
-  // GENERAL conserva sus llaves administrativas propias hasta la fase de
-  // integracion, por lo que no se inventa una fila GENERAL nueva aqui.
-  if (company !== CORELLIAN_COMPANY && company !== UNITED_COMPANY) return false;
+  // Las llaves de dominio son independientes y se validan siempre contra el
+  // dominio exacto que resolvio la agrupacion.
+  if (!SUPPORTED_SCOPE_COMPANIES.has(company)) return false;
 
   const [rows] = await db.query(
     `SELECT id_alcance
@@ -230,11 +230,12 @@ async function resolveInformationDoor_gnral(executor, source, groupingRef, optio
   const grouping = await readGroupingByReference_gnral(db, groupingRef);
 
   if (grouping.empresa === GENERAL_COMPANY) {
+    const master = await resolveMasterAccess_gnral(db, source, GENERAL_COMPANY, options);
     return {
       allowed: true,
       grouping,
-      masterAccess: false,
-      via: 'GENERAL_DEFAULT'
+      masterAccess: master.enabled,
+      via: master.enabled ? (master.source || 'DOMINIO_COMPLETO') : 'GENERAL_DEFAULT'
     };
   }
 

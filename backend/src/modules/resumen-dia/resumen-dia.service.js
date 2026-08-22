@@ -1,6 +1,9 @@
 'use strict';
 
 const repository = require('./resumen-dia.repository');
+const {
+  hasUnrestrictedUnitedScope_gnral
+} = require('../../services/information-record-scope-gnral.service');
 
 function normalizePositiveIds(values) {
   return [...new Set((Array.isArray(values) ? values : [])
@@ -18,12 +21,15 @@ function normalizeCodes(values) {
 
 async function getInitialData(req) {
   const access = req?.informationAccess || null;
+  const unrestricted = hasUnrestrictedUnitedScope_gnral(req);
   const zoneIds = normalizePositiveIds(access?.zona_ids);
   const zoneCodes = normalizeCodes(access?.zona_codigos);
 
-  // Fail closed adicional. El Guard UNITED debe resolver siempre usuario_zop;
-  // si por cualquier motivo no entrego cuartos, este modulo no consulta datos.
-  if (!access || access.dominio !== 'UNITED' || access.requiere_filtro_zona !== true || !zoneIds.length) {
+  // Usuario normal sin cuartos falla cerrado. La llave maestra UNITED ya fue
+  // validada por el Guard y no debe reintroducir usuario_zop en esta capa.
+  if (!access || access.dominio !== 'UNITED' || (!unrestricted && (
+    access.requiere_filtro_zona !== true || !zoneIds.length
+  ))) {
     return {
       ok: true,
       source: 'aiven',
@@ -32,8 +38,8 @@ async function getInitialData(req) {
         portafolio: []
       },
       alcance: {
-        zona_ids: zoneIds,
-        zonas: zoneCodes
+        zona_ids: unrestricted ? null : zoneIds,
+        zonas: unrestricted ? null : zoneCodes
       },
       total: {
         tickets: 0,
@@ -52,8 +58,8 @@ async function getInitialData(req) {
       portafolio: data.portafolio
     },
     alcance: {
-      zona_ids: zoneIds,
-      zonas: zoneCodes
+      zona_ids: unrestricted ? null : zoneIds,
+      zonas: unrestricted ? null : zoneCodes
     },
     total: {
       tickets: data.tickets.length,

@@ -2,15 +2,17 @@
 
 const repository = require('./dashboard-callcenter.repository');
 const {
+  hasUnrestrictedUnitedScope_gnral,
   zoneIds_gnral,
   zoneCodes_gnral
 } = require('../../services/information-record-scope-gnral.service');
 
 async function getInitialData(req) {
+  const unrestricted = hasUnrestrictedUnitedScope_gnral(req);
   const zoneIds = zoneIds_gnral(req);
   const zoneCodes = zoneCodes_gnral(req);
 
-  if (!Array.isArray(zoneIds) || !zoneIds.length) {
+  if (!unrestricted && (!Array.isArray(zoneIds) || !zoneIds.length)) {
     return {
       ok: true,
       source: 'aiven',

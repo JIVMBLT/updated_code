@@ -1,6 +1,9 @@
 'use strict';
 
 const dashboardOperativoRepository = require('./dashboard-operativo.repository');
+const {
+  hasUnrestrictedUnitedScope_gnral
+} = require('../../services/information-record-scope-gnral.service');
 
 function normalizarZona(value) {
   return String(value || '')
@@ -103,21 +106,24 @@ async function getPreventivosSupervisor(mes, informationAccess = null) {
 }
 
 async function getInitialData(mes, informationAccess = null) {
+  const unrestricted = hasUnrestrictedUnitedScope_gnral(informationAccess);
   const zoneIds = normalizePositiveIds(informationAccess?.zona_ids);
   const zoneCodes = normalizeCodes(informationAccess?.zona_codigos);
 
   if (
     !informationAccess ||
     informationAccess.dominio !== 'UNITED' ||
-    informationAccess.requiere_filtro_zona !== true ||
-    !zoneIds.length
+    (!unrestricted && (
+      informationAccess.requiere_filtro_zona !== true ||
+      !zoneIds.length
+    ))
   ) {
     return {
       portafolio: [],
       tickets: [],
       supervisores: [],
       preventivos_supervisor: [],
-      alcance: { zona_ids: zoneIds, zonas: zoneCodes }
+      alcance: { zona_ids: unrestricted ? null : zoneIds, zonas: unrestricted ? null : zoneCodes }
     };
   }
 
@@ -133,7 +139,7 @@ async function getInitialData(mes, informationAccess = null) {
     tickets,
     supervisores: groupSupervisores(supervisoresRows),
     preventivos_supervisor: preventivosSupervisor,
-    alcance: { zona_ids: zoneIds, zonas: zoneCodes }
+    alcance: { zona_ids: unrestricted ? null : zoneIds, zonas: unrestricted ? null : zoneCodes }
   };
 }
 

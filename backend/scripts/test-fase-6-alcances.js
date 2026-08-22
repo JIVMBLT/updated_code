@@ -2,6 +2,15 @@
 
 const assert = require('assert');
 
+// El puente de record scope carga el pool por compatibilidad, pero esta prueba
+// usa exclusivamente executors falsos y nunca abre una conexion real.
+process.env.DB_HOST ||= 'localhost';
+process.env.DB_PORT ||= '3306';
+process.env.DB_USER ||= 'test';
+process.env.DB_PASSWORD ||= 'test';
+process.env.DB_NAME ||= 'test';
+process.env.DB_SSL ||= 'false';
+
 const {
   resolveInformationDoor_gnral
 } = require('../src/services/alcance/alcance-resolver.service');
@@ -31,12 +40,30 @@ async function testDoors() {
   const source = { user: { id_SB: 10 } };
 
   const generalDoor = await resolveInformationDoor_gnral(
-    fakeExecutor(() => { throw new Error('GENERAL no debe consultar puerta.'); }),
+    fakeExecutor((sql) => {
+      if (sql.includes("tipo_alcance = 'DOMINIO_COMPLETO'")) return [[]];
+      throw new Error(`SQL no esperado GENERAL: ${sql}`);
+    }),
     source,
     { id_agrupacion: 1, codigo: 'HOME', nombre: 'Inicio', empresa: 'GENERAL', activo: 1 }
   );
   assert.equal(generalDoor.allowed, true);
+  assert.equal(generalDoor.masterAccess, false);
   assert.equal(generalDoor.via, 'GENERAL_DEFAULT');
+
+  const generalMaster = await resolveInformationDoor_gnral(
+    fakeExecutor((sql, params) => {
+      if (sql.includes("tipo_alcance = 'DOMINIO_COMPLETO'") && params[1] === 'GENERAL') {
+        return [[{ id_alcance: 3 }]];
+      }
+      throw new Error(`SQL no esperado GENERAL master: ${sql}`);
+    }),
+    source,
+    { id_agrupacion: 1, codigo: 'HOME', nombre: 'Inicio', empresa: 'GENERAL', activo: 1 }
+  );
+  assert.equal(generalMaster.allowed, true);
+  assert.equal(generalMaster.masterAccess, true);
+  assert.equal(generalMaster.via, 'DOMINIO_COMPLETO');
 
   const coreDoor = await resolveInformationDoor_gnral(
     fakeExecutor((sql) => {
@@ -66,6 +93,10 @@ async function testDoors() {
 async function testPanelContract() {
   const payload = normalizeNewPanelPayload_gnral({
     alcances: {
+      general: {
+        llave_maestra: true,
+        agrupaciones: [10]
+      },
       corellian: {
         llave_maestra: false,
         agrupaciones: [20],
@@ -81,6 +112,8 @@ async function testPanelContract() {
     }
   });
   assert.equal(payload.general.default, true);
+  assert.equal(payload.general.llave_maestra, true);
+  assert.deepEqual(payload.general.agrupaciones, [10]);
   assert.deepEqual(payload.corellian.usuarios_adicionales, [11, 12]);
   assert.deepEqual(payload.united.agrupaciones, [30]);
   // Alcance ya no administra cuartos UNITED; cualquier zona enviada se ignora.
@@ -89,6 +122,8 @@ async function testPanelContract() {
   const executor = fakeExecutor((sql) => {
     if (sql.includes('FROM usuarios_alcance_informacion')) {
       return [[
+        { id_alcance: 5, tipo_alcance: 'DOMINIO_COMPLETO', dominio: 'GENERAL' },
+        { id_alcance: 6, tipo_alcance: 'AGRUPACION', id_agrupacion: 10 },
         { id_alcance: 1, tipo_alcance: 'AGRUPACION', id_agrupacion: 20 },
         { id_alcance: 2, tipo_alcance: 'AGRUPACION', id_agrupacion: 30 },
         { id_alcance: 3, tipo_alcance: 'REPORTA_A' },
@@ -97,6 +132,7 @@ async function testPanelContract() {
     }
     if (sql.includes('FROM perm_agrupaciones')) {
       return [[
+        { id_agrupacion: 10, codigo: 'SOPORTE', nombre: 'Soporte', empresa: 'BLT', activo: 1 },
         { id_agrupacion: 20, codigo: 'VENTAS', nombre: 'Ventas', empresa: 'CORELLIAN', activo: 1 },
         { id_agrupacion: 30, codigo: 'PORTAFOLIO', nombre: 'Portafolio', empresa: 'UNITED', activo: 1 }
       ]];
@@ -117,6 +153,8 @@ async function testPanelContract() {
   // La lectura sigue informando los cuartos asignados desde usuario_zop.
   assert.deepEqual(read.alcances.united.zonas, [2]);
   assert.equal(read.alcances.general.default, true);
+  assert.equal(read.alcances.general.llave_maestra, true);
+  assert.deepEqual(read.alcances.general.agrupaciones, [10]);
 }
 
 function testRecordBridge() {
@@ -147,18 +185,17 @@ function testRecordBridge() {
         motor: 'alcance_uni',
         empresa: 'UNITED',
         llave_maestra: true,
-        requiere_filtro_zona: true,
-        zona_ids: [2, 3]
+        requiere_filtro_zona: false,
+        zona_ids: null
       }
     }
   };
   const pm = buildPortafolioScopeSql_gnral(unitedMasterReq, 'p');
-  assert.ok(pm.sql.includes('p.zona_id IN'));
-  assert.deepEqual(pm.params, [2, 3]);
+  assert.equal(pm.sql, '1 = 1');
+  assert.deepEqual(pm.params, []);
   const tm = buildTicketScopeSql_gnral(unitedMasterReq, 't');
-  assert.ok(tm.sql.includes('p_scope_uni_ticket_equipo.zona_id IN'));
-  assert.ok(tm.sql.includes('COUNT(DISTINCT p_scope_uni_ticket_project_check.zona_id) = 1'));
-  assert.deepEqual(tm.params, [2, 3, 2, 3]);
+  assert.equal(tm.sql, '1 = 1');
+  assert.deepEqual(tm.params, []);
 
   const corReq = {
     informationAccess: {
@@ -218,7 +255,7 @@ async function testCrossLayer() {
   assert.equal(recordCalls, 1);
   assert.equal(loadCalls, 1);
 
-  // Llave maestra UNITED abre la puerta, pero NO evita recordScopeCheck.
+  // Llave maestra UNITED abre la puerta y evita reintroducir alcance territorial.
   let unitedMasterRecordCalls = 0;
   const masterDefinition = {
     ...definition,
@@ -234,14 +271,14 @@ async function testCrossLayer() {
       motor: 'alcance_uni',
       empresa: 'UNITED',
       llave_maestra: true,
-      requiere_filtro_zona: true,
-      zona_ids: [2, 3],
+      requiere_filtro_zona: false,
+      zona_ids: null,
       agrupacion: definition.groupingRef
     })
   });
   assert.equal(master.visible, true);
   assert.equal(master.llave_maestra, true);
-  assert.equal(unitedMasterRecordCalls, 1);
+  assert.equal(unitedMasterRecordCalls, 0);
 }
 
 (async () => {

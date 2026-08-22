@@ -1,6 +1,9 @@
 'use strict';
 
 const {
+  GENERAL_COMPANY
+} = require('./alcance-gnral.service');
+const {
   CORELLIAN_COMPANY
 } = require('./alcance-cor.service');
 const {
@@ -65,11 +68,13 @@ function normalizeDomainConfig_gnral(source, domain) {
 function normalizeNewPanelPayload_gnral(body) {
   const root = body && typeof body === 'object' ? body : {};
   const scopes = root.alcances && typeof root.alcances === 'object' ? root.alcances : root;
+  const general = normalizeDomainConfig_gnral(scopes.general, GENERAL_COMPANY);
   const corellian = normalizeDomainConfig_gnral(scopes.corellian, CORELLIAN_COMPANY);
   const united = normalizeDomainConfig_gnral(scopes.united, UNITED_COMPANY);
 
   return {
     general: {
+      ...general,
       default: true,
       ver_propio: true,
       creado_por_mi: true,
@@ -85,6 +90,7 @@ function hasNewPanelPayload_gnral(body) {
   const root = body && typeof body === 'object' ? body : {};
   return Boolean(
     root.alcances
+    || Object.prototype.hasOwnProperty.call(root, 'general')
     || Object.prototype.hasOwnProperty.call(root, 'corellian')
     || Object.prototype.hasOwnProperty.call(root, 'united')
   );
@@ -178,6 +184,15 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
   );
   const groupingDomains = await readGroupingDomains_gnral(db, groupingIds);
 
+  const general = {
+    llave_maestra: false,
+    agrupaciones: [],
+    default: true,
+    ver_propio: true,
+    creado_por_mi: true,
+    asignado_a_mi: true,
+    relacionado_conmigo: true
+  };
   const corellian = {
     llave_maestra: false,
     agrupaciones: [],
@@ -198,6 +213,7 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
     const type = String(row.tipo_alcance || '').trim().toUpperCase();
     if (type === 'DOMINIO_COMPLETO') {
       const domain = String(row.dominio || '').trim().toUpperCase();
+      if (domain === GENERAL_COMPANY) general.llave_maestra = true;
       if (domain === CORELLIAN_COMPANY) corellian.llave_maestra = true;
       if (domain === UNITED_COMPANY) united.llave_maestra = true;
       continue;
@@ -206,6 +222,7 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
       const groupingId = positiveId_gnral(row.id_agrupacion);
       const grouping = groupingDomains.get(groupingId);
       if (!grouping) continue;
+      if (grouping.empresa === GENERAL_COMPANY) general.agrupaciones.push(groupingId);
       if (grouping.empresa === CORELLIAN_COMPANY) corellian.agrupaciones.push(groupingId);
       if (grouping.empresa === UNITED_COMPANY) united.agrupaciones.push(groupingId);
       continue;
@@ -224,6 +241,7 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
     }
   }
 
+  general.agrupaciones = positiveIds_gnral(general.agrupaciones);
   corellian.agrupaciones = positiveIds_gnral(corellian.agrupaciones);
   united.agrupaciones = positiveIds_gnral(united.agrupaciones);
   corellian.usuarios_adicionales = positiveIds_gnral([...additional]);
@@ -234,21 +252,20 @@ async function readPanelScope_gnral(executor, userId, options = {}) {
   united.zonas_detalle = zones;
 
   const domainsLegacy = [];
+  if (general.llave_maestra) domainsLegacy.push(GENERAL_COMPANY);
   if (corellian.llave_maestra) domainsLegacy.push(CORELLIAN_COMPANY);
   if (united.llave_maestra) domainsLegacy.push(UNITED_COMPANY);
-  const groupingsLegacy = positiveIds_gnral([...corellian.agrupaciones, ...united.agrupaciones]);
+  const groupingsLegacy = positiveIds_gnral([
+    ...general.agrupaciones,
+    ...corellian.agrupaciones,
+    ...united.agrupaciones
+  ]);
 
   const result = {
     version_alcance: PANEL_SCOPE_VERSION,
     id_usuario: id,
     alcances: {
-      general: {
-        default: true,
-        ver_propio: true,
-        creado_por_mi: true,
-        asignado_a_mi: true,
-        relacionado_conmigo: true
-      },
+      general,
       corellian,
       united
     },
@@ -328,6 +345,13 @@ async function replaceScopeRows_gnral(executor, userId, normalized, actorId, opt
   );
 
   const rows = [];
+  if (normalized.general.llave_maestra) {
+    rows.push([userId, 'DOMINIO_COMPLETO', GENERAL_COMPANY, null, null, actorId, actorId]);
+  } else {
+    normalized.general.agrupaciones.forEach((idGrouping) => {
+      rows.push([userId, 'AGRUPACION', null, idGrouping, null, actorId, actorId]);
+    });
+  }
   if (normalized.corellian.llave_maestra) {
     rows.push([userId, 'DOMINIO_COMPLETO', CORELLIAN_COMPANY, null, null, actorId, actorId]);
   } else {
@@ -372,6 +396,11 @@ async function savePanelScope_gnral(executor, userId, body, actor, options = {})
   if (!actorId) throw panelError_gnral('Actor invalido.', 401, 'ALCANCE_PANEL_ACTOR_REQUIRED');
 
   const normalized = normalizeNewPanelPayload_gnral(body);
+  normalized.general.agrupaciones = await assertGroupingIdsForDomain_gnral(
+    db,
+    normalized.general.agrupaciones,
+    GENERAL_COMPANY
+  );
   normalized.corellian.agrupaciones = await assertGroupingIdsForDomain_gnral(
     db,
     normalized.corellian.agrupaciones,
@@ -417,6 +446,13 @@ function mergeBulkActivation_gnral(current, activation) {
 
   return {
     alcances: {
+      general: {
+        llave_maestra: Boolean(currentScopes.general?.llave_maestra || add.general.llave_maestra),
+        agrupaciones: positiveIds_gnral([
+          ...(currentScopes.general?.agrupaciones || []),
+          ...add.general.agrupaciones
+        ])
+      },
       corellian: {
         llave_maestra: Boolean(currentScopes.corellian?.llave_maestra || add.corellian.llave_maestra),
         agrupaciones: positiveIds_gnral([
@@ -449,7 +485,9 @@ async function activatePanelScopeBulk_gnral(executor, userIds, activation, actor
   }
 
   const normalizedActivation = normalizeNewPanelPayload_gnral({ alcances: activation });
-  const hasActivation = normalizedActivation.corellian.llave_maestra
+  const hasActivation = normalizedActivation.general.llave_maestra
+    || normalizedActivation.general.agrupaciones.length
+    || normalizedActivation.corellian.llave_maestra
     || normalizedActivation.corellian.agrupaciones.length
     || normalizedActivation.corellian.ver_reporta_a
     || normalizedActivation.corellian.ver_rel_admin
@@ -457,7 +495,7 @@ async function activatePanelScopeBulk_gnral(executor, userIds, activation, actor
     || normalizedActivation.united.agrupaciones.length;
   if (!hasActivation) {
     throw panelError_gnral(
-      'Selecciona al menos una llave, puerta o regla Corellian.',
+      'Selecciona al menos una llave, puerta o regla de alcance.',
       400,
       'ALCANCE_PANEL_BULK_EMPTY'
     );

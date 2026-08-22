@@ -19,7 +19,7 @@ const checks = [
   ['equipos criticos delegado', controller.includes('criticosCuartosOperacionService.getEquiposCriticos')],
   ['proyectos criticos delegado', controller.includes('criticosCuartosOperacionService.getProyectosCriticos')],
   ['criticidad corporativa delegada', controller.includes('criticosCuartosOperacionService.getCriticidadCorporativa')],
-  ['call center permanece legacy', controller.includes('criticosService.getCallCenterU365Equipos')]
+  ['call center conserva alcance estructurado', controller.includes('callcenterCuartosOperacionService.getCallCenterU365Equipos')]
 ];
 
 const failed = checks.filter(([, ok]) => !ok);

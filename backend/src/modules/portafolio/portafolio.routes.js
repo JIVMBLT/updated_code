@@ -15,7 +15,6 @@ const {
 } = require('../../services/information-record-scope-gnral.service');
 
 const requirePortafolioIntegration = requireIntegrationAuthFor('INTEGRATION_PORTAFOLIO_ID');
-const UNITED_GROUPINGS = Object.freeze(['PORTAFOLIO', 'OPERACION', 'EXPERIMENTAL']);
 
 const PORTAFOLIO_READ_PERMISSIONS = Object.freeze([
   'PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER',
@@ -50,10 +49,33 @@ const PORTAFOLIO_DETAIL_PERMISSIONS = Object.freeze([
   'PROYECTOS_CRITICOS_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL'
 ]);
 
+function unitedGroupingPermissionPairs(permissionCodes) {
+  const pairs = [
+    {
+      groupingCode: 'PORTAFOLIO',
+      permissionCodesAny: permissionCodes.filter((code) => code.startsWith('PORTAFOLIO_'))
+    },
+    {
+      groupingCode: 'OPERACION',
+      permissionCodesAny: permissionCodes.filter((code) => code.startsWith('OPERACION_'))
+    },
+    {
+      groupingCode: 'EXPERIMENTAL',
+      permissionCodesAny: permissionCodes.filter((code) => code.includes('_EXP_'))
+    }
+  ].filter((pair) => pair.permissionCodesAny.length);
+
+  const pairedCodes = new Set(pairs.flatMap((pair) => pair.permissionCodesAny));
+  const unpaired = permissionCodes.filter((code) => !pairedCodes.has(code));
+  if (unpaired.length) {
+    throw new Error(`Permisos UNITED sin agrupacion emparejada: ${unpaired.join(', ')}`);
+  }
+  return pairs;
+}
+
 const portafolioReadGuard = humanInformationGuard_gnral({
-  permissionCodesAny: PORTAFOLIO_READ_PERMISSIONS,
   domain: 'UNITED',
-  groupingCodesAny: UNITED_GROUPINGS
+  groupingPermissionPairsAny: unitedGroupingPermissionPairs(PORTAFOLIO_READ_PERMISSIONS)
 });
 
 // FASE 7/11: la carga inicial de Dashboard Portafolio no puede abrirse por
@@ -67,9 +89,8 @@ const dashboardPortafolioGuard = humanInformationGuard_gnral({
 });
 
 const portafolioDetailGuard = humanInformationGuard_gnral({
-  permissionCodesAny: PORTAFOLIO_DETAIL_PERMISSIONS,
   domain: 'UNITED',
-  groupingCodesAny: UNITED_GROUPINGS
+  groupingPermissionPairsAny: unitedGroupingPermissionPairs(PORTAFOLIO_DETAIL_PERMISSIONS)
 });
 
 // FASE 9/11: Movimientos tiene puerta funcional propia. No se hereda acceso
@@ -93,9 +114,8 @@ const contextualEquipmentGuard = dynamicHumanInformationGuard_gnral((req) => {
     };
   }
   return {
-    permissionCodesAny: PORTAFOLIO_DETAIL_PERMISSIONS,
     domain: 'UNITED',
-    groupingCodesAny: UNITED_GROUPINGS
+    groupingPermissionPairsAny: unitedGroupingPermissionPairs(PORTAFOLIO_DETAIL_PERMISSIONS)
   };
 });
 

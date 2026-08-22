@@ -28,7 +28,7 @@ const checks = [
   ['initial portfolio scope', repository.includes('buildPortafolioScopeSql_gnral')],
   ['initial ticket scope', repository.includes('buildTicketScopeSql_gnral')],
   ['initial canonical zone', repository.includes('INNER JOIN z_op z_cc') && repository.includes('zona_oficial')],
-  ['fail closed no rooms', service.includes('zoneIds_gnral') && service.includes('if (!Array.isArray(zoneIds) || !zoneIds.length)')],
+  ['fail closed no rooms except UNITED master', service.includes('hasUnrestrictedUnitedScope_gnral') && service.includes('if (!unrestricted && (!Array.isArray(zoneIds) || !zoneIds.length))')],
   ['route mounted', dataRoutes.includes("require('./data/dashboard-callcenter.routes')")],
   ['phase 5 delegation preserved', controller.includes('criticosCuartosOperacionService.getEquiposCriticos') && controller.includes('criticosCuartosOperacionService.getCriticidadCorporativa')],
   ['call center secondary delegation', controller.includes('callcenterCuartosOperacionService.getMtbcEquipos') && controller.includes('callcenterCuartosOperacionService.getCallCenterU365Proyectos')],

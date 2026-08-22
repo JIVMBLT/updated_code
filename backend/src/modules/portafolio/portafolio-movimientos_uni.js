@@ -8,6 +8,7 @@
 
 const db = require('../../config/db');
 const {
+  hasUnrestrictedUnitedScope_gnral,
   buildPortafolioScopeSql_gnral,
   zoneIds_gnral
 } = require('../../services/information-record-scope-gnral.service');
@@ -94,6 +95,15 @@ const latestTicketJoin_uni = `
 `;
 
 async function authorizedZoneRows_uni(req) {
+  if (hasUnrestrictedUnitedScope_gnral(req)) {
+    const [rows] = await db.query(`
+      SELECT id_zona, zona
+      FROM z_op
+      WHERE estado = 1
+      ORDER BY zona ASC, id_zona ASC
+    `);
+    return rows;
+  }
   const ids = zoneIds_gnral(req);
   if (!ids.length) return [];
   const [rows] = await db.query(`

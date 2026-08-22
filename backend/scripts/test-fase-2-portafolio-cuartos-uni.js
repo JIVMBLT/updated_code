@@ -119,6 +119,8 @@ const consultas = require(path.join(backendRoot, 'src', 'modules', 'portafolio',
 
 function reqWithRooms(ids, { master = false } = {}) {
   const codes = ids.map(id => `CNA-0${id}`);
+  const scopedIds = master ? null : ids;
+  const scopedCodes = master ? null : codes;
   return {
     query: {},
     params: {},
@@ -127,16 +129,16 @@ function reqWithRooms(ids, { master = false } = {}) {
       motor: 'alcance_uni',
       dominio: 'UNITED',
       llave_maestra: master,
-      requiere_filtro_zona: true,
-      zona_ids: ids,
-      zona_codigos: codes,
+      requiere_filtro_zona: !master,
+      zona_ids: scopedIds,
+      zona_codigos: scopedCodes,
       alcance: {
         motor: 'alcance_uni',
         empresa: 'UNITED',
         llave_maestra: master,
-        requiere_filtro_zona: true,
-        zona_ids: ids,
-        zona_codigos: codes
+        requiere_filtro_zona: !master,
+        zona_ids: scopedIds,
+        zona_codigos: scopedCodes
       }
     }
   };
@@ -151,11 +153,12 @@ function responseRecorder() {
   };
 }
 
-async function testBuildersKeepRoomsWithMaster() {
+async function testBuildersRemoveRoomsWithMaster() {
   const req = reqWithRooms([1, 2], { master: true });
   const built = recordScope.buildPortafolioScopeSql_gnral(req, 'p');
-  assert.strictEqual(built.sql, 'p.zona_id IN (?, ?)');
-  assert.deepStrictEqual(built.params, [1, 2]);
+  assert.strictEqual(built.sql, '1 = 1');
+  assert.deepStrictEqual(built.params, []);
+  assert.strictEqual(recordScope.buildPortafolioScopeSqlInline_gnral(req, 'p').sql, '1 = 1');
 }
 
 async function testFiltersAreScoped() {
@@ -175,7 +178,7 @@ async function testFiltersAreScoped() {
 
 async function testDashboardIsScoped() {
   calls.length = 0;
-  const req = reqWithRooms([1, 2], { master: true });
+  const req = reqWithRooms([1, 2]);
   const res = responseRecorder();
   await commercial.getPortafolioDashboard_uni(req, res);
   assert.strictEqual(res.statusCode, 200);
@@ -217,13 +220,12 @@ async function testProjectDetailIsScoped() {
 }
 
 async function testAllRoomsGuard() {
-  const deniedReq = reqWithRooms([1, 2], { master: true });
-  const deniedRes = responseRecorder();
-  let deniedNext = false;
-  await recordScope.requireAllUnitedZones_gnral(deniedReq, deniedRes, () => { deniedNext = true; });
-  assert.strictEqual(deniedNext, false);
-  assert.strictEqual(deniedRes.statusCode, 403);
-  assert.strictEqual(deniedRes.body.code, 'INFORMATION_ALL_ROOMS_REQUIRED');
+  const masterReq = reqWithRooms([], { master: true });
+  const masterRes = responseRecorder();
+  let masterNext = false;
+  await recordScope.requireAllUnitedZones_gnral(masterReq, masterRes, () => { masterNext = true; });
+  assert.strictEqual(masterNext, true);
+  assert.strictEqual(masterRes.statusCode, 200);
 
   const allowedReq = reqWithRooms([1, 2, 3]);
   const allowedRes = responseRecorder();
@@ -235,7 +237,8 @@ async function testAllRoomsGuard() {
 function testRouteAndRepositoryWiring() {
   const routeText = fs.readFileSync(path.join(backendRoot, 'src', 'modules', 'portafolio', 'portafolio.routes.js'), 'utf8');
   const repositoryText = fs.readFileSync(path.join(backendRoot, 'src', 'modules', 'portafolio', 'portafolio.repository.js'), 'utf8');
-  assert.ok(routeText.includes('requireAllUnitedZones_gnral'));
+  assert.ok(routeText.includes('groupingPermissionPairsAny'));
+  assert.ok(!routeText.includes('groupingCodesAny: UNITED_GROUPINGS'));
   assert.ok(!routeText.includes("requireCompleteInformationDomain_gnral('UNITED')"));
   assert.ok(repositoryText.includes('getPortafolioFiltros: portafolioConsultasUni.getPortafolioFiltros_uni'));
   assert.ok(repositoryText.includes('getPortafolioEquipos: portafolioComercialUni.getPortafolioEquipos_uni'));
@@ -245,7 +248,7 @@ function testRouteAndRepositoryWiring() {
 }
 
 (async () => {
-  await testBuildersKeepRoomsWithMaster();
+  await testBuildersRemoveRoomsWithMaster();
   await testFiltersAreScoped();
   await testDashboardIsScoped();
   await testEquipmentDetailIsScoped();

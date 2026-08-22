@@ -17,7 +17,7 @@ const fakeDb = {
       return [[{ id: 1 }]];
     }
 
-    if (text.includes('SELECT t.*') && text.includes('(t.ticket = ? OR t.folio = ?)')) {
+    if (text.includes('FROM tickets t') && text.includes("TRIM(COALESCE(t.id_interno, '')) = ?") && text.includes('LIMIT 1')) {
       return [[{
         id: 1,
         ticket: 'T-1',
@@ -27,7 +27,7 @@ const fakeDb = {
       }]];
     }
 
-    if (text.includes('SELECT t.*') && text.includes('FROM tickets t')) {
+    if (text.includes('t.*,') && text.includes('FROM tickets t') && text.includes('LIMIT 50000')) {
       return [[{
         id: 1,
         ticket: 'T-1',
@@ -52,6 +52,7 @@ const recordScope = require(path.join(backendRoot, 'src', 'services', 'informati
 const consultas = require(path.join(backendRoot, 'src', 'modules', 'tickets', 'tickets-consultas_uni.js'));
 
 function reqWithRooms(ids, { master = false } = {}) {
+  const scopedIds = master ? null : ids;
   return {
     query: {},
     params: {},
@@ -60,14 +61,14 @@ function reqWithRooms(ids, { master = false } = {}) {
       motor: 'alcance_uni',
       dominio: 'UNITED',
       llave_maestra: master,
-      requiere_filtro_zona: true,
-      zona_ids: ids,
+      requiere_filtro_zona: !master,
+      zona_ids: scopedIds,
       alcance: {
         motor: 'alcance_uni',
         empresa: 'UNITED',
         llave_maestra: master,
-        requiere_filtro_zona: true,
-        zona_ids: ids
+        requiere_filtro_zona: !master,
+        zona_ids: scopedIds
       }
     }
   };
@@ -85,7 +86,7 @@ function responseRecorder() {
 function testParameterizedBuilderPrecedence() {
   const context = {
     motor: alcanceUni.UNITED_ENGINE,
-    llave_maestra: true,
+    llave_maestra: false,
     requiere_filtro_zona: true,
     zona_ids: [1, 2]
   };
@@ -101,20 +102,29 @@ function testParameterizedBuilderPrecedence() {
 }
 
 
-function testNoRoomsFailClosedEvenWithMaster() {
-  const context = {
+function testNoRoomsAndMasterContracts() {
+  const masterContext = {
     motor: alcanceUni.UNITED_ENGINE,
     llave_maestra: true,
+    requiere_filtro_zona: false,
+    zona_ids: null
+  };
+  const master = alcanceUni.buildResolvedTicketScopeSql_uni(masterContext, 't');
+  assert.strictEqual(master.sql, '1 = 1');
+  assert.deepStrictEqual(master.params, []);
+
+  const normalWithoutRooms = alcanceUni.buildResolvedTicketScopeSql_uni({
+    motor: alcanceUni.UNITED_ENGINE,
+    llave_maestra: false,
     requiere_filtro_zona: true,
     zona_ids: []
-  };
-  const built = alcanceUni.buildResolvedTicketScopeSql_uni(context, 't');
-  assert.strictEqual(built.sql, '1 = 0');
-  assert.deepStrictEqual(built.params, []);
+  }, 't');
+  assert.strictEqual(normalWithoutRooms.sql, '1 = 0');
+  assert.deepStrictEqual(normalWithoutRooms.params, []);
 }
 
 function testInlineBuilderKeepsSameRules() {
-  const req = reqWithRooms([1, 2], { master: true });
+  const req = reqWithRooms([1, 2]);
   const built = recordScope.buildTicketScopeSqlInline_gnral(req, 't');
 
   assert.ok(built.sql.includes('zona_id IN (1, 2)'));
@@ -127,14 +137,14 @@ function testInlineBuilderKeepsSameRules() {
 
 async function testTicketListIsScoped() {
   calls.length = 0;
-  const req = reqWithRooms([1, 2], { master: true });
+  const req = reqWithRooms([1, 2]);
   const res = responseRecorder();
 
   await consultas.getTickets_uni(req, res);
 
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.data.length, 1);
-  const call = calls.find(item => item.sql.includes('SELECT t.*') && item.sql.includes('LIMIT 50000'));
+  const call = calls.find(item => item.sql.includes('t.*,') && item.sql.includes('LIMIT 50000'));
   assert.ok(call);
   assert.ok(call.sql.includes('p_scope_uni_ticket_equipo.zona_id IN (?, ?)'));
   assert.deepStrictEqual(call.params, [1, 2, 1, 2]);
@@ -150,10 +160,13 @@ async function testTicketDetailIsScoped() {
 
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.data.ticket, 'T-1');
-  const call = calls.find(item => item.sql.includes('(t.ticket = ? OR t.folio = ?)'));
+  const call = calls.find(item => item.sql.includes("TRIM(COALESCE(t.id_interno, '')) = ?") && item.sql.includes('LIMIT 1'));
   assert.ok(call);
+  assert.ok(call.sql.includes("TRIM(COALESCE(t.ticket, '')) = ?"));
+  assert.ok(call.sql.includes('CAST(t.id AS CHAR) = ?'));
+  assert.ok(call.sql.includes("TRIM(COALESCE(t.folio, '')) = ?"));
   assert.ok(call.sql.includes('p_scope_uni_ticket_equipo.zona_id IN (?, ?)'));
-  assert.deepStrictEqual(call.params, ['T-1', 'T-1', 1, 2, 1, 2]);
+  assert.deepStrictEqual(call.params, ['T-1', 'T-1', 'T-1', 'T-1', 1, 2, 1, 2]);
 }
 
 async function testRecordGuardUsesSameScope() {
@@ -198,7 +211,7 @@ function testRepositoryWiringAndM2M() {
 
 (async () => {
   testParameterizedBuilderPrecedence();
-  testNoRoomsFailClosedEvenWithMaster();
+  testNoRoomsAndMasterContracts();
   testInlineBuilderKeepsSameRules();
   await testTicketListIsScoped();
   await testTicketDetailIsScoped();

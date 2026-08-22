@@ -1,6 +1,6 @@
 'use strict';
 
-const VALID_DOMAINS = new Set(['UNITED', 'CORELLIAN']);
+const VALID_DOMAINS = new Set(['GENERAL', 'UNITED', 'CORELLIAN']);
 
 function scopedError(message, status = 400) {
   const error = new Error(message);
@@ -20,9 +20,10 @@ function normalizePositiveIds(values) {
 }
 
 function domainFromGroupingCompany_gnral(value) {
-  const normalized = String(value || '').trim().toUpperCase();
-  if (normalized.includes('UNITED')) return 'UNITED';
-  if (normalized.includes('CORELLIAN')) return 'CORELLIAN';
+  const normalized = String(value || '').trim().toUpperCase().replace(/[.,]/g, '').replace(/\s+/g, ' ');
+  if (normalized === 'GENERAL' || normalized === 'BLT') return 'GENERAL';
+  if (normalized === 'UNITED' || normalized === 'UNITED ELEVADORES') return 'UNITED';
+  if (normalized === 'CORELLIAN' || normalized === 'CORELLIAN SA DE CV') return 'CORELLIAN';
   return null;
 }
 
@@ -172,7 +173,7 @@ async function assertInformationScopeGroupings_gnral(connection, groupingIds) {
   const unsupported = rows.filter((row) => !VALID_DOMAINS.has(row.dominio));
   if (unsupported.length) {
     throw scopedError(
-      `Las agrupaciones ${unsupported.map((row) => row.codigo || row.id_agrupacion).join(', ')} no pertenecen a United o Corellian.`
+      `Las agrupaciones ${unsupported.map((row) => row.codigo || row.id_agrupacion).join(', ')} no pertenecen a GENERAL, UNITED o CORELLIAN.`
     );
   }
 

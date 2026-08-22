@@ -29,10 +29,26 @@ const PROJECT_READ_PERMISSIONS = Object.freeze([
   'PROYECTOS_CRITICOS_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL'
 ]);
 
+function projectGroupingPermissionPairs() {
+  return [
+    {
+      groupingCode: 'PORTAFOLIO',
+      permissionCodesAny: PROJECT_READ_PERMISSIONS.filter((code) => code.startsWith('PORTAFOLIO_'))
+    },
+    {
+      groupingCode: 'OPERACION',
+      permissionCodesAny: PROJECT_READ_PERMISSIONS.filter((code) => code.startsWith('OPERACION_'))
+    },
+    {
+      groupingCode: 'EXPERIMENTAL',
+      permissionCodesAny: PROJECT_READ_PERMISSIONS.filter((code) => code.includes('_EXP_'))
+    }
+  ].filter((pair) => pair.permissionCodesAny.length);
+}
+
 const projectGuard = humanInformationGuard_gnral({
-  permissionCodesAny: PROJECT_READ_PERMISSIONS,
   domain: 'UNITED',
-  groupingCodesAny: ['PORTAFOLIO', 'OPERACION', 'EXPERIMENTAL']
+  groupingPermissionPairsAny: projectGroupingPermissionPairs()
 });
 
 // Primera llamada propia del modulo. No comparte puerta con Operacion/Experimental.

@@ -134,7 +134,7 @@
     const rawDomains=Array.isArray(source.dominios_completos)
       ?source.dominios_completos
       :Object.entries(source.dominio_completo||{}).filter(([,enabled])=>Boolean(enabled)).map(([domain])=>domain);
-    const domains=new Set(rawDomains.map(value=>String(value||'').trim().toUpperCase()).filter(value=>value==='UNITED'||value==='CORELLIAN'));
+    const domains=new Set(rawDomains.map(value=>String(value||'').trim().toUpperCase()).filter(value=>value==='GENERAL'||value==='UNITED'||value==='CORELLIAN'));
     const rawGroupings=Array.isArray(source.agrupaciones)
       ?source.agrupaciones
       :(Array.isArray(source.agrupaciones_acceso)?source.agrupaciones_acceso:[]);
@@ -154,7 +154,7 @@
   function informationScopePayload(value){
     const source=value||emptyInformationScopeDraft();
     return {
-      dominios_completos:[...source.dominios_completos].filter(value=>value==='UNITED'||value==='CORELLIAN').sort(),
+      dominios_completos:[...source.dominios_completos].filter(value=>value==='GENERAL'||value==='UNITED'||value==='CORELLIAN').sort(),
       agrupaciones:[...source.agrupaciones].map(Number).filter(id=>Number.isInteger(id)&&id>0).sort((a,b)=>a-b),
       ver_propio:true,
       ver_reporta_a:Boolean(source.ver_reporta_a),
@@ -172,9 +172,10 @@
   }
 
   function informationScopeGroupingDomain(group){
-    const company=normalizeText(group?.company);
-    if(company.includes('UNITED'))return 'UNITED';
-    if(company.includes('CORELLIAN'))return 'CORELLIAN';
+    const company=normalizeText(group?.company).replace(/[.,]/g,'').replace(/\s+/g,' ');
+    if(company==='GENERAL'||company==='BLT')return 'GENERAL';
+    if(company==='UNITED'||company==='UNITED ELEVADORES')return 'UNITED';
+    if(company==='CORELLIAN'||company==='CORELLIAN SA DE CV')return 'CORELLIAN';
     return '';
   }
 
@@ -194,7 +195,7 @@
   const complete=draft.dominios_completos.has(domain);
   const domainAttribute=bulk?'data-information-scope-bulk-domain':'data-information-scope-domain';
   const groupAttribute=bulk?'data-information-scope-bulk-group':'data-information-scope-group';
-  const domainLabel=domain==='UNITED'?'United':'Corellian';
+  const domainLabel=domain==='GENERAL'?'General':domain==='UNITED'?'United':'Corellian';
   const selectedDoors=groups.filter(group=>draft.agrupaciones.has(Number(group.id))).length;
   const doorSummary=complete
     ?`${groups.length} puerta(s) cubiertas por la llave maestra`
@@ -216,7 +217,7 @@
 }
 
   function informationScopeAccessGeneralHtml(draft,{bulk=false}={}){
-  return `<div class="pc-scope-access-grid">${['UNITED','CORELLIAN'].map(domain=>informationScopeAccessDomainHtml(draft,domain,{bulk})).join('')}</div>`;
+  return `<div class="pc-scope-access-grid">${['GENERAL','UNITED','CORELLIAN'].map(domain=>informationScopeAccessDomainHtml(draft,domain,{bulk})).join('')}</div>`;
 }
 
   const FIX_PANEL_ALCANCE_USUARIO_MASIVO_V002=true;

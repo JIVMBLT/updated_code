@@ -84,9 +84,12 @@ Module._load = function patchedLoad(request, parent, isMain) {
   assert(JSON.stringify(payload.alcance.zonas) === JSON.stringify(['CNA-01', 'CNA-02', 'CNA-03']), 'Debe exponer zonas autorizadas.');
   assert(/LEFT JOIN portafolio p_ticket_code/.test(capturedSql), 'SQL debe enlazar codigo_equipo con Portafolio.');
   assert(/LEFT JOIN z_op z_ticket_official/.test(capturedSql), 'SQL debe resolver la etiqueta oficial en z_op.');
-  assert(/WHERE \(t\.ticket = \? OR t\.folio = \?\)/.test(capturedSql), 'SQL debe limitarse al ticket solicitado.');
+  assert(/TRIM\(COALESCE\(t\.ticket, ''\)\) = \?/.test(capturedSql), 'SQL debe aceptar ticket.');
+  assert(/CAST\(t\.id AS CHAR\) = \?/.test(capturedSql), 'SQL debe aceptar id.');
+  assert(/TRIM\(COALESCE\(t\.folio, ''\)\) = \?/.test(capturedSql), 'SQL debe aceptar folio.');
+  assert(/TRIM\(COALESCE\(t\.id_interno, ''\)\) = \?/.test(capturedSql), 'SQL debe aceptar id_interno.');
   assert(/AND t\.id = \?/.test(capturedSql), 'SQL debe conservar el predicado de alcance territorial.');
-  assert(JSON.stringify(capturedParams) === JSON.stringify(['T-100', 'T-100', 100]), 'Debe propagar ticket y parametros de alcance en orden.');
+  assert(JSON.stringify(capturedParams) === JSON.stringify(['T-100', 'T-100', 'T-100', 'T-100', 100]), 'Debe propagar los cuatro identificadores y parametros de alcance en orden.');
 
   console.log('FASE_4_11_OPERACION_DETALLE_TICKET_CUARTOS_V001: OK');
 })().catch((error) => {

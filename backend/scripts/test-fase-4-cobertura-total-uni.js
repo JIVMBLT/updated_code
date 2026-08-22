@@ -4,6 +4,13 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
+process.env.DB_HOST ||= 'localhost';
+process.env.DB_PORT ||= '3306';
+process.env.DB_USER ||= 'test';
+process.env.DB_PASSWORD ||= 'test';
+process.env.DB_NAME ||= 'test';
+process.env.DB_SSL ||= 'false';
+
 const backendRoot = path.join(__dirname, '..');
 const recordScope = require(path.join(
   backendRoot,
@@ -18,20 +25,22 @@ function text(relativePath) {
 
 function reqWithRooms(codes, ids = null, master = false) {
   const zoneIds = ids || codes.map((_, index) => index + 1);
+  const scopedZoneIds = master ? null : zoneIds;
+  const scopedCodes = master ? null : codes;
   return {
     informationAccess: {
       motor: 'alcance_uni',
       llave_maestra: master,
-      requiere_filtro_zona: true,
-      zona_ids: zoneIds,
-      zona_codigos: codes,
+      requiere_filtro_zona: !master,
+      zona_ids: scopedZoneIds,
+      zona_codigos: scopedCodes,
       alcance: {
         motor: 'alcance_uni',
         empresa: 'UNITED',
         llave_maestra: master,
-        requiere_filtro_zona: true,
-        zona_ids: zoneIds,
-        zona_codigos: codes
+        requiere_filtro_zona: !master,
+        zona_ids: scopedZoneIds,
+        zona_codigos: scopedCodes
       }
     }
   };
@@ -41,22 +50,21 @@ function testSharedRoomBuilders() {
   const req = reqWithRooms(['CNA-01', 'CNA-02'], [11, 12], true);
 
   const byId = recordScope.buildZoneIdScopeSql_gnral(req, 'z.id_zona');
-  assert.strictEqual(byId.sql, 'z.id_zona IN (?, ?)');
-  assert.deepStrictEqual(byId.params, [11, 12]);
+  assert.strictEqual(byId.sql, '1 = 1');
+  assert.deepStrictEqual(byId.params, []);
 
   const byCode = recordScope.buildZoneCodeScopeSql_gnral(req, 'gc.z_oper');
   assert.strictEqual(
     byCode.sql,
-    "UPPER(TRIM(COALESCE(gc.z_oper, ''))) IN (?, ?)"
+    '1 = 1'
   );
-  assert.deepStrictEqual(byCode.params, ['CNA-01', 'CNA-02']);
+  assert.deepStrictEqual(byCode.params, []);
 
   const inline = recordScope.buildZoneCodeScopeSqlInline_gnral(req, 'pc.zona_operativa');
-  assert.ok(inline.sql.includes("'CNA-01'"));
-  assert.ok(inline.sql.includes("'CNA-02'"));
+  assert.strictEqual(inline.sql, '1 = 1');
   assert.deepStrictEqual(inline.params, []);
 
-  const noRooms = reqWithRooms([], [], true);
+  const noRooms = reqWithRooms([], [], false);
   assert.strictEqual(
     recordScope.buildZoneCodeScopeSql_gnral(noRooms, 'gc.z_oper').sql,
     '1 = 0'

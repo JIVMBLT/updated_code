@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  hasUnrestrictedUnitedScope_gnral,
   zoneIds_gnral,
   zoneCodes_gnral
 } = require('./information-record-scope-gnral.service');
@@ -61,6 +62,7 @@ function zoneIdList_uni(req) {
  */
 function buildCobranzaProjectScopeSql_uni(req, alias) {
   const a = safeAlias_uni(alias);
+  if (hasUnrestrictedUnitedScope_gnral(req)) return '1 = 1';
   const ids = zoneIdList_uni(req);
   if (!ids.length) return '1 = 0';
 
