@@ -14,6 +14,10 @@
  * Movimientos de Portafolio sale de handlers legacy para mensual, semanal y
  * detalle. Todos resuelven cuartos por Portafolio.zona_id y z_op.
  *
+ * FOTOGRAFIAS UNITED:
+ * la galeria de proyecto usa portafolio_proyecto_fotos y conserva la cadena
+ * controller -> service -> repository -> handler _uni.
+ *
  * Los handlers no relacionados con el filtro territorial se conservan sin
  * cambios para minimizar riesgo durante la migracion incremental.
  */
@@ -21,6 +25,7 @@ const legacyController = require('../../controllers/data.controller');
 const portafolioComercialUni = require('./portafolio-comercial_uni');
 const portafolioConsultasUni = require('./portafolio-consultas_uni');
 const portafolioMovimientosUni = require('./portafolio-movimientos_uni');
+const portafolioProyectoFotosUni = require('./portafolio-proyecto-fotos_uni');
 
 const handlers = Object.freeze({
   getPortafolioFiltros: portafolioConsultasUni.getPortafolioFiltros_uni,
@@ -35,6 +40,9 @@ const handlers = Object.freeze({
   getPortafolioEquipoDetalle: portafolioConsultasUni.getPortafolioEquipoDetalle_uni,
   getPortafolioEquipos: portafolioComercialUni.getPortafolioEquipos_uni,
   getPortafolioProyectoDetalle: portafolioConsultasUni.getPortafolioProyectoDetalle_uni,
+  getPortafolioProyectoFotografias: portafolioProyectoFotosUni.getPortafolioProyectoFotografias_uni,
+  uploadPortafolioProyectoFotografia: portafolioProyectoFotosUni.uploadPortafolioProyectoFotografia_uni,
+  updatePortafolioProyectoFotoPrincipal: portafolioProyectoFotosUni.updatePortafolioProyectoFotoPrincipal_uni,
   getPortafolio: portafolioConsultasUni.getPortafolio_uni,
   syncPortafolio: legacyController.syncPortafolio,
   getEquipos: portafolioConsultasUni.getEquipos_uni

@@ -28,6 +28,9 @@ module.exports = {
   getPortafolioEquipoDetalle: createAction('getPortafolioEquipoDetalle'),
   getPortafolioEquipos: createAction('getPortafolioEquipos'),
   getPortafolioProyectoDetalle: createAction('getPortafolioProyectoDetalle'),
+  getPortafolioProyectoFotografias: createAction('getPortafolioProyectoFotografias'),
+  uploadPortafolioProyectoFotografia: createAction('uploadPortafolioProyectoFotografia'),
+  updatePortafolioProyectoFotoPrincipal: createAction('updatePortafolioProyectoFotoPrincipal'),
   getPortafolio: createAction('getPortafolio'),
   syncPortafolio: createAction('syncPortafolio'),
   getEquipos: createAction('getEquipos')

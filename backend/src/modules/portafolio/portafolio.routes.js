@@ -1,5 +1,6 @@
 // [Aster | 2026-08-21 | ASTER-MG | FASE 9/11: Movimientos Portafolio por cuartos UNITED]
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const portafolioController = require('./portafolio.controller');
 const { requireIntegrationAuthFor } = require('../../middleware/integration-auth.middleware');
@@ -13,6 +14,8 @@ const {
   filterPortafolioEquipmentBodyScope_gnral,
   requireContextualEquipmentScope_gnral
 } = require('../../services/information-record-scope-gnral.service');
+const filePolicy = require('../../services/storage/storage-file-policy.service');
+const { requireProjectPhotoManager_gnral } = require('../../middleware/project-photo.middleware');
 
 const requirePortafolioIntegration = requireIntegrationAuthFor('INTEGRATION_PORTAFOLIO_ID');
 
@@ -119,6 +122,30 @@ const contextualEquipmentGuard = dynamicHumanInformationGuard_gnral((req) => {
   };
 });
 
+const uploadProjectPhotoMulter_uni = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 1,
+    fileSize: filePolicy.getLimits_gnral().maxFileBytes
+  }
+}).single('foto');
+
+function uploadProjectPhoto_uni(req, res, next) {
+  uploadProjectPhotoMulter_uni(req, res, error => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        ok: false,
+        message: 'La fotografia supera el tamano maximo permitido.'
+      });
+    }
+    return res.status(400).json({
+      ok: false,
+      message: error.message || 'No fue posible leer la fotografia.'
+    });
+  });
+}
+
 router.get(
   '/portafolio/dashboard/inicial',
   ...dashboardPortafolioGuard,
@@ -171,6 +198,32 @@ router.get(
   portafolioController.getPortafolioEquipoDetalle
 );
 router.get('/portafolio/equipos', ...portafolioReadGuard, portafolioController.getPortafolioEquipos);
+
+// Fotografías de proyecto UNITED. La lectura no agrega un permiso fotográfico
+// independiente: quien puede abrir el proyecto y pasa su alcance territorial
+// puede ver la galería. Las mutaciones añaden el rol de gestión de fotografías.
+router.get(
+  '/portafolio/proyectos/:proyecto/fotografias',
+  ...portafolioDetailGuard,
+  requirePortafolioProjectScope_gnral,
+  portafolioController.getPortafolioProyectoFotografias
+);
+router.post(
+  '/portafolio/proyectos/:proyecto/fotografias',
+  ...portafolioDetailGuard,
+  requirePortafolioProjectScope_gnral,
+  requireProjectPhotoManager_gnral,
+  uploadProjectPhoto_uni,
+  portafolioController.uploadPortafolioProyectoFotografia
+);
+router.patch(
+  '/portafolio/proyectos/:proyecto/fotografias/principal',
+  ...portafolioDetailGuard,
+  requirePortafolioProjectScope_gnral,
+  requireProjectPhotoManager_gnral,
+  portafolioController.updatePortafolioProyectoFotoPrincipal
+);
+
 router.get(
   '/portafolio/proyectos/detalle/:proyecto',
   ...portafolioDetailGuard,
