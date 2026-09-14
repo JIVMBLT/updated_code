@@ -1,0 +1,3 @@
+ELIMINAR MANUALMENTE SI EXISTEN:
+tools/validar_fix_notificaciones_layout_v001.py
+tools/validar_fix_notificaciones_popover_v002.py

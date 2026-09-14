@@ -1,10 +1,8 @@
 .env
-backend/.env
+.env.*
 node_modules/
-backend/node_modules/
+*.log
 .DS_Store
-backend/scripts/usuario_password_temporal.csv
-backend/scripts/usuarios_passwords_temporales.csv
-
-# Local Netlify folder
-.netlify
+Thumbs.db
+.vscode/
+.idea/

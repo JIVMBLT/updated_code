@@ -1,0 +1,34 @@
+FASE 11 — ARCHIVOS V001
+
+MODIFICADOS / SOBRESCRIBIR:
+.gitignore
+README.md
+core/config.js
+
+NUEVOS / AGREGAR:
+manifest.json
+core/push-notifications.js
+core/data-sync.js
+docs/lab/FASE_11_LAB_DGB_CIERRE_INTEGRACION_V001.md
+docs/lab/FASE_11_LIMITATIONS_V001.md
+docs/lab/FASE_11_ROUTE_MATRIX_V001.md
+docs/lab/FASE_11_DELETE_V001.txt
+docs/lab/FASE_11_VALIDATION_V001.txt
+docs/lab/FASE_11_FILES_V001.txt
+docs/lab/FASE_11_CHECKSUMS_V001.sha256
+tests/lab_phase11_source_guard.test.cjs
+tests/lab_phase11_contracts.test.cjs
+tests/lab_phase11_package_guard.test.cjs
+
+ELIMINAR MANUALMENTE SI EXISTEN:
+tools/validar_fix_notificaciones_layout_v001.py
+tools/validar_fix_notificaciones_popover_v002.py
+
+SIN CAMBIOS:
+index.html
+lab/database/*
+lab/backend/*
+lab/runtime/*
+modules/*
+styles/*
+.github/workflows/pages.yml

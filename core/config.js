@@ -19,6 +19,30 @@
     identity:'synthetic-lab'
   });
 
+  function normalizeLegacyLabShell(){
+    if(typeof document==='undefined')return;
+    document.title='Mantto Gestor | LAB DGB';
+    const textBySelector={
+      '.auth-brand p':'LABORATORIO DGB · DATOS FICTICIOS',
+      '#login-form .auth-help':'Acceso de laboratorio con identidades ficticias.',
+      '#rd-api-status span:last-child':'Cargando LAB...',
+      '#view-help .help-head p':'Flujos, avisos y preguntas frecuentes del Laboratorio DGB.',
+      '#view-support-request .help-head p':'La solicitud se guarda únicamente dentro del Laboratorio DGB.',
+      '.panda-chat-title small':'Soporte Mantto · LAB DGB',
+      '#pandaMessages .nori-msg.bot':'Hola, soy Nori. Cargando flujos de ayuda del Laboratorio DGB...'
+    };
+    Object.entries(textBySelector).forEach(([selector,value])=>{
+      const element=document.querySelector(selector);
+      if(element)element.textContent=value;
+    });
+    document.documentElement.setAttribute('data-mantto-environment','LAB_DGB');
+  }
+
+  normalizeLegacyLabShell();
+  if(typeof document!=='undefined'&&document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',normalizeLegacyLabShell,{once:true});
+  }
+
   const dependencies=[
     './lab/vendor/sql.js/1.14.2/sql-wasm.js',
     './lab/runtime/lab-db.js',
@@ -76,7 +100,7 @@
   ];
 
   const styles=['./lab/styles/lab-phase4.css'];
-  const version='20260914-fase10-lab-dgb-v002';
+  const version='20260914-fase11-lab-dgb-v001';
   const checks={
     './lab/vendor/sql.js/1.14.2/sql-wasm.js':()=>typeof global.initSqlJs==='function',
     './lab/runtime/lab-db.js':()=>Boolean(global.ManttoLabDB),

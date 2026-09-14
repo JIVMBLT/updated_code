@@ -1,0 +1,91 @@
+FASE 11 - LAB DGB - CIERRE E INTEGRACION DE ENTRADA RAIZ V001
+VALIDACION EJECUTADA
+Fecha: 2026-09-14
+
+BASELINE GITHUB VERIFICADO
+==========================
+Repositorio: JIVMBLT/updated_code
+Rama: main
+Commit: dc2296db8cb6670199dde9b2b2597372789ec9ff
+Tree: 778f9f6fc490d723c4519ec5a3a230fc1ae7191a
+
+Hallazgos previos verificados en GitHub:
+- Fases 1-10 presentes.
+- backend/, database/, sql/ y validation/ legacy eliminados.
+- lab/database con schema.sql, seed.sql, version.json y migraciones 004-010.
+- index.html raiz referencia manifest.json, core/push-notifications.js y core/data-sync.js.
+- manifest.json, core/push-notifications.js y core/data-sync.js no estaban presentes despues de la limpieza.
+- dos validadores legacy permanecian en tools/.
+- workflow Pages existente fallo en Configure Pages porque Pages no estaba habilitado/configurado para GitHub Actions.
+
+VALIDACION F11
+==============
+node --check core/config.js: PASS
+node --check core/push-notifications.js: PASS
+node --check core/data-sync.js: PASS
+manifest.json parse JSON: PASS
+FASE 11 source guard: PASS
+FASE 11 contracts: PASS
+FASE 11 package guard: PASS
+
+AISLAMIENTO F11
+===============
+Hosts productivos en archivos runtime nuevos/modificados F11: 0
+Push remoto: DESHABILITADO POR DISENO
+Registro de Service Worker productivo desde core/push-notifications.js: 0
+fetch desde core/push-notifications.js: 0
+Transporte propio desde core/data-sync.js: 0
+MANTTO_LAB_MODE: true
+MANTTO_LAB_PRODUCTION_CONNECTIONS_ALLOWED: false
+
+SQLITE / BACKEND
+================
+Migracion 011: NO EXISTE
+DDL F11: 0
+Cambios de schema: 0
+Cambios de seed: 0
+Cambios de backend LAB: 0
+Cambios de rutas API: 0
+PRAGMA user_version esperado: 10
+Rutas acumuladas heredadas de F10: 288
+
+REGRESION ACUMULADA F1-F11
+==========================
+Workspace acumulado reconstruido desde los ZIP validos F1-F10 y overlay F11.
+
+29 pruebas CJS ejecutadas: PASS
+8 pruebas Python ejecutadas: PASS
+37 archivos de prueba ejecutados: PASS
+
+F1 SQLite / sql.js WASM: PASS
+F2 Backend Engine: PASS (11/11)
+F3 Transporte / aislamiento: PASS (10/10)
+F4 Identidad / permisos: PASS
+F5 Servicios compartidos: PASS
+F6 Home: PASS
+F7 Operacion / Portafolio: PASS
+F8 Ventas / Cobranza: PASS
+F9 Instalaciones / Logistica / Almacen: PASS
+F10 Servicios transversales / cierre: PASS
+F11 Compatibilidad entrada raiz: PASS estatico/contractual
+
+FULL_REGRESSION_F1_F11_PASS
+
+ENTREGA
+=======
+.patch: 0
+.diff: 0
+APPLY_/APLICAR_: 0
+Archivos modificados incluidos completos: SI
+Archivos nuevos incluidos completos: SI
+Eliminaciones: documentadas para ejecucion manual; no se entrega script mutador.
+
+NO VALIDADO / NO EJECUTADO
+==========================
+- E2E visual del index.html raiz en navegador: NO EJECUTADO.
+- Deploy GitHub Pages: NO EJECUTADO POR F11.
+- GitHub Pages habilitado/configurado: NO CONFIRMADO.
+- Workflow YML definitivo: NO MODIFICADO.
+- Registro real de PWA /lab/ en HTTPS: NO EJECUTADO EN F11.
+- Escritura remota a GitHub durante generacion F11: 0.
+- Escritura a Aiven/Azure/Netlify/Drive/Sheets: 0.
