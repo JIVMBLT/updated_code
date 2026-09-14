@@ -34,20 +34,46 @@ jobs:
       - name: Generate deployed version metadata
         run: node tools/generate-build-info.js
 
-      - name: Run LAB regression tests
+      - name: Run LAB integrated regression tests
         shell: bash
         run: |
           set -euo pipefail
 
-          for test in tests/lab_*.cjs; do
+          while IFS= read -r test; do
             echo "> node $test"
             node "$test"
-          done
+          done < <(find tests -maxdepth 1 -type f -name 'lab_*.cjs' ! -name '*package_guard*' | sort)
 
-          for test in tests/lab_*.py; do
+          while IFS= read -r test; do
             echo "> python3 $test"
             python3 "$test"
-          done
+          done < <(find tests -maxdepth 1 -type f -name 'lab_*.py' | sort)
+
+      - name: Validate integrated LAB structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f index.html
+          test -f manifest.json
+          test -f core/config.js
+          test -f core/data-sync.js
+          test -f core/push-notifications.js
+          test -f lab/index.html
+          test -f lab/database/schema.sql
+          test -f lab/database/seed.sql
+          test -f lab/vendor/sql.js/1.14.2/sql-wasm.js
+          test -f lab/vendor/sql.js/1.14.2/sql-wasm.wasm
+
+          test ! -d backend
+          test ! -d database
+          test ! -d sql
+          test ! -d validation
+
+          if find . -type f             \( -name '*.patch' -o -name '*.diff' -o -name 'APPLY_*' -o -name 'APLICAR_*' \)             -not -path './.git/*' | grep -q .; then
+            echo 'ERROR: se encontraron artefactos prohibidos (.patch/.diff/APPLY_/APLICAR_).'
+            exit 1
+          fi
 
       - name: Build GitHub Pages artifact
         shell: bash
