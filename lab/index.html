@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LAB DGB · Fase 10 Servicios Transversales + Cierre Técnico</title>
+  <link rel="stylesheet" href="./styles/lab-phase1.css">
+  <link rel="stylesheet" href="./styles/lab-phase4.css">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0d2e6e">
+</head>
+<body>
+<main>
+  <div class="lab-banner">LABORATORIO DGB · DATOS FICTICIOS · SIN CONEXIÓN A PRODUCCIÓN</div>
+
+  <section class="lab-card">
+    <p class="lab-eyebrow">FASE 10 V002</p>
+    <h1>Servicios transversales + cierre técnico</h1>
+    <p>Backups locales, Blob Store, jobs simulados, diagnóstico técnico y PWA LAB sobre SQLite WASM + IndexedDB.</p>
+    <div class="lab-grid">
+      <div class="lab-kpi">Base de datos<b id="db-status">Inicializando…</b></div>
+      <div class="lab-kpi">Backend LAB<b id="backend-status">Inicializando…</b></div>
+      <div class="lab-kpi">Transporte LAB<b id="transport-status">Inicializando…</b></div>
+      <div class="lab-kpi">Fase 10<b id="phase10-status">Inicializando…</b></div>
+      <div class="lab-kpi">Tareas<b id="tasks">—</b></div>
+      <div class="lab-kpi">Notificaciones<b id="notifications">—</b></div>
+      <div class="lab-kpi">Interacciones<b id="interactions">—</b></div>
+      <div class="lab-kpi">PRAGMA user_version<b id="user-version">—</b></div>
+    </div>
+  </section>
+
+  <section class="lab-card">
+    <h2>Identidad de laboratorio</h2>
+    <div class="lab-actions">
+      <select id="identity-select" aria-label="Identidad LAB"></select>
+      <button id="select-identity" type="button">Usar identidad</button>
+      <button id="home-snapshot" class="secondary" type="button">Home snapshot</button>
+      <button id="task-list" class="secondary" type="button">Tareas visibles</button>
+      <button id="task-catalogs" class="secondary" type="button">Catálogos tareas</button>
+      <button id="notifications-list" class="secondary" type="button">Notificaciones</button>
+      <button id="home-status" class="secondary" type="button">Diagnostico Home</button>
+      <button id="operation-summary" class="secondary" type="button">Resumen del Dia</button>
+      <button id="portfolio-dashboard" class="secondary" type="button">Dashboard Portafolio</button>
+      <button id="portfolio-movements" class="secondary" type="button">Movimientos</button>
+      <button id="sales-dashboard" class="secondary" type="button">Dashboard Ventas</button>
+      <button id="sales-quotes" class="secondary" type="button">Cotizaciones</button>
+      <button id="collections-uni" class="secondary" type="button">Cobranza UNITED</button>
+      <button id="collections-cor" class="secondary" type="button">Cobranza CORELLIAN</button>
+      <button id="phase8-status-btn" class="secondary" type="button">Diagnostico F8</button>
+      <button id="installations-list" class="secondary" type="button">Instalaciones</button>
+      <button id="logistics-list" class="secondary" type="button">Producción / Logística</button>
+      <button id="warehouse-dashboard" class="secondary" type="button">Almacén</button>
+      <button id="phase9-status-btn" class="secondary" type="button">Diagnostico F9</button>
+      <button id="phase10-status-btn" data-technical class="secondary" type="button">Cierre técnico F10</button>
+      <button id="technical-routes" data-technical class="secondary" type="button">Cobertura rutas</button>
+      <button id="technical-jobs" data-technical class="secondary" type="button">Jobs LAB</button>
+      <button id="run-integrity" data-technical class="secondary" type="button">Integridad SQLite</button>
+      <button id="pwa-status" data-technical class="secondary" type="button">PWA LAB</button>
+    </div>
+    <p><small id="identity-current">Sin identidad seleccionada.</small></p>
+  </section>
+
+  <section class="lab-card">
+    <h2>Persistencia y respaldo</h2>
+    <div class="lab-actions">
+      <button id="refresh" type="button">Refrescar diagnóstico</button>
+      <button id="persist" class="secondary" type="button">Persistir ahora</button>
+      <button id="backup-export" data-technical class="secondary" type="button">Exportar respaldo LAB</button>
+      <button id="backup-import" data-technical class="secondary" type="button">Importar respaldo LAB</button>
+      <input id="backup-file" type="file" accept="application/json,.json" hidden>
+      <button id="reset" class="danger" type="button">Reset LAB + Fase 10</button>
+    </div>
+  </section>
+
+  <section class="lab-card">
+    <h2>Log</h2>
+    <pre id="log" aria-live="polite"></pre>
+  </section>
+</main>
+
+<script src="./vendor/sql.js/1.14.2/sql-wasm.js"></script>
+<script src="./runtime/lab-db.js"></script>
+<script src="./runtime/lab-bootstrap.js"></script>
+<script src="./backend/lab-errors.js"></script>
+<script src="./backend/lab-context.js"></script>
+<script src="./backend/lab-router.js"></script>
+<script src="./backend/lab-backend.js"></script>
+<script src="./backend/routes/lab-system.routes.js"></script>
+<script src="./runtime/lab-backend-bootstrap.js"></script>
+<script src="./runtime/lab-transport.js"></script>
+<script src="./backend/services/lab-permissions.service.js"></script>
+<script src="./backend/services/lab-scope.service.js"></script>
+<script src="./backend/routes/lab-auth-permissions.routes.js"></script>
+<script src="./runtime/lab-phase4-bootstrap.js"></script>
+<script src="./backend/services/lab-catalogs.service.js"></script>
+<script src="./backend/services/lab-users.service.js"></script>
+<script src="./backend/services/lab-relations.service.js"></script>
+<script src="./backend/services/lab-shared-assets.service.js"></script>
+<script src="./backend/routes/lab-shared.routes.js"></script>
+<script src="./runtime/lab-phase5-bootstrap.js"></script>
+<script src="../core/rich-text.js"></script>
+<script src="./backend/services/lab-blob-store.js"></script>
+<script src="./backend/services/lab-interactions.service.js"></script>
+<script src="./backend/services/lab-notifications.service.js"></script>
+<script src="./backend/services/lab-tasks.service.js"></script>
+<script src="./backend/services/lab-home.service.js"></script>
+<script src="./backend/routes/lab-home.routes.js"></script>
+<script src="./runtime/lab-phase6-bootstrap.js"></script>
+<script src="./backend/services/lab-operation.service.js"></script>
+<script src="./backend/services/lab-criticals.service.js"></script>
+<script src="./backend/services/lab-portfolio.service.js"></script>
+<script src="./backend/services/lab-movements.service.js"></script>
+<script src="./backend/services/lab-followup.service.js"></script>
+<script src="./backend/services/lab-tickets.service.js"></script>
+<script src="./backend/routes/lab-operation.routes.js"></script>
+<script src="./runtime/lab-phase7-bootstrap.js"></script>
+<script src="./backend/services/lab-sales.service.js"></script>
+<script src="./backend/services/lab-collections-uni.service.js"></script>
+<script src="./backend/services/lab-collections-cor.service.js"></script>
+<script src="./backend/routes/lab-sales-collections.routes.js"></script>
+<script src="./runtime/lab-phase8-bootstrap.js"></script>
+<script src="./backend/services/lab-installations.service.js"></script>
+<script src="./backend/services/lab-logistics.service.js"></script>
+<script src="./backend/services/lab-warehouse.service.js"></script>
+<script src="./backend/routes/lab-installations-logistics-warehouse.routes.js"></script>
+<script src="./runtime/lab-phase9-bootstrap.js"></script>
+<script src="./backend/services/lab-backup.service.js"></script>
+<script src="./backend/services/lab-jobs.service.js"></script>
+<script src="./runtime/lab-pwa.js"></script>
+<script src="./backend/services/lab-diagnostics.service.js"></script>
+<script src="./backend/routes/lab-technical.routes.js"></script>
+<script src="./runtime/lab-phase10-bootstrap.js"></script>
+<script src="./runtime/lab-auth.js"></script>
+<script>
+(function phase10Diagnostic(){
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const pretty=value=>JSON.stringify(value,null,2);
+  const log=message=>{$('log').textContent+=`[${new Date().toLocaleTimeString('es-MX')}] ${message}\n`;};
+
+  function fillIdentities(){
+    const select=$('identity-select');
+    const identities=window.ManttoLabAuth.listLabIdentities();
+    select.innerHTML=identities.map(user=>`<option value="${Number(user.id_SB)}">${user.rol} · ${user.empresa||'LAB'} · ${user.nombre}</option>`).join('');
+    const actor=window.ManttoLabAuth.getActorUser();
+    if(actor)select.value=String(actor.id_SB);
+  }
+  function render(){
+    const db=window.ManttoLabDB.getStatus();
+    const backend=window.ManttoLabBackend?.getStatus?.()||null;
+    const transport=window.ManttoLabTransport?.getStatus?.()||null;
+    const actor=window.ManttoLabAuth?.getActorUser?.()||null;
+    const effective=window.ManttoLabAuth?.getUser?.()||actor;
+    $('db-status').textContent=db.ready?'Lista':'No lista';
+    $('backend-status').textContent=backend?.ready?'Listo':'No listo';
+    $('transport-status').textContent=transport?.ready?'Aislado':'No listo';
+    $('phase10-status').textContent=window.ManttoLabPhase10?'Lista':'No lista';
+    $('tasks').textContent=window.ManttoLabDB.scalar('SELECT COUNT(*) FROM pendientes');
+    $('notifications').textContent=window.ManttoLabDB.scalar('SELECT COUNT(*) FROM sup_notificaciones');
+    $('interactions').textContent=window.ManttoLabDB.scalar('SELECT COUNT(*) FROM usuario_interacciones');
+    $('user-version').textContent=window.ManttoLabDB.scalar('PRAGMA user_version');
+    $('identity-current').textContent=actor?`${actor.nombre} · ${actor.rol} · ${actor.empresa}`:'Sin identidad seleccionada.';
+    const programmer=Boolean(effective&&window.ManttoLabDiagnosticsService?.isProgrammer(effective,window.ManttoLabDB));
+    document.querySelectorAll('[data-technical]').forEach(button=>{button.disabled=!programmer;button.title=programmer?'':'Disponible exclusivamente para Programador';});
+    fillIdentities();
+  }
+  async function request(path,options){return window.ManttoLabTransport.request(path,options);}
+  function requireProgrammer(){const effective=window.ManttoLabAuth?.getUser?.();window.ManttoLabDiagnosticsService.assertProgrammer(effective,window.ManttoLabDB);return effective;}
+
+  Promise.all([
+    window.ManttoLabReady,
+    window.ManttoLabBackendReady,
+    window.ManttoLabTransportReady,
+    window.ManttoLabPhase10Ready
+  ]).then(()=>{
+    render();
+    log('Fase 10 lista. El cierre técnico está disponible para identidades Programador.');
+  }).catch(error=>log(error.stack||error.message||String(error)));
+
+  $('select-identity').addEventListener('click',async()=>{try{await window.ManttoLabAuth.selectLabIdentity(Number($('identity-select').value));render();log('IDENTIDAD\n'+pretty(window.ManttoLabAuth.getActorUser()));}catch(error){log('IDENTIDAD ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('home-snapshot').addEventListener('click',async()=>{try{log('HOME SNAPSHOT\n'+pretty(await request('/api/home/snapshot')));}catch(error){log('HOME ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('task-list').addEventListener('click',async()=>{try{log('TAREAS\n'+pretty(await request('/api/pendientes')));}catch(error){log('TAREAS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('task-catalogs').addEventListener('click',async()=>{try{log('CATALOGOS\n'+pretty(await request('/api/pendientes/catalogos')));}catch(error){log('CATALOGOS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('notifications-list').addEventListener('click',async()=>{try{log('NOTIFICACIONES\n'+pretty(await request('/api/notificaciones?limit=20')));}catch(error){log('NOTIFICACIONES ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('home-status').addEventListener('click',async()=>{try{log('HOME STATUS\n'+pretty(await request('/api/__lab/home-status')));}catch(error){log('STATUS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('operation-summary').addEventListener('click',async()=>{try{log('RESUMEN DEL DIA\n'+pretty(await request('/api/operacion/resumen-dia/inicial')));}catch(error){log('RESUMEN ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('portfolio-dashboard').addEventListener('click',async()=>{try{log('DASHBOARD PORTAFOLIO\n'+pretty(await request('/api/portafolio/dashboard/inicial')));}catch(error){log('PORTAFOLIO ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('portfolio-movements').addEventListener('click',async()=>{try{log('MOVIMIENTOS\n'+pretty(await request('/api/portafolio/movimientos/inicial')));}catch(error){log('MOVIMIENTOS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('sales-dashboard').addEventListener('click',async()=>{try{log('DASHBOARD VENTAS\n'+pretty(await request('/api/ventas/dashboard/kpis')));}catch(error){log('VENTAS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('sales-quotes').addEventListener('click',async()=>{try{log('COTIZACIONES\n'+pretty(await request('/api/ventas/cotizaciones?page=1&page_size=10')));}catch(error){log('COTIZACIONES ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('collections-uni').addEventListener('click',async()=>{try{log('COBRANZA UNITED\n'+pretty(await request('/api/cobranza-uni/gestion-credito')));}catch(error){log('COBRANZA UNITED ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('collections-cor').addEventListener('click',async()=>{try{log('COBRANZA CORELLIAN\n'+pretty(await request('/api/cobranza-cor/estados-cuenta')));}catch(error){log('COBRANZA CORELLIAN ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('phase8-status-btn').addEventListener('click',async()=>{try{log('FASE 8 STATUS\n'+pretty(await request('/api/__lab/sales-collections-status')));}catch(error){log('FASE 8 ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('installations-list').addEventListener('click',async()=>{try{log('INSTALACIONES\n'+pretty(await request('/api/instalaciones/proyectos')));}catch(error){log('INSTALACIONES ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('logistics-list').addEventListener('click',async()=>{try{log('LOGISTICA\n'+pretty(await request('/api/logistica')));}catch(error){log('LOGISTICA ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('warehouse-dashboard').addEventListener('click',async()=>{try{log('ALMACEN\n'+pretty(await request('/api/almacen/dashboard')));}catch(error){log('ALMACEN ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('phase9-status-btn').addEventListener('click',async()=>{try{log('FASE 9 STATUS\n'+pretty(await request('/api/__lab/phase9')));}catch(error){log('FASE 9 ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('phase10-status-btn').addEventListener('click',async()=>{try{requireProgrammer();log('CIERRE F10\n'+pretty(await request('/api/__lab/closure')));}catch(error){log('F10 ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('technical-routes').addEventListener('click',async()=>{try{requireProgrammer();log('RUTAS LAB\n'+pretty(await request('/api/__lab/routes')));}catch(error){log('RUTAS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('technical-jobs').addEventListener('click',async()=>{try{requireProgrammer();log('JOBS LAB\n'+pretty(await request('/api/__lab/jobs')));}catch(error){log('JOBS ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('run-integrity').addEventListener('click',async()=>{try{requireProgrammer();log('INTEGRIDAD\n'+pretty(await request('/api/__lab/jobs/integrity-check/run',{method:'POST'})));}catch(error){log('INTEGRIDAD ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('pwa-status').addEventListener('click',()=>{try{requireProgrammer();log('PWA LAB\n'+pretty(window.ManttoLabPwa.getStatus()));}catch(error){log('PWA ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('backup-export').addEventListener('click',async()=>{try{requireProgrammer();const result=await window.ManttoLabBackupService.download();log('RESPALDO EXPORTADO\n'+pretty(result));}catch(error){log('BACKUP ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('backup-import').addEventListener('click',()=>{try{requireProgrammer();$('backup-file').click();}catch(error){log('BACKUP ERROR\n'+(error.stack||error.message||String(error)));}});
+  $('backup-file').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;try{requireProgrammer();if(!window.confirm('¿Importar este respaldo y sustituir exclusivamente los datos locales del LAB?'))return;const text=await file.text();const result=await window.ManttoLabBackupService.importEnvelope(text);log('RESPALDO IMPORTADO\n'+pretty(result));location.reload();}catch(error){log('IMPORT ERROR\n'+(error.stack||error.message||String(error)));}finally{event.target.value='';}});
+  $('refresh').addEventListener('click',render);
+  $('persist').addEventListener('click',async()=>{await window.ManttoLabDB.persist('manual-diagnostic-phase10-v002');render();});
+  $('reset').addEventListener('click',async()=>{if(!window.confirm('¿Restablecer exclusivamente los datos ficticios LAB y reaplicar Fases 4 a 10?'))return;await window.ManttoLabPhase10.resetDatabase();localStorage.removeItem('mantto_lab_identity_id_v2');location.reload();});
+})();
+</script>
+</body>
+</html>

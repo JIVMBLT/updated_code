@@ -1,0 +1,33 @@
+FASE_2_LAB_DGB_BACKEND_ENGINE_V002
+
+PRERREQUISITO:
+  FASE_1_LAB_DGB_SQLITE_WASM_V002
+
+MODIFICADO - ARCHIVO COMPLETO:
+  lab/index.html
+
+NUEVOS - ARCHIVOS COMPLETOS:
+  lab/backend/lab-errors.js
+  lab/backend/lab-context.js
+  lab/backend/lab-router.js
+  lab/backend/lab-backend.js
+  lab/backend/routes/lab-system.routes.js
+  lab/runtime/lab-backend-bootstrap.js
+  tests/lab_phase2_backend_engine.test.cjs
+  docs/lab/FASE_2_LAB_DGB_BACKEND_ENGINE_V002.md
+  docs/lab/FASE_2_FILES_V002.txt
+  docs/lab/FASE_2_VALIDATION_V002.txt
+  docs/lab/FASE_2_CHECKSUMS_V002.sha256
+
+NO INCLUIDOS PORQUE NO CAMBIARON:
+  lab/database/*
+  lab/vendor/*
+  lab/runtime/lab-db.js
+  lab/runtime/lab-bootstrap.js
+  lab/styles/lab-phase1.css
+  index.html principal
+  core/*
+  _redirects
+
+ARCHIVOS .patch: 0
+APPLY_FASE*.ps1: 0

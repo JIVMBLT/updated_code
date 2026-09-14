@@ -1,0 +1,16 @@
+(function initManttoLabFollowupService(root,factory){
+  const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.ManttoLabFollowupService=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function createManttoLabFollowupService(root){
+  'use strict';
+  function txt(v){return String(v==null?'':v).trim();}
+  function upper(v){return txt(v).toUpperCase();}
+  function visible(userId,db){return root.ManttoLabOperationService.visiblePortfolio(userId,db,{includeInactive:false});}
+  function interests(userId,db){return(db||root.ManttoLabDB).query(`SELECT i.*,p.proyecto,p.numero_equipo,p.identificacion_sitio,z.zona AS zona_oficial FROM portafolio_interes i JOIN portafolio p ON p.id_portafolio=i.id_portafolio LEFT JOIN z_op z ON z.id_zona=p.zona_id WHERE i.id_usuario=? AND i.activo=1 ORDER BY p.proyecto,p.numero_equipo`,[Number(userId)]);}
+  function list(userId,db){const allowed=new Set(visible(userId,db).map(x=>Number(x.id_portafolio)));return interests(userId,db).filter(x=>allowed.has(Number(x.id_portafolio)));}
+  function project(userId,name,db){const rows=visible(userId,db).filter(p=>upper(p.proyecto)===upper(name)||upper(p.nombre_publico)===upper(name)||upper(p.proyecto_cc_x_port)===upper(name)),ids=new Set(interests(userId,db).map(x=>Number(x.id_portafolio)));if(!rows.length)return null;return{proyecto:rows[0].proyecto,activo:rows.some(r=>ids.has(Number(r.id_portafolio))),total_equipos:rows.length,equipos_marcados:rows.filter(r=>ids.has(Number(r.id_portafolio))).length};}
+  function equipment(userId,code,db){const row=visible(userId,db).find(p=>txt(p.numero_equipo)===txt(code));if(!row)return null;const active=Number((db||root.ManttoLabDB).scalar(`SELECT COUNT(*) FROM portafolio_interes WHERE id_usuario=? AND id_portafolio=? AND activo=1`,[Number(userId),Number(row.id_portafolio)])||0)>0;return{codigo_equipo:row.numero_equipo,proyecto:row.proyecto,activo:active};}
+  function setRows(userId,rows,active,origin,db){const database=db||root.ManttoLabDB;rows.forEach(row=>{const found=database.query(`SELECT id_interes FROM portafolio_interes WHERE id_usuario=? AND id_portafolio=? LIMIT 1`,[Number(userId),Number(row.id_portafolio)])[0];if(found)database.run(`UPDATE portafolio_interes SET activo=?,origen=?,updated_at=CURRENT_TIMESTAMP WHERE id_interes=?`,[active?1:0,origin,Number(found.id_interes)]);else if(active)database.run(`INSERT INTO portafolio_interes(id_usuario,id_portafolio,origen,activo) VALUES(?,?,?,1)`,[Number(userId),Number(row.id_portafolio),origin]);});}
+  function setProject(userId,name,body,db){const rows=visible(userId,db).filter(p=>upper(p.proyecto)===upper(name)||upper(p.nombre_publico)===upper(name)||upper(p.proyecto_cc_x_port)===upper(name));if(!rows.length)return null;const active=body?.activo!==false&&body?.interes!==false&&body?.seguimiento!==false;setRows(userId,rows,active,'PROYECTO',db);return project(userId,name,db);}
+  function setEquipment(userId,code,body,db){const row=visible(userId,db).find(p=>txt(p.numero_equipo)===txt(code));if(!row)return null;const active=body?.activo!==false&&body?.interes!==false&&body?.seguimiento!==false;setRows(userId,[row],active,'EQUIPO',db);return equipment(userId,code,db);}
+  return Object.freeze({list,project,equipment,setProject,setEquipment});
+});

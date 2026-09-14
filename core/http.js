@@ -16,7 +16,11 @@
   ]);
 
   function apiBase(){
-    return String(window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
+    return String(window.MANTTO_API_BASE || '').replace(/\/$/, '');
+  }
+
+  function isLabMode(){
+    return window.MANTTO_LAB_MODE === true || Boolean(window.__MANTTO_LAB_NETWORK_POLICY__);
   }
 
   function identityValue(user){
@@ -85,8 +89,14 @@
     }
   }
 
+  function isApiPath(path){
+    const clean = String(path || '').split('?')[0];
+    return clean === '/api' || clean.startsWith('/api/');
+  }
+
   function isGestorApi(url){
     if(!url) return false;
+    if(isLabMode()) return isApiPath(url.pathname);
     try{
       const base = new URL(apiBase(), window.location.href);
       return url.origin === base.origin && url.pathname.startsWith('/api/');
@@ -115,9 +125,6 @@
       (typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined);
     const headers = new Headers(sourceHeaders || {});
 
-    // Compatibilidad: cualquier fetch operativo antiguo pasa por el cliente
-    // central y recibe Auth/Viewer/Device sin obligar a reescribir todos los
-    // módulos en una sola entrega.
     if(window.ManttoAuth && typeof window.ManttoAuth.authHeaders === 'function'){
       const authHeaders = window.ManttoAuth.authHeaders() || {};
       Object.keys(authHeaders).forEach(name => {
@@ -141,6 +148,20 @@
     delete next.manttoSkipMutationEvent;
     delete next.manttoNoDedupe;
     return next;
+  }
+
+  function emitMutation(path, method){
+    if(!['POST','PUT','PATCH','DELETE'].includes(method)) return;
+    if(isSystemMutationUrl(path)) return;
+    document.dispatchEvent(new CustomEvent('mantto:data-mutated', {
+      detail:{
+        path:String(path || ''),
+        url:String(path || ''),
+        method,
+        source:'mantto-http',
+        at:Date.now()
+      }
+    }));
   }
 
   function installFetchBridge(){
@@ -182,15 +203,7 @@
         !managedMutation && !skipMutationEvent &&
         !isSystemMutationUrl(url && url.pathname)
       ){
-        document.dispatchEvent(new CustomEvent('mantto:data-mutated', {
-          detail:{
-            path:url ? url.pathname + url.search : '',
-            url:url ? url.toString() : '',
-            method,
-            source:'mantto-http',
-            at:Date.now()
-          }
-        }));
+        emitMutation(url ? url.pathname + url.search : '', method);
       }
 
       return response;
@@ -213,9 +226,21 @@
     if(!response.ok || data.ok === false){
       const error = new Error(data.message || data.error || ('HTTP ' + response.status));
       error.status = response.status;
+      error.code = data.code || null;
+      error.payload = data;
       throw error;
     }
     return data;
+  }
+
+  async function labRequest(path, cfg){
+    if(window.ManttoLabTransportReady) await window.ManttoLabTransportReady;
+    if(!window.ManttoLabTransport || typeof window.ManttoLabTransport.request !== 'function'){
+      const error = new Error('Transporte LAB no disponible.');
+      error.code = 'LAB_TRANSPORT_NOT_READY';
+      throw error;
+    }
+    return window.ManttoLabTransport.request(path, cfg);
   }
 
   function request(path, options){
@@ -226,10 +251,14 @@
     const dedupe = source.dedupe !== false && (method === 'GET' || method === 'HEAD');
     const key = requestKey(path, method, source.cacheKey);
     const cfg = Object.assign({}, source);
+    const skipMutationEvent = Boolean(cfg.manttoSkipMutationEvent);
     delete cfg.cacheTtlMs;
     delete cfg.cacheKey;
     delete cfg.dedupe;
     delete cfg.force;
+    delete cfg.manttoMutationManaged;
+    delete cfg.manttoSkipMutationEvent;
+    delete cfg.manttoNoDedupe;
 
     if(!force && cacheTtlMs > 0){
       const hit = cache.get(key);
@@ -239,12 +268,14 @@
     if(dedupe && inflight.has(key)) return inflight.get(key);
 
     const task = Promise.resolve().then(() => {
+      if(isLabMode() && isApiPath(path)) return labRequest(path, cfg);
       if(window.ManttoAuth && typeof window.ManttoAuth.api === 'function'){
         return window.ManttoAuth.api(path, cfg);
       }
       return fallbackRequest(path, cfg);
     }).then(value => {
       if(cacheTtlMs > 0) cache.set(key, { value, expiresAt:Date.now() + cacheTtlMs });
+      if(isLabMode() && !skipMutationEvent) emitMutation(path, method);
       return value;
     }).finally(() => inflight.delete(key));
 

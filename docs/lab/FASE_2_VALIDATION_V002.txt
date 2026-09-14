@@ -1,0 +1,70 @@
+FASE 2 LAB DGB BACKEND ENGINE V002 - VALIDACION
+Fecha de generación: 2026-09-14
+
+BASELINE LAB VERIFICADO
+- Repo: JIVMBLT/updated_code
+- Branch: main
+- Commit: d3b766477663e6726ea46f1bb08bdc30b01a74e6
+
+VALIDACION ACUMULADA FASE 1 V002 + FASE 2 V002
+
+[PASS] Phase 1 Python SQLite smoke
+  tables: 93
+  columns: 1553
+  indexes: 445
+  seeded_tables: 67
+  seed_rows: 900
+  foreign_key_violations: 0
+  user_version: 1
+
+[PASS] Phase 1 sql.js WASM smoke
+  tables: 93
+  users: 61
+  projects: 15
+  equipment: 15
+  tickets: 30
+  tasks: 20
+  userVersion: 1
+  fkViolations: 0
+
+[PASS] Phase 2 Backend Engine unit tests
+  tests: 11
+  pass: 11
+  fail: 0
+
+Casos probados:
+  - params + query repetida
+  - middleware
+  - contexto de usuario
+  - POST con JSON
+  - transacción automática en mutaciones
+  - rollback ante error de mutación
+  - contrato 404
+  - error controlado 400 + code/details
+  - error 500 con mensaje público protegido
+  - fail-closed si un handler no responde
+  - ManttoLabApiError en request()
+  - JSON inválido
+  - rutas de sistema y contadores
+  - ejecución local sin invocar fetch
+
+[PASS] node --check
+  lab/backend/lab-errors.js
+  lab/backend/lab-context.js
+  lab/backend/lab-router.js
+  lab/backend/lab-backend.js
+  lab/backend/routes/lab-system.routes.js
+  lab/runtime/lab-backend-bootstrap.js
+
+[PASS] Recursos locales referenciados por lab/index.html existen en instalación acumulada.
+[PASS] Source guard: sin azurewebsites/aivencloud/supabase/Google Apps Script en runtime/backend de Fase 2.
+[PASS] Archivos .patch: 0
+[PASS] APPLY_FASE*.ps1: 0
+
+NO EJECUTADO / NO CONFIRMADO
+- E2E en navegador real.
+- Deploy GitHub Pages.
+- Escritura en GitHub remoto.
+- Acceso a Azure.
+- Acceso a Aiven.
+- Deploy Netlify.

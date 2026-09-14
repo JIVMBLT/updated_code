@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Laboratorio DGB">
+  <rect width="512" height="512" rx="96" fill="#0d2e6e"/>
+  <rect x="72" y="72" width="368" height="368" rx="64" fill="#1b4fd8"/>
+  <path d="M176 132h160v48h-52v104c0 22 8 43 22 59l54 61H152l54-61c14-16 22-37 22-59V180h-52z" fill="#fff"/>
+  <path d="M200 348h112l28 32H172z" fill="#e87722"/>
+  <circle cx="234" cy="303" r="12" fill="#e87722"/>
+  <circle cx="278" cy="326" r="9" fill="#e87722"/>
+</svg>

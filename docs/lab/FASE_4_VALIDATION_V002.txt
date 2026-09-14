@@ -1,0 +1,86 @@
+FASE 4 LAB DGB IDENTIDAD PERMISOS V002
+Fecha de validacion: 2026-09-13
+
+BASELINE LAB GITHUB VERIFICADO
+JIVMBLT/updated_code main = d3b766477663e6726ea46f1bb08bdc30b01a74e6
+
+VALIDACION ACUMULADA FASES 1-4
+
+[FASE 1 / Python SQLite]
+PASS
+Tablas: 93
+Columnas: 1553
+Indices: 445
+Tablas con seed: 67
+Registros seed: 900
+FK violations: 0
+PRAGMA user_version: 1 antes de Fase 4
+
+[FASE 1 / sql.js WASM]
+PASS
+Usuarios: 61
+Proyectos: 15
+Equipos: 15
+Tickets: 30
+Tareas: 20
+FK violations: 0
+
+[FASE 2 / Backend Engine]
+11 pruebas
+11 PASS
+0 FAIL
+
+[FASE 3 / Transporte y aislamiento]
+10 pruebas
+10 PASS
+0 FAIL
+
+[FASE 4 / Auth + permisos + alcance]
+PASS: FASE4_V002_AUTH_PERMISSIONS_OK
+- permiso Viewer heredado de Programador: PASS
+- override personal deny sobre rol: PASS
+- restauracion de herencia: PASS
+- CORELLIAN REPORTA_A directo, no recursivo: PASS
+- UNITED por zonas: PASS
+- UNITED llave maestra: PASS
+- alcance sin evidencia falla cerrado: PASS
+- session-permissions: PASS
+- override de usuario y readback: PASS
+- Viewer Programador United limitado a UNITED: PASS
+- Panel Control Programador United limitado a GENERAL + UNITED: PASS
+- Programador United no administra alcance global: PASS
+- Programador administra alcance global: PASS
+- viewer mutacion denegada VIEWER_READ_ONLY: PASS
+
+[FASE 4 / SQLite]
+PASS: FASE4_V002_SQLITE_OK
+perm_acciones: 44
+perm_agrupaciones: 14
+perm_modulos: 64
+perm_elementos: 129
+perm_subelementos: 232
+perm_subelemento_acciones: 510
+perm_subelemento_acciones activos: 509
+rol_permisos: 14669
+PRAGMA user_version: 4
+Foreign key violations: 0
+
+[ESTATICA]
+node --check Fase4 JS/CJS: PASS
+.patch/.diff incluidos: 0
+APPLY_FASE*.ps1 incluidos: 0
+Hosts productivos en core/lab/tests Fase4: 0
+fetch directo a /api desde Fase4: 0
+Recursos locales referenciados por lab/index.html faltantes: 0
+
+NO VALIDADO
+- GitHub Pages E2E
+- navegador publicado E2E
+- Azure
+- Aiven productivo
+- Netlify
+- writes en GitHub remoto
+
+NOTA DE PRECISION
+El catalogo de permisos LAB usa como baseline SABANA270826.sql y compatibilidad actual explicitamente verificada.
+No puedo confirmar que represente bit-a-bit el catalogo Aiven productivo vigente al 13/09/2026.

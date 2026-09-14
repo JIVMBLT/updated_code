@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+'use strict';
+const assert=require('assert'),fs=require('fs'),path=require('path');
+const ROOT=path.resolve(__dirname,'..'),read=f=>fs.readFileSync(path.join(ROOT,f),'utf8');
+const routes=read('lab/backend/routes/lab-technical.routes.js');
+for(const p of ['/api/__lab/closure','/api/__lab/health','/api/__lab/routes','/api/__lab/jobs','/api/__lab/jobs/:name/run','/api/__lab/backup/summary'])assert(routes.includes(p),`missing ${p}`);
+assert(routes.includes('programmerOnly'),'technical routes must be Programmer-only');
+const db=read('lab/runtime/lab-db.js');
+assert(db.includes('inspectBytes'),'DB must expose pre-import inspection');
+assert(db.includes('LAB_DB_IMPORT_FOREIGN_KEY_FAILED'),'DB import must fail closed on FK errors');
+const blob=read('lab/backend/services/lab-blob-store.js');
+for(const fn of ['exportAll','importAll','validateImportEntries'])assert(blob.includes(fn),`Blob Store missing ${fn}`);
+const backup=read('lab/backend/services/lab-backup.service.js');
+assert(backup.includes('MANTTO_LAB_DGB_BACKUP'));
+assert(backup.includes('phase10-backup-rollback'),'backup import needs rollback path');
+const sw=read('lab/sw.js');
+assert(sw.includes("url.pathname.includes('/api/')"),'service worker must ignore /api');
+assert(!/https?:\/\//i.test(sw),'service worker must not hard-code external hosts');
+const manifest=JSON.parse(read('lab/manifest.webmanifest'));
+assert.equal(manifest.scope,'./');assert.equal(manifest.start_url,'./index.html');
+console.log('FASE 10 contract/PWA guard: OK');

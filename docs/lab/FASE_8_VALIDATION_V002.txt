@@ -1,0 +1,328 @@
+FASE 8 - LAB DGB - VENTAS + COBRANZA V002
+
+VALIDACION EJECUTADA
+====================
+
+FASE 8 SQLite smoke: OK
+tables 93
+user_version 8
+ventas_clientes 10
+ventas_cotizaciones_cor 10
+ventas_prospecciones 10
+ventas_redes 10
+gestion_credito 15
+detalle_mp_2026 15
+cobranza_indice_cor 10
+cobranza_fuente_cor 20
+cobranza_aditivas_cor 10
+fixture_permissions 840
+fk_violations 0
+
+FASE 8 runtime services: OK
+clients 10
+quotes_after_create 11
+dashboard_users 2
+cobranza_uni_credit 15
+cobranza_cor_states 10
+
+FASE 8 contract guard: OK
+FASE 8 source isolation guard: OK
+FASE 8 package guard: OK
+
+Rutas registradas: 116
+Integraciones productivas bloqueadas localmente: 12
+
+REGRESION ACUMULATIVA FASES 1-8
+================================
+
+===== F1 PYTHON SQLITE =====
+OK LAB PHASE 1 V002 / PYTHON SQLITE
+{
+  "tables": 93,
+  "columns": 1553,
+  "indexes": 445,
+  "seeded_tables": 67,
+  "seed_rows": 900,
+  "foreign_key_violations": 0,
+  "user_version": 1
+}
+
+===== F1 SQL.JS WASM =====
+OK LAB PHASE 1 V002 / SQL.JS WASM
+{
+  "tables": 93,
+  "users": 61,
+  "projects": 15,
+  "equipment": 15,
+  "tickets": 30,
+  "tasks": 20,
+  "userVersion": 1,
+  "fkViolations": 0
+}
+
+===== F2 BACKEND ENGINE =====
+TAP version 13
+# Subtest: resuelve params, query, middleware y contexto sin HTTP
+ok 1 - resuelve params, query, middleware y contexto sin HTTP
+  ---
+  duration_ms: 4.186742
+  type: 'test'
+  ...
+# Subtest: mutaciones usan transacción de ManttoLabDB y conservan body JSON
+ok 2 - mutaciones usan transacción de ManttoLabDB y conservan body JSON
+  ---
+  duration_ms: 17.94668
+  type: 'test'
+  ...
+# Subtest: error dentro de mutación propaga rollback transaccional
+ok 3 - error dentro de mutación propaga rollback transaccional
+  ---
+  duration_ms: 0.681957
+  type: 'test'
+  ...
+# Subtest: 404 conserva contrato del backend real
+ok 4 - 404 conserva contrato del backend real
+  ---
+  duration_ms: 0.310047
+  type: 'test'
+  ...
+# Subtest: errores expuestos conservan status, code y details
+ok 5 - errores expuestos conservan status, code y details
+  ---
+  duration_ms: 0.416847
+  type: 'test'
+  ...
+# Subtest: errores 500 ocultan mensaje público y conservan diagnóstico LAB
+ok 6 - errores 500 ocultan mensaje público y conservan diagnóstico LAB
+  ---
+  duration_ms: 0.38515
+  type: 'test'
+  ...
+# Subtest: ruta que termina sin respuesta falla cerrado
+ok 7 - ruta que termina sin respuesta falla cerrado
+  ---
+  duration_ms: 0.345059
+  type: 'test'
+  ...
+# Subtest: request() lanza ManttoLabApiError en respuestas no exitosas
+ok 8 - request() lanza ManttoLabApiError en respuestas no exitosas
+  ---
+  duration_ms: 0.568716
+  type: 'test'
+  ...
+# Subtest: JSON inválido falla cerrado con 400
+ok 9 - JSON inválido falla cerrado con 400
+  ---
+  duration_ms: 0.618621
+  type: 'test'
+  ...
+# Subtest: rutas de sistema leen contadores desde req.db
+ok 10 - rutas de sistema leen contadores desde req.db
+  ---
+  duration_ms: 1.307558
+  type: 'test'
+  ...
+# Subtest: Backend Engine no invoca fetch para ejecutar una ruta local
+ok 11 - Backend Engine no invoca fetch para ejecutar una ruta local
+  ---
+  duration_ms: 0.396527
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 40.187483
+
+===== F3 TRANSPORT =====
+[LAB DGB] BLOQUEADA PETICION PRODUCTIVA {
+  method: 'GET',
+  url: 'https://mantto-gestor-api-a4hwfpgvbeb4gmgj.mexicocentral-01.azurewebsites.net/api/ok',
+  reason: 'production-api-rerouted-local'
+}
+[LAB DGB] BLOQUEADA PETICION PRODUCTIVA {
+  method: 'GET',
+  url: 'https://mantto-gestor-api-a4hwfpgvbeb4gmgj.mexicocentral-01.azurewebsites.net/health',
+  reason: 'production-host'
+}
+[LAB DGB] BLOQUEADA PETICION PRODUCTIVA {
+  method: 'POST',
+  url: 'https://example.net/upload',
+  reason: 'cross-origin-mutation'
+}
+TAP version 13
+# Subtest: fetch /api se resuelve localmente sin tocar fetch nativo
+ok 1 - fetch /api se resuelve localmente sin tocar fetch nativo
+  ---
+  duration_ms: 4.29906
+  type: 'test'
+  ...
+# Subtest: URL Azure /api se redirige al backend LAB sin red productiva
+ok 2 - URL Azure /api se redirige al backend LAB sin red productiva
+  ---
+  duration_ms: 2.114833
+  type: 'test'
+  ...
+# Subtest: ruta /api desconocida falla cerrado con 501 LAB_MOCK_NOT_IMPLEMENTED
+ok 3 - ruta /api desconocida falla cerrado con 501 LAB_MOCK_NOT_IMPLEMENTED
+  ---
+  duration_ms: 0.629837
+  type: 'test'
+  ...
+# Subtest: host productivo no API queda bloqueado
+ok 4 - host productivo no API queda bloqueado
+  ---
+  duration_ms: 0.865071
+  type: 'test'
+  ...
+# Subtest: recursos estáticos same-origin continúan por fetch nativo
+ok 5 - recursos estáticos same-origin continúan por fetch nativo
+  ---
+  duration_ms: 0.368315
+  type: 'test'
+  ...
+# Subtest: GET estático cross-origin no productivo permanece permitido
+ok 6 - GET estático cross-origin no productivo permanece permitido
+  ---
+  duration_ms: 0.198518
+  type: 'test'
+  ...
+# Subtest: mutación cross-origin desconocida se bloquea por defecto
+ok 7 - mutación cross-origin desconocida se bloquea por defecto
+  ---
+  duration_ms: 0.489156
+  type: 'test'
+  ...
+# Subtest: ManttoLabTransport.request usa backend local y propaga error LAB
+ok 8 - ManttoLabTransport.request usa backend local y propaga error LAB
+  ---
+  duration_ms: 0.266241
+  type: 'test'
+  ...
+# Subtest: XMLHttpRequest /api queda dentro del backend LAB
+ok 9 - XMLHttpRequest /api queda dentro del backend LAB
+  ---
+  duration_ms: 0.69757
+  type: 'test'
+  ...
+# Subtest: estado declara aislamiento productivo
+ok 10 - estado declara aislamiento productivo
+  ---
+  duration_ms: 0.337548
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22.055755
+
+===== F4 SQLITE =====
+FASE4_V002_SQLITE_OK {'perm_acciones': 44, 'perm_agrupaciones': 14, 'perm_modulos': 64, 'perm_elementos': 129, 'perm_subelementos': 232, 'perm_subelemento_acciones': 510, 'rol_permisos': 14669}
+
+===== F4 AUTH PERMISSIONS =====
+FASE4_V002_AUTH_PERMISSIONS_OK
+
+===== F5 SQLITE =====
+FASE5_V002_SQLITE_OK {'usuarios': 61, 'portafolio': 15, 'tickets': 30, 'perm_subelemento_acciones': 510, 'rol_permisos': 14669}
+
+===== F5 SHARED SERVICES =====
+FASE5_V002_SHARED_SERVICES_OK
+
+===== F5 PACKAGE =====
+FASE5_V002_PACKAGE_GUARD_OK
+
+===== F6 SQLITE =====
+FASE 6 SQLite smoke: OK
+tables 93
+user_version 6
+tasks 20
+notifications 2
+fk_violations 0
+
+===== F6 RUNTIME =====
+FASE 6 runtime services: OK
+created_task 950021
+visible_tasks_910006 5
+united_projects_910025 2
+
+===== F6 CONTRACTS =====
+FASE 6 Home contracts: OK
+
+===== F6 SOURCE GUARD =====
+FASE 6 source isolation guard: OK
+
+===== F6 PACKAGE =====
+FASE 6 package guard: OK
+
+===== F7 SQLITE =====
+FASE 7 SQLite smoke: OK
+tables 93
+user_version 7
+portfolio 15
+tickets 40
+preventives 30
+blt_99001 5
+fk_violations 0
+
+===== F7 RUNTIME =====
+FASE 7 runtime services: OK
+full_portfolio 15
+scoped_portfolio_910025 2
+monthly_movements 3
+weekly_full 3
+critical_99001_blt 5
+
+===== F7 CONTRACTS =====
+FASE 7 contract guard: OK
+
+===== F7 SOURCE GUARD =====
+FASE 7 source isolation guard: OK
+
+===== F7 PACKAGE =====
+FASE 7 package guard: OK
+
+===== F8 SQLITE =====
+FASE 8 SQLite smoke: OK
+tables 93
+user_version 8
+ventas_clientes 10
+ventas_cotizaciones_cor 10
+ventas_prospecciones 10
+ventas_redes 10
+gestion_credito 15
+detalle_mp_2026 15
+cobranza_indice_cor 10
+cobranza_fuente_cor 20
+cobranza_aditivas_cor 10
+fixture_permissions 840
+fk_violations 0
+
+===== F8 RUNTIME SERVICES =====
+FASE 8 runtime services: OK
+clients 10
+quotes_after_create 11
+dashboard_users 2
+cobranza_uni_credit 15
+cobranza_cor_states 10
+
+===== F8 CONTRACTS =====
+FASE 8 contract guard: OK
+
+===== F8 SOURCE GUARD =====
+FASE 8 source isolation guard: OK
+
+===== F8 PACKAGE =====
+FASE 8 package guard: OK
+
+===== FULL REGRESSION RESULT =====
+PASS
+

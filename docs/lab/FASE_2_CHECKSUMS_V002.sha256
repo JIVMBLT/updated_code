@@ -1,0 +1,11 @@
+18251f805f047404433d6bebf075d699a457f73913cab99db3d13b7d19776e76  ./docs/lab/FASE_2_FILES_V002.txt
+23729b68e62556daff63b594f5a5518fefe871cfef3f3e74058bbae2f914c7d8  ./docs/lab/FASE_2_LAB_DGB_BACKEND_ENGINE_V002.md
+f312be0895a46424567a383f84d17a9a63525c7be6ba90fbcede31aa5f5c67b6  ./docs/lab/FASE_2_VALIDATION_V002.txt
+013d83133a7228e9a22fdd585522d7e58a482a5a8a5a6fd3e2d4a163637946c8  ./lab/backend/lab-backend.js
+77507d9f47cf1323a0936e8476e7b3d36d125836cda1190e33274e46fccac5e9  ./lab/backend/lab-context.js
+2db2222223eb037bc763dcc166f87d98629e738a79b4ea57b57729cf2f21f6d6  ./lab/backend/lab-errors.js
+6e9e93744e6e48181535e78a283d1481162fbcca5b0fc43686795157e7bf6465  ./lab/backend/lab-router.js
+b677347bd77d119da7c4ff6e2bfd25dd98a2ba6ef679a1a5b4209dda1f10bf77  ./lab/backend/routes/lab-system.routes.js
+e51fa641f87ab97a2d18463bf846d1ed0203d53b500cc803752c82f27acd48c2  ./lab/index.html
+e5d9cd7cd0681d8267a2f06b95c37a04cb709b7e74184d1fe23ad0ba2a989e80  ./lab/runtime/lab-backend-bootstrap.js
+a6d1734cfc98347654debc269f4784952e2cbda582b2f0d6c2fa5a4595a96be7  ./tests/lab_phase2_backend_engine.test.cjs

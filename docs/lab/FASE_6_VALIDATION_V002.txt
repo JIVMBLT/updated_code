@@ -1,0 +1,95 @@
+GESTOR MANTTO - LAB DGB - FASE 6 V002
+VALIDACION EJECUTADA: 2026-09-14
+
+ENTORNO DE VALIDACION
+- Composicion incremental: Fase 1 V002 -> Fase 2 V002 -> Fase 3 V002 -> Fase 4 V002 -> Fase 5 V002 -> Fase 6 V002.
+- Base relacional: SQLite / sql.js WASM en memoria para pruebas.
+- Archivos Home: contrato IndexedDB local; el runtime test usa un stub local porque Node no expone IndexedDB nativo.
+- No se utilizo Aiven, Azure, Netlify, Supabase ni API productiva.
+
+SINTAXIS FASE 6
+- core/config.js: PASS
+- lab-auth.js: PASS
+- lab-blob-store.js: PASS
+- lab-interactions.service.js: PASS
+- lab-notifications.service.js: PASS
+- lab-tasks.service.js: PASS
+- lab-home.service.js: PASS
+- lab-home.routes.js: PASS
+- lab-phase6-bootstrap.js: PASS
+- tests Fase 6: PASS node --check
+
+FASE 6 V002 / PACKAGE GUARD: PASS
+- sin .patch
+- sin .diff
+- sin APPLY_FASE*.ps1
+- modules/home/home.js NO se entrega
+- styles/home.css NO se entrega
+- core/rich-text.js NO se entrega
+- Fase 6 se registra antes de lab-auth
+- lab-auth conserva identidad V2 y limpieza de auth productiva
+- migracion 006 no crea ni altera tablas
+
+FASE 6 V002 / HOME CONTRACTS: PASS
+- contratos Home registrados
+- contratos Pendientes registrados
+- contratos Notificaciones registrados
+- contratos Interacciones registrados
+- limite local de archivo: 25 MB
+- storage local: IndexedDB
+- Rich Text consume ManttoRichText y fallback escapa HTML
+
+FASE 6 V002 / SOURCE ISOLATION: PASS
+- sin hosts productivos en archivos ejecutables Fase 6
+- sin fetch directo hacia API productiva
+- sin Azure Blob / Google Drive como proveedor runtime de Home
+
+FASE 6 V002 / SQLITE: PASS
+- tablas antes/despues: 93 / 93
+- PRAGMA user_version: 6
+- tareas fixture: 20
+- notificaciones fixture Fase 6: 2
+- foreign_key_check: 0 violaciones
+- migracion 006 idempotente: PASS
+  - relacion L06/950002 repetida: 1
+  - notificaciones Fase 6 repetidas: 2
+
+FASE 6 V002 / SERVICIOS RUNTIME: PASS
+Verificado con sql.js 1.14.2 y datos acumulados F1-F6:
+- alcance UNITED por zona para identidad 910025
+- catalogo proyecto/equipo visible
+- alta local de tarea PERSONAL
+- prioridad PERSONAL default MEDIA
+- sanitizacion Rich Text sin script
+- proyecto fuera de alcance falla cerrado
+- prioridad COLABORATIVA solo RESPONSABLE
+- creador no responsable no puede alterar prioridad colaborativa
+- politica de notificacion OPCIONAL
+- politica de notificacion OBLIGATORIA
+- interacciones cliente NAVEGACION se omiten
+- interacciones operativas fabricadas por cliente se rechazan
+- snapshot Home devuelve tareas + actividad
+
+Salida del test runtime:
+FASE 6 runtime services: OK
+created_task 950021
+visible_tasks_910006 5
+united_projects_910025 2
+
+NOTA DE PRUEBA
+- La tarea 950021 fue creada solo dentro de la base SQLite en memoria del test y NO forma parte del seed ni del paquete.
+
+VALIDACION ACUMULADA RELEVANTE
+- Fase 1: 93 tablas, 1553 columnas, 445 indices, 900 filas seed, 0 FK.
+- Fase 2: Backend Engine validado.
+- Fase 3: transporte/aislamiento validado.
+- Fase 4: identidad, permisos y alcance validados.
+- Fase 5: servicios compartidos validados.
+- Fase 6: Home completo validado a nivel sintaxis, SQL y servicios.
+
+LIMITES DE ESTA VALIDACION
+- No se ejecuto E2E visual en navegador real.
+- No se desplego GitHub Pages.
+- No se probo IndexedDB con un navegador real; su contrato se valido estaticamente y el servicio de tareas se probo con stub local de blob store.
+- No se comparo el contenido LAB con Aiven productivo vigente.
+- No se escribio en repositorios GitHub remotos ni servicios productivos.

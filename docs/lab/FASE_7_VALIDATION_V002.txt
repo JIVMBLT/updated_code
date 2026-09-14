@@ -1,0 +1,47 @@
+FASE 7 LAB DGB OPERACION + PORTAFOLIO V002
+VALIDACION LOCAL ACUMULADA F1-F7
+
+Repositorios verificados antes de construir:
+LAB main: d3b766477663e6726ea46f1bb08bdc30b01a74e6
+REAL main: af76fe08a5c100747a15a155d5989dcdd1ef4023
+
+FASE 7 SQLite smoke: OK
+tables 93
+user_version 7
+portfolio 15
+tickets 40
+preventives 30
+blt_99001 5
+fk_violations 0
+
+FASE 7 package guard: OK
+FASE 7 contract guard: OK
+FASE 7 source isolation guard: OK
+FASE 7 runtime services: OK
+full_portfolio 15
+scoped_portfolio_910025 2
+monthly_movements 3
+weekly_full 3
+critical_99001_blt 5
+
+Regresion acumulada ejecutada:
+F1 Python SQLite: OK
+F1 sql.js WASM: OK
+F2 Backend Engine: 11/11 PASS
+F3 Transport isolation: 10/10 PASS
+F4 Auth/permissions: OK
+F4 SQLite: OK
+F5 package/shared services/SQLite: OK
+F6 package/contracts/isolation/SQLite/runtime: OK
+
+Todos los archivos JS/CJS entregados en F7: node --check OK
+.patch/.diff en F7: 0
+APPLY_FASE*.ps1 en F7: 0
+CREATE/ALTER/DROP TABLE en migracion 007: 0
+Hosts productivos en runtime F7: 0
+
+NO VALIDADO:
+- E2E visual en navegador real.
+- Deploy de GitHub Pages.
+- Aiven/Azure/Netlify.
+- Comparacion bit-a-bit con datos productivos vigentes.

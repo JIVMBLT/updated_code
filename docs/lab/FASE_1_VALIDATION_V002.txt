@@ -1,0 +1,46 @@
+FASE 1 LAB DGB SQLITE WASM V002 - VALIDACION
+Fecha de generacion: 2026-09-13
+Baseline repo: JIVMBLT/updated_code main
+Baseline commit: d3b766477663e6726ea46f1bb08bdc30b01a74e6
+
+1) Python sqlite3 - EJECUTADO OK
+- tablas: 93
+- columnas (table_xinfo): 1553
+- indices: 445
+- tablas pobladas: 67
+- registros seed: 900
+- PRAGMA user_version: 1
+- PRAGMA foreign_key_check: 0 violaciones
+- columnas generadas almacen_auditoria: OK
+
+2) sql.js 1.14.2 / WASM vendorizado - EJECUTADO OK
+- tablas: 93
+- usuarios: 61
+- proyectos: 15
+- equipos: 15
+- tickets: 30
+- pendientes: 20
+- PRAGMA user_version: 1
+- PRAGMA foreign_key_check: 0 violaciones
+- columnas generadas almacen_auditoria: OK
+
+3) Sintaxis - EJECUTADO OK
+- node --check lab/runtime/lab-db.js
+- node --check lab/runtime/lab-bootstrap.js
+- node --check lab/vendor/sql.js/1.14.2/sql-wasm.js
+- py_compile converter y smoke test
+
+4) Entregable - EJECUTADO OK
+- no contiene archivos .patch
+- no contiene APPLY_FASE*.ps1
+- no contiene git apply
+- no modifica archivos existentes del baseline; Fase 1 agrega rutas nuevas
+- SQLite JS/WASM se incluye localmente; no depende de CDN en runtime
+
+5) NO EJECUTADO / NO CONFIRMADO
+- deploy GitHub Pages
+- E2E en navegador publicado
+- persistencia real IndexedDB en navegador real
+
+No se accedio a Aiven ni Azure durante estas pruebas.
+No se modifico GitHub remoto.

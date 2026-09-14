@@ -1,0 +1,17 @@
+core/config.js
+docs/lab/FASE_5_FILES_V002.txt
+docs/lab/FASE_5_LAB_DGB_SERVICIOS_COMPARTIDOS_V002.md
+docs/lab/FASE_5_LIMITATIONS_V002.md
+docs/lab/FASE_5_ROUTE_MATRIX_V002.md
+docs/lab/FASE_5_VALIDATION_V002.txt
+lab/backend/routes/lab-shared.routes.js
+lab/backend/services/lab-catalogs.service.js
+lab/backend/services/lab-relations.service.js
+lab/backend/services/lab-shared-assets.service.js
+lab/backend/services/lab-users.service.js
+lab/database/migrations/005_shared_services.sql
+lab/index.html
+lab/runtime/lab-phase5-bootstrap.js
+tests/lab_phase5_package_guard.test.cjs
+tests/lab_phase5_shared_services.test.cjs
+tests/lab_phase5_sqlite_smoke.py

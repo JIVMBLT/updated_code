@@ -1,53 +1,171 @@
-(function(){
-  const directApiBase =
-    'https://mantto-gestor-api-a4hwfpgvbeb4gmgj.mexicocentral-01.azurewebsites.net';
+(function initManttoLabConfig(global){
+  'use strict';
 
-  const hostname = String(window.location.hostname || '')
-    .trim()
-    .toLowerCase();
+  const locationRef=global.location||{protocol:'',origin:'',href:'',hostname:''};
+  const protocol=String(locationRef.protocol||'').toLowerCase();
+  const sameOriginBase=/^https?:$/.test(protocol)?String(locationRef.origin||''):'';
 
-  const isLocal =
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1';
+  global.MANTTO_LAB_MODE=true;
+  global.MANTTO_API_BASE=sameOriginBase;
+  global.MANTTO_SESSION_API_BASE=sameOriginBase;
+  global.MANTTO_LAB_PRODUCTION_CONNECTIONS_ALLOWED=false;
 
-  const isNetlify =
-    hostname === 'bltnow.netlify.app' ||
-    hostname.endsWith('.netlify.app');
+  global.__MANTTO_LAB_NETWORK_POLICY__=Object.freeze({
+    lineage:'LAB_DGB_V2',
+    mode:'DGB',
+    externalApplicationApis:false,
+    productionConnectionsAllowed:false,
+    apiTransport:'in-browser',
+    identity:'synthetic-lab'
+  });
 
-  // ============================================================
-  // API OPERATIVA
-  // ============================================================
-  // Local, GitHub Pages y Netlify continúan consultando
-  // directamente el backend Azure para módulos operativos.
-  // ============================================================
+  const dependencies=[
+    './lab/vendor/sql.js/1.14.2/sql-wasm.js',
+    './lab/runtime/lab-db.js',
+    './lab/runtime/lab-bootstrap.js',
+    './lab/backend/lab-errors.js',
+    './lab/backend/lab-context.js',
+    './lab/backend/lab-router.js',
+    './lab/backend/lab-backend.js',
+    './lab/backend/routes/lab-system.routes.js',
+    './lab/runtime/lab-backend-bootstrap.js',
+    './lab/runtime/lab-transport.js',
+    './lab/backend/services/lab-permissions.service.js',
+    './lab/backend/services/lab-scope.service.js',
+    './lab/backend/routes/lab-auth-permissions.routes.js',
+    './lab/runtime/lab-phase4-bootstrap.js',
+    './lab/backend/services/lab-catalogs.service.js',
+    './lab/backend/services/lab-users.service.js',
+    './lab/backend/services/lab-relations.service.js',
+    './lab/backend/services/lab-shared-assets.service.js',
+    './lab/backend/routes/lab-shared.routes.js',
+    './lab/runtime/lab-phase5-bootstrap.js',
+    './core/rich-text.js',
+    './lab/backend/services/lab-blob-store.js',
+    './lab/backend/services/lab-interactions.service.js',
+    './lab/backend/services/lab-notifications.service.js',
+    './lab/backend/services/lab-tasks.service.js',
+    './lab/backend/services/lab-home.service.js',
+    './lab/backend/routes/lab-home.routes.js',
+    './lab/runtime/lab-phase6-bootstrap.js',
+    './lab/backend/services/lab-operation.service.js',
+    './lab/backend/services/lab-criticals.service.js',
+    './lab/backend/services/lab-portfolio.service.js',
+    './lab/backend/services/lab-movements.service.js',
+    './lab/backend/services/lab-followup.service.js',
+    './lab/backend/services/lab-tickets.service.js',
+    './lab/backend/routes/lab-operation.routes.js',
+    './lab/runtime/lab-phase7-bootstrap.js',
+    './lab/backend/services/lab-sales.service.js',
+    './lab/backend/services/lab-collections-uni.service.js',
+    './lab/backend/services/lab-collections-cor.service.js',
+    './lab/backend/routes/lab-sales-collections.routes.js',
+    './lab/runtime/lab-phase8-bootstrap.js',
+    './lab/backend/services/lab-installations.service.js',
+    './lab/backend/services/lab-logistics.service.js',
+    './lab/backend/services/lab-warehouse.service.js',
+    './lab/backend/routes/lab-installations-logistics-warehouse.routes.js',
+    './lab/runtime/lab-phase9-bootstrap.js',
+    './lab/backend/services/lab-backup.service.js',
+    './lab/backend/services/lab-jobs.service.js',
+    './lab/runtime/lab-pwa.js',
+    './lab/backend/services/lab-diagnostics.service.js',
+    './lab/backend/routes/lab-technical.routes.js',
+    './lab/runtime/lab-phase10-bootstrap.js',
+    './lab/runtime/lab-auth.js'
+  ];
 
-  window.MANTTO_API_BASE =
-    window.MANTTO_API_BASE || directApiBase;
+  const styles=['./lab/styles/lab-phase4.css'];
+  const version='20260914-fase10-lab-dgb-v002';
+  const checks={
+    './lab/vendor/sql.js/1.14.2/sql-wasm.js':()=>typeof global.initSqlJs==='function',
+    './lab/runtime/lab-db.js':()=>Boolean(global.ManttoLabDB),
+    './lab/runtime/lab-bootstrap.js':()=>Boolean(global.ManttoLabReady),
+    './lab/backend/lab-errors.js':()=>Boolean(global.ManttoLabErrors),
+    './lab/backend/lab-context.js':()=>Boolean(global.ManttoLabContext),
+    './lab/backend/lab-router.js':()=>Boolean(global.ManttoLabRouter),
+    './lab/backend/lab-backend.js':()=>Boolean(global.ManttoLabBackendModule),
+    './lab/backend/routes/lab-system.routes.js':()=>Boolean(global.ManttoLabSystemRoutes),
+    './lab/runtime/lab-backend-bootstrap.js':()=>Boolean(global.ManttoLabBackendReady),
+    './lab/runtime/lab-transport.js':()=>Boolean(global.ManttoLabTransport),
+    './lab/backend/services/lab-permissions.service.js':()=>Boolean(global.ManttoLabPermissionsService),
+    './lab/backend/services/lab-scope.service.js':()=>Boolean(global.ManttoLabScopeService),
+    './lab/backend/routes/lab-auth-permissions.routes.js':()=>Boolean(global.ManttoLabAuthPermissionRoutes),
+    './lab/runtime/lab-phase4-bootstrap.js':()=>Boolean(global.ManttoLabPhase4Ready),
+    './lab/backend/services/lab-catalogs.service.js':()=>Boolean(global.ManttoLabCatalogsService),
+    './lab/backend/services/lab-users.service.js':()=>Boolean(global.ManttoLabUsersService),
+    './lab/backend/services/lab-relations.service.js':()=>Boolean(global.ManttoLabRelationsService),
+    './lab/backend/services/lab-shared-assets.service.js':()=>Boolean(global.ManttoLabSharedAssetsService),
+    './lab/backend/routes/lab-shared.routes.js':()=>Boolean(global.ManttoLabSharedRoutes),
+    './lab/runtime/lab-phase5-bootstrap.js':()=>Boolean(global.ManttoLabPhase5Ready),
+    './core/rich-text.js':()=>Boolean(global.ManttoRichText),
+    './lab/backend/services/lab-blob-store.js':()=>Boolean(global.ManttoLabBlobStore),
+    './lab/backend/services/lab-interactions.service.js':()=>Boolean(global.ManttoLabInteractionsService),
+    './lab/backend/services/lab-notifications.service.js':()=>Boolean(global.ManttoLabNotificationsService),
+    './lab/backend/services/lab-tasks.service.js':()=>Boolean(global.ManttoLabTasksService),
+    './lab/backend/services/lab-home.service.js':()=>Boolean(global.ManttoLabHomeService),
+    './lab/backend/routes/lab-home.routes.js':()=>Boolean(global.ManttoLabHomeRoutes),
+    './lab/runtime/lab-phase6-bootstrap.js':()=>Boolean(global.ManttoLabPhase6Ready),
+    './lab/backend/services/lab-operation.service.js':()=>Boolean(global.ManttoLabOperationService),
+    './lab/backend/services/lab-criticals.service.js':()=>Boolean(global.ManttoLabCriticalsService),
+    './lab/backend/services/lab-portfolio.service.js':()=>Boolean(global.ManttoLabPortfolioService),
+    './lab/backend/services/lab-movements.service.js':()=>Boolean(global.ManttoLabMovementsService),
+    './lab/backend/services/lab-followup.service.js':()=>Boolean(global.ManttoLabFollowupService),
+    './lab/backend/services/lab-tickets.service.js':()=>Boolean(global.ManttoLabTicketsService),
+    './lab/backend/routes/lab-operation.routes.js':()=>Boolean(global.ManttoLabOperationRoutes),
+    './lab/runtime/lab-phase7-bootstrap.js':()=>Boolean(global.ManttoLabPhase7Ready),
+    './lab/backend/services/lab-sales.service.js':()=>Boolean(global.ManttoLabSalesService),
+    './lab/backend/services/lab-collections-uni.service.js':()=>Boolean(global.ManttoLabCollectionsUniService),
+    './lab/backend/services/lab-collections-cor.service.js':()=>Boolean(global.ManttoLabCollectionsCorService),
+    './lab/backend/routes/lab-sales-collections.routes.js':()=>Boolean(global.ManttoLabSalesCollectionsRoutes),
+    './lab/runtime/lab-phase8-bootstrap.js':()=>Boolean(global.ManttoLabPhase8Ready),
+    './lab/backend/services/lab-installations.service.js':()=>Boolean(global.ManttoLabInstallationsService),
+    './lab/backend/services/lab-logistics.service.js':()=>Boolean(global.ManttoLabLogisticsService),
+    './lab/backend/services/lab-warehouse.service.js':()=>Boolean(global.ManttoLabWarehouseService),
+    './lab/backend/routes/lab-installations-logistics-warehouse.routes.js':()=>Boolean(global.ManttoLabPhase9Routes),
+    './lab/runtime/lab-phase9-bootstrap.js':()=>Boolean(global.ManttoLabPhase9Ready),
+    './lab/backend/services/lab-backup.service.js':()=>Boolean(global.ManttoLabBackupService),
+    './lab/backend/services/lab-jobs.service.js':()=>Boolean(global.ManttoLabJobsService),
+    './lab/runtime/lab-pwa.js':()=>Boolean(global.ManttoLabPwa),
+    './lab/backend/services/lab-diagnostics.service.js':()=>Boolean(global.ManttoLabDiagnosticsService),
+    './lab/backend/routes/lab-technical.routes.js':()=>Boolean(global.ManttoLabTechnicalRoutes),
+    './lab/runtime/lab-phase10-bootstrap.js':()=>Boolean(global.ManttoLabPhase10Ready),
+    './lab/runtime/lab-auth.js':()=>Boolean(global.ManttoLabAuth)
+  };
 
-  // ============================================================
-  // API DE SESIÓN / AUTH
-  // ============================================================
-  //
-  // LOCAL
-  //   http://localhost:3001
-  //
-  // GITHUB PAGES
-  //   Azure directo
-  //
-  // NETLIFY
-  //   mismo origen Netlify
-  //   /api/auth/* será enviado a Azure mediante _redirects
-  //
-  // ============================================================
+  function alreadyLoaded(src){return checks[src]?checks[src]():false;}
+  function ensureParserStyles(){
+    if(typeof document==='undefined'||document.readyState!=='loading')return false;
+    styles.forEach(href=>{
+      if(document.querySelector(`link[data-mantto-lab-style="${href}"]`))return;
+      document.write('<link rel="stylesheet" data-mantto-lab-style="'+href+'" href="'+href+'?v='+version+'">');
+    });
+    return true;
+  }
+  function parserBootstrap(){
+    const missing=dependencies.filter(src=>!alreadyLoaded(src));
+    if(!missing.length)return true;
+    if(typeof document==='undefined'||document.readyState!=='loading')return false;
+    ensureParserStyles();
+    missing.forEach(src=>document.write('<script src="'+src+'?v='+version+'"><\\/script>'));
+    return true;
+  }
+  async function deferredBootstrap(){
+    if(typeof document==='undefined')throw new Error('LAB_DOCUMENT_REQUIRED');
+    for(const href of styles){
+      if(document.querySelector(`link[data-mantto-lab-style="${href}"]`))continue;
+      await new Promise((resolve,reject)=>{const link=document.createElement('link');link.rel='stylesheet';link.href=href+'?v='+version;link.dataset.manttoLabStyle=href;link.onload=resolve;link.onerror=()=>reject(new Error('LAB_STYLE_LOAD_FAILED '+href));(document.head||document.documentElement).appendChild(link);});
+    }
+    for(const src of dependencies){
+      if(alreadyLoaded(src))continue;
+      await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src+'?v='+version;script.async=false;script.onload=resolve;script.onerror=()=>reject(new Error('LAB_SCRIPT_LOAD_FAILED '+src));(document.head||document.documentElement).appendChild(script);});
+    }
+    if(global.ManttoLabPhase10Ready)await global.ManttoLabPhase10Ready;
+    return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;
+  }
 
-  window.MANTTO_SESSION_API_BASE =
-    window.MANTTO_SESSION_API_BASE || (
-      isLocal
-        ? `http://${hostname === '::1' ? 'localhost' : hostname}:3001`
-        : isNetlify
-          ? window.location.origin
-          : directApiBase
-    );
-
-})();
+  const synchronous=parserBootstrap();
+  global.ManttoLabCoreReady=synchronous
+    ?Promise.resolve().then(async()=>{if(global.ManttoLabPhase10Ready)await global.ManttoLabPhase10Ready;return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;})
+    :deferredBootstrap();
+})(typeof window!=='undefined'?window:globalThis);

@@ -1,0 +1,17 @@
+core/auth.js
+core/config.js
+docs/lab/FASE_4_FILES_V002.txt
+docs/lab/FASE_4_LAB_DGB_IDENTIDAD_PERMISOS_V002.md
+docs/lab/FASE_4_LIMITATIONS_V002.md
+docs/lab/FASE_4_ROLE_MATRIX_V002.md
+docs/lab/FASE_4_VALIDATION_V002.txt
+lab/backend/routes/lab-auth-permissions.routes.js
+lab/backend/services/lab-permissions.service.js
+lab/backend/services/lab-scope.service.js
+lab/database/migrations/004_permissions_catalog.sql
+lab/index.html
+lab/runtime/lab-auth.js
+lab/runtime/lab-phase4-bootstrap.js
+lab/styles/lab-phase4.css
+tests/lab_phase4_auth_permissions.test.cjs
+tests/lab_phase4_sqlite_smoke.py

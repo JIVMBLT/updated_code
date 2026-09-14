@@ -1,0 +1,43 @@
+# FASE 9 — Matriz de rutas V002
+
+| Método | Ruta | Ejecución |
+|---|---|---|
+| GET | `/api/instalaciones/dashboard` | Local SQLite/IndexedDB |
+| GET | `/api/instalaciones/proyectos` | Local SQLite/IndexedDB |
+| GET | `/api/instalaciones/proyectos/:id` | Local SQLite/IndexedDB |
+| PATCH | `/api/instalaciones/proyectos/:id` | Local SQLite/IndexedDB |
+| GET | `/api/instalaciones/carpetas` | Local SQLite/IndexedDB |
+| POST | `/api/instalaciones/proyectos/:id/carpeta` | Local SQLite/IndexedDB |
+| GET | `/api/instalaciones/proyectos/:id/documentos` | Local SQLite/IndexedDB |
+| POST | `/api/instalaciones/proyectos/:id/documentos` | Local SQLite/IndexedDB |
+| GET | `/api/instalaciones/proyectos/:id/documentos/:idDocumento/acceso` | Local SQLite/IndexedDB |
+| DELETE | `/api/instalaciones/proyectos/:id/documentos/:idDocumento` | Local SQLite/IndexedDB |
+| POST | `/api/instalaciones/drive/sync` | Bloqueada (501) |
+| POST | `/api/instalaciones/proyectos/:id/drive/sync` | Bloqueada (501) |
+| GET | `/api/logistica/config` | Local SQLite/IndexedDB |
+| GET | `/api/logistica/config/google-sheets/columns` | Local SQLite/IndexedDB |
+| GET | `/api/logistica/entities/piezas` | Local SQLite/IndexedDB |
+| GET | `/api/logistica/resumen-semanal` | Local SQLite/IndexedDB |
+| GET | `/api/logistica` | Local SQLite/IndexedDB |
+| POST | `/api/logistica` | Local SQLite/IndexedDB |
+| GET | `/api/logistica/:id` | Local SQLite/IndexedDB |
+| PATCH | `/api/logistica/:id` | Local SQLite/IndexedDB |
+| PUT | `/api/logistica/:id` | Local SQLite/IndexedDB |
+| DELETE | `/api/logistica/:id` | Local SQLite/IndexedDB |
+| POST | `/api/logistica/:id/archivos` | Local SQLite/IndexedDB |
+| GET | `/api/logistica/:id/archivos/:idArchivo/acceso` | Local SQLite/IndexedDB |
+| DELETE | `/api/logistica/:id/archivos/:idArchivo` | Local SQLite/IndexedDB |
+| POST | `/api/logistica/migrate-schema` | Bloqueada (501) |
+| POST | `/api/logistica/sync` | Bloqueada (501) |
+| POST | `/api/logistica/google-sheets/sync` | Bloqueada (501) |
+| GET | `/api/almacen/dashboard` | Local SQLite/IndexedDB |
+| GET | `/api/almacen/inventario` | Local SQLite/IndexedDB |
+| GET | `/api/almacen/movimientos` | Local SQLite/IndexedDB |
+| POST | `/api/almacen/stock-reabasto/excepciones` | Local SQLite/IndexedDB |
+| GET | `/api/almacen/auditorias` | Local SQLite/IndexedDB |
+| POST | `/api/almacen/auditorias` | Local SQLite/IndexedDB |
+| PATCH | `/api/almacen/auditorias/:id` | Local SQLite/IndexedDB |
+| POST | `/api/almacen/auditorias/:folio/cerrar` | Local SQLite/IndexedDB |
+| POST | `/api/almacen/importar-excel` | Bloqueada (501) |
+| POST | `/api/almacen/sync` | Bloqueada (501) |
+| GET | `/api/__lab/phase9` | Local SQLite/IndexedDB |

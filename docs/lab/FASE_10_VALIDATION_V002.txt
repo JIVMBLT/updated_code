@@ -1,0 +1,95 @@
+FASE 10 - LAB DGB - SERVICIOS TRANSVERSALES + CIERRE TECNICO V002
+VALIDACION FINAL EJECUTADA
+Fecha: 2026-09-14
+
+BASELINE GITHUB VERIFICADO ANTES DE GENERAR
+============================================
+Repositorio: JIVMBLT/updated_code
+Rama: main
+Commit: d3b766477663e6726ea46f1bb08bdc30b01a74e6
+Tree: a0c78d785842ca7dfc1b987a68b43a50aa1f399e
+Escrituras remotas realizadas: 0
+
+FASE 10 SQLITE
+===============
+FASE 10 SQLite smoke: OK
+tables 93
+user_version 10
+fk_violations 0
+CREATE/ALTER/DROP schema en migracion 010: 0
+
+FASE 10 CONTRATOS
+==================
+FASE 10 package guard: OK
+FASE 10 contract/PWA guard: OK
+FASE 10 source isolation guard: OK
+FASE 10 runtime services: OK
+routes 288
+backup_blobs_roundtrip 1
+user_version_after_backup_roundtrip 10
+fk_violations_after_backup_roundtrip 0
+
+COBERTURA DE RUTAS ACUMULADA
+============================
+GET 172
+POST 58
+PUT 19
+PATCH 23
+DELETE 16
+TOTAL 288
+Rutas agregadas por F10: 6
+
+CIERRE TRANSVERSAL PROBADO
+==========================
+- Export de SQLite a sobre JSON LAB: PASS
+- Export de Blob Store mediante contrato local: PASS
+- Validacion de respaldo antes de importacion: PASS
+- Round-trip de respaldo SQLite + Blob mock: PASS
+- Restauracion del dato SQLite mutado: PASS
+- Job integrity-check: PASS
+- Job notifications-refresh: PASS
+- Job storage-summary: PASS
+- Deteccion Programador: PASS
+- Restriccion no-Programador en servicio de diagnostico: PASS
+- Manifest JSON: PASS
+- Service Worker: validacion estatica PASS
+- /api/ excluido del Service Worker: PASS
+- Hosts productivos en runtime F10: 0
+
+REGRESION ACUMULATIVA F1-F10
+============================
+8 pruebas Python ejecutadas: PASS
+26 pruebas CJS ejecutadas: PASS
+
+F1 SQLite / sql.js WASM: PASS
+F2 Backend Engine: PASS (11/11)
+F3 Transporte / aislamiento: PASS (10/10)
+F4 Identidad / permisos: PASS
+F5 Servicios compartidos: PASS
+F6 Home: PASS
+F7 Operacion / Portafolio: PASS
+F8 Ventas / Cobranza: PASS
+F9 Instalaciones / Logistica / Almacen: PASS
+F10 Servicios transversales / cierre: PASS
+
+FULL_REGRESSION_F1_F10_PASS
+
+VALIDACIONES DE ENTREGA
+=======================
+node --check archivos JS/CJS F10: PASS
+.patch: 0
+.diff: 0
+APPLY_FASE*.ps1: 0
+Archivos modificados entregados completos: SI
+Estructura de carpetas preservada: SI
+
+NO VALIDADO / NO EJECUTADO
+==========================
+- Deploy a GitHub Pages: NO EJECUTADO
+- E2E visual publicado: NO EJECUTADO
+- Registro real del Service Worker en navegador servido por HTTPS: NO EJECUTADO
+- Escritura a GitHub: NO EJECUTADA
+- Escritura a Aiven: NO EJECUTADA
+- Escritura a Azure: NO EJECUTADA
+- Escritura a Netlify: NO EJECUTADA
+- Escritura a Google Drive/Sheets: NO EJECUTADA

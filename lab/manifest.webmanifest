@@ -1,0 +1,21 @@
+{
+  "name": "Gestor Mantto - Laboratorio DGB",
+  "short_name": "Mantto LAB",
+  "description": "Laboratorio DGB con datos ficticios y backend ejecutado dentro del navegador.",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f0f4f8",
+  "theme_color": "#0d2e6e",
+  "lang": "es-MX",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icons/lab-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

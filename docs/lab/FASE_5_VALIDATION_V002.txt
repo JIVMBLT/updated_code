@@ -1,0 +1,93 @@
+GESTOR MANTTO · LAB DGB · FASE 5 V002
+VALIDACION EJECUTADA: 2026-09-14
+
+ENTORNO DE VALIDACION
+- Composicion incremental: Fase 1 V002 -> Fase 2 V002 -> Fase 3 V002 -> Fase 4 V002 -> Fase 5 V002.
+- Base: SQLite / sql.js WASM en memoria para pruebas.
+- No se utilizo Aiven, Azure, Netlify ni API productiva.
+
+SINTAXIS FASE 5
+- core/config.js: PASS
+- lab-catalogs.service.js: PASS
+- lab-users.service.js: PASS
+- lab-relations.service.js: PASS
+- lab-shared-assets.service.js: PASS
+- lab-shared.routes.js: PASS
+- lab-phase5-bootstrap.js: PASS
+
+VALIDACION ACUMULADA
+FASE 1 V002 / Python SQLite: PASS
+- 93 tablas
+- 1,553 columnas
+- 445 indices
+- 67 tablas con seed
+- 900 registros seed
+- 0 violaciones FK
+
+FASE 1 V002 / sql.js WASM: PASS
+- usuarios: 61
+- proyectos fixture: 15
+- equipos: 15
+- tickets: 30
+- tareas: 20
+- 0 violaciones FK
+
+FASE 2 V002 / Backend Engine: PASS
+- 11 / 11 pruebas
+
+FASE 3 V002 / Transporte y aislamiento: PASS
+- 10 / 10 pruebas
+- /api/* local
+- hosts productivos bloqueados o redirigidos al backend LAB segun contrato
+- mutaciones cross-origin desconocidas bloqueadas
+
+FASE 4 V002 / Identidad, permisos y alcance: PASS
+- Auth/permisos: PASS
+- SQLite: PASS
+- perm_acciones: 44
+- perm_agrupaciones: 14
+- perm_modulos: 64
+- perm_elementos: 129
+- perm_subelementos: 232
+- perm_subelemento_acciones: 510
+- rol_permisos: 14,669
+
+FASE 5 V002 / Package Guard: PASS
+- sin .patch
+- sin .diff
+- sin APPLY_FASE*.ps1
+- sin hosts productivos en archivos ejecutables Fase 5
+- Fase 5 se carga antes de lab-auth
+- migracion 005 no crea tablas
+
+FASE 5 V002 / SQLite: PASS
+- PRAGMA user_version: 5
+- usuarios fixture: 61
+- portafolio fixture: 15
+- tickets fixture: 30
+- tabla legacy permisos: AUSENTE, segun estructura LAB
+- 0 violaciones FK
+
+FASE 5 V002 / Servicios compartidos: PASS
+Verificado con LabBackend + LabRouter + sql.js:
+- catalogos base
+- estados visuales
+- error explicito de /api/permisos legacy
+- directorio y detalle de usuarios
+- preferencias de criticidad
+- alta/edicion sintetica de usuario
+- rechazo de correo no @lab.invalid
+- reset LAB sin contraseña
+- alta/eliminacion usuarios_rel_admin
+- listado/filtros de proyectos
+- permiso dedicado de /api/proyectos/inicial
+- listado/filtros Portafolio
+- alias /api/equipos
+- alcance UNITED por zona para identidad no maestra
+- rutas de detalle Fase 7 no son sombreadas por Fase 5
+
+LIMITES DE ESTA VALIDACION
+- No se ejecuto E2E visual en GitHub Pages ni navegador real.
+- No se comparo el contenido del snapshot LAB contra Aiven productivo vigente.
+- No se afirma que la tabla legacy permisos exista en produccion actual mas alla del contrato de codigo revisado; en el snapshot LAB no existe.
+- No se escribio en repositorios GitHub remotos.

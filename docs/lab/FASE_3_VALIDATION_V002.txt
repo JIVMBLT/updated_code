@@ -1,0 +1,65 @@
+FASE 3 LAB DGB TRANSPORTE AISLAMIENTO V002
+===========================================
+
+Baseline verificado:
+JIVMBLT/updated_code main
+d3b766477663e6726ea46f1bb08bdc30b01a74e6
+
+VALIDACION ACUMULADA F1 + F2 + F3
+----------------------------------
+F1 Python SQLite smoke: PASS
+  tablas: 93
+  columnas: 1553
+  indices: 445
+  seeded_tables: 67
+  seed_rows: 900
+  foreign_key_violations: 0
+  user_version: 1
+
+F1 sql.js/WASM smoke: PASS
+  users: 61
+  projects: 15
+  equipment: 15
+  tickets: 30
+  tasks: 20
+  fkViolations: 0
+
+F2 Backend Engine tests: PASS
+  tests: 11
+  pass: 11
+  fail: 0
+
+F3 Transport tests: PASS
+  tests: 10
+  pass: 10
+  fail: 0
+
+Cobertura F3 validada:
+- /api/* usa backend local sin fetch nativo: PASS
+- URL Azure /api se resuelve localmente: PASS
+- ruta desconocida -> 501 LAB_MOCK_NOT_IMPLEMENTED: PASS
+- Azure no API bloqueado: PASS
+- recurso estatico same-origin permitido: PASS
+- GET estatico cross-origin no productivo permitido: PASS
+- mutacion cross-origin bloqueada: PASS
+- ManttoLabTransport.request local: PASS
+- XMLHttpRequest /api local: PASS
+- productionConnectionsAllowed=false: PASS
+
+Sintaxis:
+- core/config.js: PASS
+- core/http.js: PASS
+- lab/runtime/lab-transport.js: PASS
+
+Disciplina de entrega:
+- archivos .patch: 0
+- APPLY_FASE*.ps1: 0
+- git apply requerido: NO
+
+No ejecutado:
+- E2E navegador publicado
+- deploy GitHub Pages
+- escritura GitHub
+- Azure
+- Aiven
+- Netlify
