@@ -34,6 +34,7 @@
       estatus:{ label:'Estatus', type:'select' },
       fecha_inicio_ajuste:{ label:'Fecha Inicio Ajuste', type:'date' },
       fecha_fin_ajuste_planeado:{ label:'Fecha Fin Ajuste', type:'date' },
+      fecha_fin_ajuste_modificado:{ label:'Fecha Fin Ajuste Modificado', type:'date' },
       ajustador:{ label:'Ajustador', type:'text' },
       comentarios_fl:{ label:'Comentario', type:'textarea' }
     }),
@@ -66,12 +67,36 @@
     '08-T': Object.freeze([['COMENTARIO','comentarios_fl','comentario']])
   });
 
+
+  // Columnas exclusivas de Modo Junta. Se agregan al final de la etapa
+  // indicada y, si una columna ya existe en la definicion base, se mueve
+  // al bloque final para conservar exactamente el orden funcional acordado.
+  const MEETING_APPEND_COLUMNS_COR = Object.freeze({
+    '04-M': Object.freeze([
+      ['Minuta Revisión de Ajuste','fecha_minuta_revision_ajuste','fecha'],
+      ['Liberado por Ajuste','fecha_liberacion_ajuste','texto']
+    ]),
+    '05-PA': Object.freeze([
+      ['No. Pisos','numero_pisos','texto'],
+      ['No. Desembarques','numero_desembarques','texto'],
+      ['No. Puertas','numero_puertas','texto'],
+      ['Capacidad (kg)','capacidad_kg','texto'],
+      ['Revisión por Supervisor','fecha_revision_supervisor','fecha'],
+      ['Revisión por Ajuste','fecha_minuta_revision_ajuste','fecha'],
+      ['Liberado por Ajuste','fecha_liberacion_ajuste','texto'],
+      ['CTI','fecha_cti','fecha'],
+      ['Última Visita','fecha_visita','fecha'],
+      ['Comentario','comentarios_fl','comentario'],
+      ['Posible Inicio de Ajuste','fecha_posible_inicio_ajuste','fecha']
+    ])
+  });
+
   const PERMISSIONS_COR = Object.freeze({
     acceso_visual:'INSTALACIONES_DASHBOARD_ACCESO_VISUAL_MODULO.ACCESO_VISUAL',
     selector_ver:'INSTALACIONES_DASHBOARD_SELECTOR_SUPERVISORES_SELECTOR.VER',
     selector_filtrar:'INSTALACIONES_DASHBOARD_SELECTOR_SUPERVISORES_SELECTOR.FILTRAR',
     comentarios_ver:'INSTALACIONES_DASHBOARD_COMENTARIOS_JUNTA_LISTADO.VER',
-    reporte_selector_ver:'INSTALACIONES_DASHBOARD_REPORTE_SECCION_SELECTOR.VER',
+    reporte_selector_fer:'INSTALACIONES_DASHBOARD_REPORTE_SECCION_SELECTOR.VER',
     reporte_selector_filtrar:'INSTALACIONES_DASHBOARD_REPORTE_SECCION_SELECTOR.FILTRAR',
     reporte_listado_ver:'INSTALACIONES_DASHBOARD_REPORTE_SECCION_LISTADO.VER',
     reporte_abrir_detalle:'INSTALACIONES_DASHBOARD_REPORTE_SECCION_LISTADO.ABRIR_DETALLE',
@@ -598,16 +623,35 @@
     const editable = QUICK_EDIT_FIELDS_COR[sectionCode];
     if(!editable) return withStatus;
 
+    // 04-M y 05-PA tienen columnas adicionales exclusivas de Modo Junta.
+    // Las columnas repetidas se retiran de la base y se reinsertan al final
+    // para respetar el orden exacto solicitado sin duplicarlas.
+    const meetingAppend = Array.isArray(MEETING_APPEND_COLUMNS_COR[sectionCode])
+      ? MEETING_APPEND_COLUMNS_COR[sectionCode]
+      : [];
+    let meetingColumns = withStatus;
+    if(meetingAppend.length){
+      const appendFields = new Set(meetingAppend.map(item => item[1]));
+      meetingColumns = withStatus.filter(item => !(
+        Array.isArray(item) && typeof item[1] === 'string' && appendFields.has(item[1])
+      ));
+      meetingColumns = meetingColumns.concat(meetingAppend.map(item => [item[0], item[1], item[2]]));
+    }
+
+    const currentFields = new Set();
+    meetingColumns.forEach(item => {
+      if(Array.isArray(item) && typeof item[1] === 'string') currentFields.add(item[1]);
+    });
     const additions = Array.isArray(QUICK_EDIT_MISSING_COLUMNS_COR[sectionCode])
       ? QUICK_EDIT_MISSING_COLUMNS_COR[sectionCode]
       : [];
     const rest = [];
     additions.forEach(item => {
-      if(existing.has(item[1])) return;
+      if(currentFields.has(item[1])) return;
       rest.push(item);
-      existing.add(item[1]);
+      currentFields.add(item[1]);
     });
-    return withStatus.concat(rest);
+    return meetingColumns.concat(rest);
   }
 
   function dateInputValue_cor(value){
@@ -806,12 +850,18 @@
 
   function documentationCell_cor(doc, type){
     const item = doc && typeof doc === 'object' ? doc : {};
-    const value = item.valor;
+    const value = raw(item.valor);
     const generated = item.generado === true;
-    const empty = value === null || value === undefined || raw(value) === '' || raw(value) === '-' || raw(value) === '.';
-    if(empty) return '<span class="idb-cor-doc-chip idb-cor-doc-missing">Falta</span>';
-    const label = type === 'date' ? formatDate_cor(value) : raw(value);
-    return '<span class="idb-cor-doc-chip ' + (generated ? 'idb-cor-doc-ok' : 'idb-cor-doc-neutral') + '">' + esc(label || '—') + '</span>';
+    if(!generated){
+      return '<span class="idb-cor-doc-chip idb-cor-doc-missing" title="' + esc(value || 'Falta') + '">Falta</span>';
+    }
+    const hasDate = /^(\d{4})-(\d{2})-(\d{2})/.test(value) ||
+      /^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(value) ||
+      /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/.test(value);
+    const label = type === 'date'
+      ? (hasDate ? formatDate_cor(value) : 'Entregado')
+      : (value || 'Entregado');
+    return '<span class="idb-cor-doc-chip idb-cor-doc-ok" title="' + esc(value || 'Entregado') + '">' + esc(label) + '</span>';
   }
 
   function documentationPageWindow_cor(page,totalPages){
@@ -1006,7 +1056,7 @@
     const body = rows.length ? rows.map(row => {
       const dynamic = columns.map(item => renderReportCell_cor(row, item, sectionCode)).join('');
       const alerts = Array.isArray(row.notificaciones) && row.notificaciones.length
-        ? '<div class="idb-cor-alerts">' + row.notificaciones.map(alert => '<span class="idb-cor-alert" title="' + esc(alert.texto) + '">' + esc(alert.emoji) + ' ' + esc(alert.texto) + '</span>').join('') + '</div>'
+        ? '<div class="idb-cor-alerts">' + row.notificaciones.map(alert => '<span class="idb-cor-alert" role="img" aria-label="' + esc(alert.texto) + '" title="' + esc(alert.texto) + '">' + esc(alert.emoji) + '</span>').join('') + '</div>'
         : '<span class="idb-cor-muted">—</span>';
       const attrs = canOpen && raw(row.proyecto) && raw(row.referencia_sitio)
         ? ' class="idb-cor-clickable" data-equipment-project="' + esc(row.proyecto) + '" data-equipment-reference="' + esc(row.referencia_sitio) + '"'

@@ -1,13 +1,20 @@
 (function(){
-  const TICKET_CHAT_REFRESH_MS = 10000;
+  const TICKET_CHAT_REFRESH_ACTIVE_MS = 15000;
+  const TICKET_CHAT_REFRESH_IDLE_MS = 30000;
+  const TICKET_CHAT_REFRESH_MAX_MS = 60000;
   let ticketChatRefreshTimer = null;
   let ticketChatRefreshId = null;
   let ticketChatRefreshBusy = false;
+  let ticketChatRefreshDelay = TICKET_CHAT_REFRESH_ACTIVE_MS;
+  let ticketChatComments = [];
+  let ticketChatLastCommentId = 0;
   const API = () => (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
   const ticketCache = new Map();
   const PROJECT_PHOTO_DOMAIN_COR = 'CORELLIAN';
   const PROJECT_PHOTO_DOMAIN_UNI = 'UNITED';
-  const projectPhotoState = { photos:[], index:0, projectId:'', projectName:'', principalUrl:'', uploading:false, showProjectLink:false, projectOptions:null, onPhotoChange:null, photoDomain:PROJECT_PHOTO_DOMAIN_COR };
+  const BITACORA_VIEW_PERMISSION = 'INSTALACIONES_PROYECTOS_DETALLE_PROYECTO_BITACORA.VER';
+  const BITACORA_PAGE_SIZE = 15;
+  const projectPhotoState = { photos:[], index:0, projectId:'', projectName:'', principalUrl:'', uploading:false, showProjectLink:false, projectOptions:null, onPhotoChange:null, allowAdd:true, allowSetPrincipal:true, managedPhotoLimit:7, photoDomain:PROJECT_PHOTO_DOMAIN_COR };
   function ticketKey(v){ return String(v || '').trim(); }
   function registerTickets(rows){
     (rows || []).forEach(t => {
@@ -37,6 +44,7 @@
     return esc(s);
   }
   async function fetchJson(path){
+    if(window.ManttoHttp&&typeof window.ManttoHttp.get==='function')return window.ManttoHttp.get(path);
     const headers = Object.assign({ 'Accept':'application/json' }, window.ManttoAuth && window.ManttoAuth.authHeaders ? window.ManttoAuth.authHeaders() : {});
     const r = await fetch(API() + path, { headers, cache:'no-store' });
     const text = await r.text();
@@ -47,6 +55,7 @@
     return data;
   }
   async function patchJson(path, body){
+    if(window.ManttoHttp&&typeof window.ManttoHttp.request==='function')return window.ManttoHttp.request(path,{method:'PATCH',body:JSON.stringify(body||{})});
     const headers = Object.assign({ 'Accept':'application/json', 'Content-Type':'application/json' }, window.ManttoAuth && window.ManttoAuth.authHeaders ? window.ManttoAuth.authHeaders() : {});
     const r = await fetch(API() + path, { method:'PATCH', headers, body:JSON.stringify(body || {}), cache:'no-store' });
     const text = await r.text();
@@ -57,6 +66,7 @@
     return data;
   }
   async function postJson(path, body){
+    if(window.ManttoHttp&&typeof window.ManttoHttp.request==='function')return window.ManttoHttp.request(path,{method:'POST',body:JSON.stringify(body||{})});
     const headers = Object.assign({ 'Accept':'application/json', 'Content-Type':'application/json' }, window.ManttoAuth && window.ManttoAuth.authHeaders ? window.ManttoAuth.authHeaders() : {});
     const r = await fetch(API() + path, { method:'POST', headers, body:JSON.stringify(body || {}), cache:'no-store' });
     const text = await r.text();
@@ -67,12 +77,10 @@
     return data;
   }
   const PROJECT_PHOTO_MANAGER_ROLE_TOKENS = Object.freeze([
-    'programador',
-    'director general',
     'gestor de fotografias',
     'gestor_fotografias'
   ]);
-  const PROJECT_PHOTO_MANAGER_TITLE = 'Disponible para Director General, Programador o Gestor de Fotografías';
+  const PROJECT_PHOTO_MANAGER_TITLE = 'Se requiere el rol Gestor de Fotografías';
   function normalizeProjectPhotoRoleToken(value){
     return String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   }
@@ -86,14 +94,15 @@
     const values=[u&&u.rol,u&&u.role,u&&u.rol_codigo,u&&u.role_code,u&&u.codigo_rol];
     ((u&&u.roles)||[]).forEach(role=>values.push(...projectPhotoRoleValues(role)));
     ((u&&u.roles_detalle)||[]).forEach(role=>values.push(...projectPhotoRoleValues(role)));
-    if(u&&u.is_programador)values.push('Programador');
     return Array.from(new Set(values.filter(Boolean).map(normalizeProjectPhotoRoleToken).filter(Boolean)));
   }
   function canManageProjectPhotos(){
+    if(window.ManttoAuth&&window.ManttoAuth.isViewingAs&&window.ManttoAuth.isViewingAs())return false;
     const roles=projectPhotoRoleTokens();
     return PROJECT_PHOTO_MANAGER_ROLE_TOKENS.some(role=>roles.includes(role));
   }
   async function postFormData(path,formData){
+    if(window.ManttoHttp&&typeof window.ManttoHttp.request==='function')return window.ManttoHttp.request(path,{method:'POST',body:formData});
     const headers=Object.assign({'Accept':'application/json'},window.ManttoAuth&&window.ManttoAuth.authHeaders?window.ManttoAuth.authHeaders():{});
     const r=await fetch(API()+path,{method:'POST',headers,body:formData,cache:'no-store'});
     const text=await r.text();let data=null;
@@ -147,6 +156,24 @@
         .mg-folder-manager-body{min-height:150px;max-height:420px;overflow-y:auto;overscroll-behavior:contain;padding:12px 14px;scrollbar-gutter:stable}.mg-folder-empty,.mg-folder-status{font-size:12px;font-weight:900;text-align:center;border-radius:10px;padding:12px 14px;margin:12px auto;max-width:420px}.mg-folder-empty{color:#9F1239;background:#FFF1F2;border:1px solid #FECDD3}.mg-folder-status{color:#0D2E6E;background:#EFF6FF;border:1px solid #BFDBFE}.mg-folder-status.error{color:#9F1239;background:#FFF1F2;border-color:#FECDD3}
         .mg-folder-tree{list-style:none;margin:0;padding:0}.mg-folder-tree ul{list-style:none;margin:3px 0 3px 22px;padding:0;border-left:1px dashed #CBD5E1}.mg-folder-node{margin:2px 0}.mg-folder-row{display:flex;align-items:center;gap:7px;min-height:32px;padding:4px 7px;border-radius:7px}.mg-folder-row:hover{background:#F8FAFC}.mg-folder-toggle{width:22px;height:22px;border:0;background:transparent;color:#334155;cursor:pointer;font-size:12px}.mg-folder-toggle.placeholder{visibility:hidden}.mg-folder-icon{width:20px;text-align:center}.mg-folder-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:750;color:#1E293B}.mg-folder-item-open{border:0;background:transparent;color:#0D2E6E;font-size:11px;font-weight:850;cursor:pointer}.mg-folder-children[hidden]{display:none}.mg-folder-muted{font-size:11px;color:#64748B}
         @media(max-width:720px){.mg-folder-manager-body{max-height:300px;padding:10px 11px}.mg-folder-manager-tabs{overflow-x:auto;white-space:nowrap;padding-bottom:2px}.mg-folder-manager-tab{flex:0 0 auto}.mg-folder-row{min-height:36px}.mg-folder-item-open{padding:5px 3px}.mg-folder-manager-head{align-items:flex-start}.mg-folder-manager-actions{max-width:62%}.mg-folder-manager-open,.mg-folder-oauth-btn{padding:7px 9px}}
+
+        .mg-bitacora-panel{background:#fff;border:1px solid rgba(13,46,110,.18);border-radius:12px;overflow:hidden}
+        .mg-bitacora-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:#EFF6FF;color:#0D2E6E;font-size:13px;font-weight:900;flex-wrap:wrap}
+        .mg-bitacora-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .mg-bitacora-lastsync{font-size:10px;font-weight:750;color:#475569;text-align:right}
+        .mg-bitacora-refresh{border:0;background:#0D2E6E;color:#fff;border-radius:8px;padding:7px 11px;font-size:11px;font-weight:850;cursor:pointer}.mg-bitacora-refresh:disabled{opacity:.6;cursor:wait}
+        .mg-bitacora-body{padding:0}
+        .mg-bitacora-table{width:100%;border-collapse:collapse}.mg-bitacora-table th{background:#F8FAFC;color:#475569;text-align:left;font-size:10px;text-transform:uppercase;font-weight:800;padding:8px 12px;border-bottom:1px solid #E2E8F0}.mg-bitacora-table td{font-size:12px;padding:8px 12px;border-bottom:1px solid #F1F5F9;color:#334155;vertical-align:top}.mg-bitacora-table tr.eliminado td{color:#94A3B8}
+        .mg-bitacora-doc-link{color:#1B4FD8;text-decoration:underline;cursor:pointer;font-weight:700}
+        .mg-bitacora-photo-evidence{display:inline-flex;align-items:center;gap:3px;margin-left:7px;border-radius:999px;padding:2px 6px;background:#E0F2FE;color:#075985;font-size:10px;font-weight:850;text-decoration:none;white-space:nowrap}
+        .mg-bitacora-ruta{color:#64748B;font-size:11px}
+        .mg-bitacora-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px}
+        .mg-bitacora-badge.activo{background:#DCFCE7;color:#166534}
+        .mg-bitacora-badge.eliminado{background:#FEE2E2;color:#991B1B}
+        .mg-bitacora-empty{padding:16px;text-align:center;color:#64748B;font-size:12px}
+        .mg-bitacora-truncado{font-size:10px;color:#B45309;background:#FFFBEB;border-top:1px solid #FDE68A;padding:6px 12px}
+        .mg-bitacora-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-top:1px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:10px;font-weight:700;flex-wrap:wrap}.mg-bitacora-page-actions{display:flex;align-items:center;gap:7px}.mg-bitacora-page-button{border:1px solid #CBD5E1;background:#fff;color:#0D2E6E;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer}.mg-bitacora-page-button:disabled{opacity:.45;cursor:not-allowed}
+        @media(max-width:720px){.mg-bitacora-table{display:block;overflow-x:auto}.mg-bitacora-head{align-items:flex-start}}
         .mg-chart-grid{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr);gap:14px}.mg-chart-card{border:1px solid #E2E8F0;border-radius:12px;padding:14px;background:#fff}.mg-chart-card h4{margin:0 0 12px;color:#0D2E6E;font-size:13px}
         .mg-bar-row{display:grid;grid-template-columns:minmax(90px,160px) 1fr 48px;gap:10px;align-items:center;margin:9px 0}.mg-bar-label{font-size:11px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mg-bar-track{height:16px;border-radius:999px;background:#E9EFF8;overflow:hidden}.mg-bar-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,#1B4FD8,#0D2E6E);min-width:0}.mg-bar-value{text-align:right;font-size:11px;font-weight:800;color:#0D2E6E}
         .mg-project-kpis{display:grid;gap:10px;margin-bottom:10px}.mg-project-kpis.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.mg-project-kpis.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.mg-project-kpi{min-height:104px;border:0;border-radius:15px;padding:13px 11px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;color:#fff;box-shadow:0 9px 20px rgba(13,46,110,.14)}.mg-project-kpi-icon{font-size:22px;line-height:1}.mg-project-kpi span:not(.mg-project-kpi-icon){display:block;font-size:9px;text-transform:uppercase;font-weight:900;letter-spacing:.04em;color:rgba(255,255,255,.94)}.mg-project-kpi strong{display:block;color:#fff;font-size:28px;line-height:1}.mg-project-kpi small{font-size:9px;color:rgba(255,255,255,.76)}.mg-project-kpi-green{background:linear-gradient(135deg,#16A34A,#166534)}.mg-project-kpi-red{background:linear-gradient(135deg,#DC2626,#991B1B)}.mg-project-kpi-amber{background:linear-gradient(135deg,#D97706,#B45309)}.mg-project-kpi-blue{background:linear-gradient(135deg,#0891B2,#0E7490)}.mg-project-kpi-indigo{background:linear-gradient(135deg,#1B4FD8,#0D2E6E)}.mg-project-kpi-cyan{background:linear-gradient(135deg,#0284C7,#0369A1)}.mg-project-kpi-slate{background:linear-gradient(135deg,#64748B,#475569)}.mg-project-kpi-link{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease}.mg-project-kpi-link:hover,.mg-project-kpi-link:focus-visible{transform:translateY(-2px);box-shadow:0 12px 28px rgba(15,23,42,.18);outline:2px solid rgba(27,79,216,.28);outline-offset:2px}.mg-project-dashboard{padding:14px}.mg-project-rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}.mg-project-ring-card{border:1px solid #E2E8F0;border-radius:12px;padding:14px;background:#fff;min-width:0}.mg-project-ring-card h4{margin:0 0 10px;color:#0D2E6E;font-size:13px}.mg-project-ring-layout{display:flex;align-items:center;gap:14px}.mg-project-ring{width:132px;height:132px;border-radius:50%;position:relative;flex:0 0 132px;background:#E2E8F0}.mg-project-ring:after{content:'';position:absolute;inset:25px;border-radius:50%;background:#fff}.mg-project-ring-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;font-size:18px;font-weight:900;color:#0D2E6E}.mg-project-ring-legend{display:grid;gap:6px;min-width:0}.mg-project-ring-item{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:7px;align-items:center;font-size:10px;color:#475569}.mg-project-ring-dot{width:10px;height:10px;border-radius:50%}.mg-project-ring-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mg-project-ring-value{font-weight:800;color:#0D2E6E}.mg-project-equipment-empty{display:none}
@@ -174,7 +201,7 @@
       lightbox.id='mg-photo-lightbox';
       lightbox.className='mg-photo-lightbox';
       lightbox.hidden=true;
-      lightbox.innerHTML='<button type="button" class="mg-photo-close" aria-label="Cerrar">×</button><button type="button" class="mg-photo-nav prev" aria-label="Anterior">‹</button><figure><img alt="Fotografía del proyecto"><figcaption></figcaption><div class="mg-photo-actions"><span class="mg-photo-current">Foto Principal Actual</span><button type="button" class="mg-photo-principal">Seleccionar Foto Principal</button><button type="button" class="mg-photo-add">Agregar Foto</button><button type="button" class="mg-photo-project">Ir a Proyecto</button></div><input type="file" class="mg-photo-input" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" hidden></figure><button type="button" class="mg-photo-nav next" aria-label="Siguiente">›</button>';
+      lightbox.innerHTML='<button type="button" class="mg-photo-close" aria-label="Cerrar">×</button><button type="button" class="mg-photo-nav prev" aria-label="Anterior">‹</button><figure><img alt="Fotografía del proyecto"><figcaption></figcaption><div class="mg-photo-actions"><span class="mg-photo-current">Foto Principal Actual</span><button type="button" class="mg-photo-principal">Seleccionar Foto Principal</button><button type="button" class="mg-photo-add">Agregar Foto</button><button type="button" class="mg-photo-project" id="mg-photo-project">Ir a Proyecto</button></div><input type="file" class="mg-photo-input" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" hidden></figure><button type="button" class="mg-photo-nav next" aria-label="Siguiente">›</button>';
       document.body.appendChild(lightbox);
       lightbox.querySelector('.mg-photo-close').addEventListener('click',closeProjectPhotoLightbox);
       lightbox.querySelector('.mg-photo-add').addEventListener('click',()=>openProjectPhotoUploader());
@@ -197,10 +224,13 @@
     if(body) body.innerHTML=html||'';
   }
   function stopTicketChatRefresh(){
-    if(ticketChatRefreshTimer) window.clearInterval(ticketChatRefreshTimer);
+    if(ticketChatRefreshTimer) window.clearTimeout(ticketChatRefreshTimer);
     ticketChatRefreshTimer = null;
     ticketChatRefreshId = null;
     ticketChatRefreshBusy = false;
+    ticketChatRefreshDelay = TICKET_CHAT_REFRESH_ACTIVE_MS;
+    ticketChatComments = [];
+    ticketChatLastCommentId = 0;
   }
   function close(){
     stopTicketChatRefresh();
@@ -337,7 +367,7 @@
     const fields=domain===PROJECT_PHOTO_DOMAIN_UNI
       ? [['foto_1','foto_1'],['foto_2','foto_2'],['foto_3','foto_3'],['foto_4','foto_4'],['foto_5','foto_5'],['foto_6','foto_6'],['foto_7','foto_7']]
       : [['foto_blt_1','FOTO BLT'],['foto_blt_2','FOTO BLT 2'],['foto_blt_3','FOTO BLT 3'],['foto_blt_4','FOTO BLT 4'],['foto_blt_5','FOTO BLT 5'],['foto_blt_6','FOTO BLT 6'],['foto_blt_7','FOTO BLT 7']];
-    return fields.map(([campo,alias],index)=>({campo,url:String((row&&(row[alias]||row[campo]))||'').trim(),label:'Foto '+(index+1)})).filter(item=>/^https?:\/\//i.test(item.url));
+    return fields.map(([campo,alias],index)=>({campo,url:String((row&&(row[alias]||row[campo]))||'').trim(),label:'Foto '+(index+1),origen:domain,manageable:true})).filter(item=>/^https?:\/\//i.test(item.url));
   }
   function projectPrincipalUrl(row, photos){
     const direct=String(row&&row.foto_portada||'').trim();
@@ -352,7 +382,15 @@
       : (canManageProjectPhotos()?'<button type="button" class="mg-project-cover mg-project-cover-empty" data-project-photo-add aria-label="Agregar fotografía al proyecto"><strong>+</strong><span>Agregar foto</span></button>':'');
   }
   function currentProjectPhotoOptions(){
-    return {photoDomain:projectPhotoState.photoDomain};
+    return {
+      showProjectLink:projectPhotoState.showProjectLink,
+      projectOptions:projectPhotoState.projectOptions?Object.assign({},projectPhotoState.projectOptions):null,
+      onPhotoChange:projectPhotoState.onPhotoChange,
+      allowAdd:projectPhotoState.allowAdd,
+      allowSetPrincipal:projectPhotoState.allowSetPrincipal,
+      managedPhotoLimit:projectPhotoState.managedPhotoLimit,
+      photoDomain:projectPhotoState.photoDomain
+    };
   }
   function openProjectPhotoLightbox(projectId, projectName, photos, principalUrl, options){
     if(!photos||!photos.length)return;
@@ -366,6 +404,9 @@
     projectPhotoState.showProjectLink=Boolean(cfg.showProjectLink);
     projectPhotoState.projectOptions=cfg.projectOptions?Object.assign({},cfg.projectOptions):null;
     projectPhotoState.onPhotoChange=typeof cfg.onPhotoChange==='function'?cfg.onPhotoChange:null;
+    projectPhotoState.allowAdd=cfg.allowAdd!==false;
+    projectPhotoState.allowSetPrincipal=cfg.allowSetPrincipal!==false;
+    projectPhotoState.managedPhotoLimit=Math.max(1,Number(cfg.managedPhotoLimit)||7);
     projectPhotoState.photoDomain=normalizeProjectPhotoDomain(cfg.photoDomain);
     renderProjectPhotoLightbox();
     document.getElementById('mg-photo-lightbox').hidden=false;
@@ -383,18 +424,19 @@
     const current=lightbox.querySelector('.mg-photo-current');
     if(current)current.textContent='Foto Principal Actual'+(principalIndex>=0?' · '+projectPhotoState.photos[principalIndex].label:' · Sin definir');
     const btn=lightbox.querySelector('.mg-photo-principal');
-    const allowed=canManageProjectPhotos();
-    btn.style.display='inline-block';
-    btn.disabled=!allowed||item.url===projectPhotoState.principalUrl;
+    const allowed=canManageProjectPhotos()&&projectPhotoState.allowSetPrincipal&&item.manageable!==false;
+    btn.style.display=allowed?'inline-block':'none';
+    btn.disabled=item.url===projectPhotoState.principalUrl;
     btn.textContent='Seleccionar Foto Principal';
     btn.title=!allowed?PROJECT_PHOTO_MANAGER_TITLE:(item.url===projectPhotoState.principalUrl?'La fotografía mostrada ya es la principal':'Seleccionar esta fotografía como principal');
     const addBtn=lightbox.querySelector('.mg-photo-add');
     const canManage=canManageProjectPhotos();
-    const canAdd=canManage&&projectPhotoState.photos.length<7;
-    addBtn.style.display='inline-block';
+    const managedCount=projectPhotoState.photos.filter(photo=>photo.manageable!==false).length;
+    const canAdd=canManage&&projectPhotoState.allowAdd&&managedCount<projectPhotoState.managedPhotoLimit;
+    addBtn.style.display=canManage&&projectPhotoState.allowAdd?'inline-block':'none';
     addBtn.disabled=!canAdd||projectPhotoState.uploading;
     addBtn.textContent=projectPhotoState.uploading?'Subiendo...':'Agregar Foto';
-    addBtn.title=!canManage?PROJECT_PHOTO_MANAGER_TITLE:(projectPhotoState.photos.length>=7?'El proyecto ya tiene el máximo de 7 fotografías':'Agregar una fotografía al proyecto');
+    addBtn.title=!canManage?PROJECT_PHOTO_MANAGER_TITLE:(!projectPhotoState.allowAdd?'Este origen conserva su administración de fotografías':(managedCount>=projectPhotoState.managedPhotoLimit?'El proyecto ya tiene el máximo de 7 fotografías':'Agregar una fotografía al proyecto'));
     const projectBtn=lightbox.querySelector('.mg-photo-project');
     if(projectBtn){
       projectBtn.style.display=projectPhotoState.showProjectLink?'inline-block':'none';
@@ -411,12 +453,15 @@
     projectPhotoState.showProjectLink=Boolean(cfg.showProjectLink);
     projectPhotoState.projectOptions=cfg.projectOptions?Object.assign({},cfg.projectOptions):null;
     projectPhotoState.onPhotoChange=typeof cfg.onPhotoChange==='function'?cfg.onPhotoChange:null;
+    projectPhotoState.allowAdd=cfg.allowAdd!==false;
+    projectPhotoState.allowSetPrincipal=cfg.allowSetPrincipal!==false;
+    projectPhotoState.managedPhotoLimit=Math.max(1,Number(cfg.managedPhotoLimit)||7);
     projectPhotoState.photoDomain=normalizeProjectPhotoDomain(cfg.photoDomain);
   }
   function bindProjectPhotoCover(root,config){
     if(!root)return;
     const cfg=config||{};
-    setProjectPhotoContext(cfg.projectId,cfg.projectName,cfg.photos,cfg.principalUrl,{photoDomain:cfg.photoDomain});
+    setProjectPhotoContext(cfg.projectId,cfg.projectName,cfg.photos,cfg.principalUrl,cfg);
     const photoButton=root.querySelector('[data-project-photo-open]');
     if(photoButton)photoButton.addEventListener('click',()=>openProjectPhotoLightbox(projectPhotoState.projectId,projectPhotoState.projectName,projectPhotoState.photos,projectPhotoState.principalUrl,currentProjectPhotoOptions()));
     const addPhotoButton=root.querySelector('[data-project-photo-add]');
@@ -427,9 +472,9 @@
     try{projectPhotoState.onPhotoChange(Object.assign({projectId:projectPhotoState.projectId,principalUrl:projectPhotoState.principalUrl,photos:projectPhotoState.photos.slice()},change||{}));}catch(error){console.warn('[ManttoDetails] No fue posible sincronizar el cambio de fotografías con la vista origen.',error);}
   }
   function openProjectPhotoUploader(projectId,projectName,photos,principalUrl,options){
-    if(!canManageProjectPhotos())return;
+    if(!canManageProjectPhotos()||!projectPhotoState.allowAdd)return;
     if(projectId!==undefined)setProjectPhotoContext(projectId,projectName,photos,principalUrl,options);
-    if(!projectPhotoState.projectId||projectPhotoState.photos.length>=7)return;
+    if(!projectPhotoState.projectId||projectPhotoState.photos.filter(photo=>photo.manageable!==false).length>=projectPhotoState.managedPhotoLimit)return;
     ensure();
     const input=document.querySelector('#mg-photo-lightbox .mg-photo-input');
     if(input){input.value='';input.click();}
@@ -437,7 +482,7 @@
   async function handleProjectPhotoSelected(event){
     const input=event&&event.target;const file=input&&input.files&&input.files[0];
     if(!file||projectPhotoState.uploading||!projectPhotoState.projectId)return;
-    if(projectPhotoState.photos.length>=7){window.alert('El proyecto ya tiene el máximo de 7 fotografías.');input.value='';return;}
+    if(!projectPhotoState.allowAdd||projectPhotoState.photos.filter(photo=>photo.manageable!==false).length>=projectPhotoState.managedPhotoLimit){window.alert('El proyecto ya tiene el máximo de 7 fotografías.');input.value='';return;}
     projectPhotoState.uploading=true;
     if(projectPhotoState.photos.length)renderProjectPhotoLightbox();
     try{
@@ -447,7 +492,7 @@
       const data=response&&response.data?response.data:{};
       const match=String(data.campo||'').match(/(\d+)$/);
       const slotNumber=Number((match&&match[1])||projectPhotoState.photos.length+1);
-      const item={campo:data.campo,url:String(data.url||''),label:'Foto '+slotNumber};
+      const item={campo:data.campo,url:String(data.url||''),label:'Foto '+slotNumber,origen:projectPhotoState.photoDomain,manageable:true};
       if(!item.campo||!/^https?:\/\//i.test(item.url))throw new Error('El backend no devolvió la fotografía guardada.');
       projectPhotoState.photos.push(item);
       projectPhotoState.index=projectPhotoState.photos.length-1;
@@ -481,8 +526,9 @@
     openProyecto(id,options);
   }
   async function selectProjectPrincipalPhoto(){
-    if(!canManageProjectPhotos())return;
+    if(!canManageProjectPhotos()||!projectPhotoState.allowSetPrincipal)return;
     const item=projectPhotoState.photos[projectPhotoState.index];if(!item||!item.campo||!projectPhotoState.projectId)return;
+    if(item.manageable===false)return;
     try{
       const endpoints=projectPhotoEndpoints(projectPhotoState.projectId,projectPhotoState.photoDomain);
       await patchJson(endpoints.principal,{campo:item.campo});
@@ -677,6 +723,130 @@
     }
   }
 
+  /* =========================================================
+     BITACORA DE OBRA
+     Historial persistente (BD) de los documentos encontrados en la
+     carpeta de Drive del proyecto (raiz + subcarpetas). Al abrir la
+     pestana se muestra primero lo ya guardado (rapido) y en paralelo
+     se dispara un sync contra Drive que reconcilia altas/bajas; el
+     boton "Actualizar" repite ese sync bajo demanda.
+     ========================================================= */
+  function bitacoraDocIcon(mime){
+    const m=String(mime||'').toLowerCase();
+    if(m.includes('pdf'))return '📕';
+    if(m.includes('spreadsheet')||m.includes('excel'))return '📊';
+    if(m.includes('document')||m.includes('word'))return '📘';
+    if(m.startsWith('image/'))return '🖼️';
+    return '📄';
+  }
+  function canViewBitacora(){
+    if(!window.ManttoPermissions||typeof window.ManttoPermissions.state!=='function')return false;
+    const permission=window.ManttoPermissions.state(BITACORA_VIEW_PERMISSION);
+    return Boolean(permission&&permission.exists===true&&permission.efectivo===true);
+  }
+  function fmtDateTime(v){
+    if(!v)return '—';
+    const s=String(v).trim();
+    const m=s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if(m)return m[3]+'/'+m[2]+'/'+m[1]+' '+m[4]+':'+m[5];
+    return fmtDate(s);
+  }
+  function renderBitacoraLastSync(panel,sincronizacion){
+    const el=panel.querySelector('.mg-bitacora-lastsync');
+    if(!el)return;
+    if(!sincronizacion||!sincronizacion.ultima_sincronizacion){el.textContent='Aún no se ha sincronizado.';return;}
+    el.textContent='Última actualización: '+fmtDateTime(sincronizacion.ultima_sincronizacion);
+  }
+  function renderBitacoraTable(panel,data,pageNumber){
+    const body=panel.querySelector('.mg-bitacora-body');
+    const documentos=(data&&data.documentos)||[];
+    panel._bitacoraData=data;
+    renderBitacoraLastSync(panel,data&&data.sincronizacion);
+    if(!documentos.length){
+      body.innerHTML='<div class="mg-bitacora-empty">Todavía no se ha registrado ningún documento. Usa "Actualizar" para sincronizar con Drive.</div>';
+      return;
+    }
+    const totalPages=Math.max(1,Math.ceil(documentos.length/BITACORA_PAGE_SIZE));
+    const currentPage=Math.min(totalPages,Math.max(1,Number(pageNumber)||1));
+    const start=(currentPage-1)*BITACORA_PAGE_SIZE;
+    const pageDocuments=documentos.slice(start,start+BITACORA_PAGE_SIZE);
+    panel._bitacoraPage=currentPage;
+    const rows=pageDocuments.map(doc=>{
+      const activo=doc.estatus==='activo';
+      const badge=activo?'<span class="mg-bitacora-badge activo">✅ Activo</span>':'<span class="mg-bitacora-badge eliminado">❌ Ya no está en Drive</span>';
+      const totalFotos=Math.max(0,Number(doc.total_imagenes_evidencia)||0);
+      const evidencia=totalFotos?'<span class="mg-bitacora-photo-evidence" title="'+totalFotos+' imagen'+(totalFotos===1?'':'es')+' de evidencia con la fecha del documento" aria-label="'+totalFotos+' imagen'+(totalFotos===1?'':'es')+' de evidencia fotográfica">📷 '+totalFotos+'</span>':'';
+      const nombre=(doc.web_view_link?'<span class="mg-bitacora-doc-link" data-bitacora-link="'+esc(doc.web_view_link)+'">'+bitacoraDocIcon(doc.mime_type)+' '+esc(doc.nombre_archivo)+'</span>':bitacoraDocIcon(doc.mime_type)+' '+esc(doc.nombre_archivo))+evidencia;
+      const ruta=doc.ruta_carpeta?esc(doc.ruta_carpeta):'Carpeta raíz';
+      return '<tr class="'+(activo?'':'eliminado')+'"><td>'+nombre+'</td><td class="mg-bitacora-ruta">'+ruta+'</td><td>'+fmtDateTime(doc.fecha_movimiento||doc.fecha_modificacion_drive||doc.fecha_creacion_drive)+'</td><td>'+badge+'</td></tr>';
+    }).join('');
+    const end=Math.min(start+BITACORA_PAGE_SIZE,documentos.length);
+    const pagination='<div class="mg-bitacora-pagination"><span>Registros '+(start+1)+'–'+end+' de '+documentos.length+'</span><div class="mg-bitacora-page-actions"><button type="button" class="mg-bitacora-page-button" data-bitacora-page="'+(currentPage-1)+'" '+(currentPage===1?'disabled':'')+'>Anterior</button><span>Página '+currentPage+' de '+totalPages+'</span><button type="button" class="mg-bitacora-page-button" data-bitacora-page="'+(currentPage+1)+'" '+(currentPage===totalPages?'disabled':'')+'>Siguiente</button></div></div>';
+    body.innerHTML='<div class="mg-table-wrap"><table class="mg-bitacora-table"><thead><tr><th>Documento</th><th>Subcarpeta</th><th>Último movimiento</th><th>Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+pagination+
+      (data&&data.sincronizacion&&data.sincronizacion.truncado?'<div class="mg-bitacora-truncado">La carpeta es muy grande: esta sincronización no alcanzó a recorrerla por completo. Vuelve a pulsar "Actualizar".</div>':'');
+    body.querySelectorAll('[data-bitacora-link]:not([data-bound])').forEach(el=>{
+      el.dataset.bound='1';
+      el.addEventListener('click',()=>window.open(el.dataset.bitacoraLink,'_blank','noopener,noreferrer'));
+    });
+    body.querySelectorAll('[data-bitacora-page]:not(:disabled)').forEach(button=>{
+      button.addEventListener('click',()=>renderBitacoraTable(panel,panel._bitacoraData,Number(button.dataset.bitacoraPage)));
+    });
+  }
+  function bitacoraStatus(panel,message,isError){
+    const body=panel.querySelector('.mg-bitacora-body');
+    if(body)body.innerHTML='<div class="mg-folder-status'+(isError?' error':'')+'">'+esc(message)+'</div>';
+  }
+  async function loadBitacoraPersisted(panel,projectId){
+    try{
+      const data=await fetchJson('/api/instalaciones/bitacora/'+encodeURIComponent(projectId));
+      renderBitacoraTable(panel,data,1);
+    }catch(error){
+      bitacoraStatus(panel,error.message||'No fue posible cargar la Bitácora de Obra.',true);
+    }
+  }
+  async function syncBitacora(panel,projectId){
+    const button=panel.querySelector('.mg-bitacora-refresh');
+    if(button)button.disabled=true;
+    const lastSyncEl=panel.querySelector('.mg-bitacora-lastsync');
+    if(lastSyncEl)lastSyncEl.textContent='Sincronizando con Drive...';
+    try{
+      const data=await postJson('/api/instalaciones/bitacora/'+encodeURIComponent(projectId)+'/sync',{});
+      renderBitacoraTable(panel,data,1);
+    }catch(error){
+      if(/conectar.*google|google.*conect/i.test(String(error.message||''))){
+        if(lastSyncEl)lastSyncEl.textContent='Conecta tu cuenta de Google (arriba, en "Gestor de la carpeta") para sincronizar.';
+      }else if(lastSyncEl){
+        lastSyncEl.textContent='No fue posible sincronizar: '+(error.message||'error desconocido.');
+      }
+    }finally{
+      if(button)button.disabled=false;
+    }
+  }
+  async function initBitacoraObra(projectId){
+    const panel=document.querySelector('.mg-bitacora-panel[data-project-id="'+CSS.escape(String(projectId))+'"]');
+    if(!panel)return;
+    if(!canViewBitacora()){
+      panel.hidden=true;
+      return;
+    }
+    panel.hidden=false;
+    if(panel.dataset.initialized==='1')return;
+    panel.dataset.initialized='1';
+    const button=panel.querySelector('.mg-bitacora-refresh');
+    if(button&&!button.dataset.bound){
+      button.dataset.bound='1';
+      button.addEventListener('click',()=>syncBitacora(panel,projectId));
+    }
+    await loadBitacoraPersisted(panel,projectId);
+    // Actualiza automaticamente al abrir la vista, sin bloquear lo ya mostrado.
+    syncBitacora(panel,projectId);
+  }
+  document.addEventListener('mantto:permissions-updated',()=>{
+    document.querySelectorAll('.mg-bitacora-panel[data-project-id]').forEach(panel=>{
+      initBitacoraObra(panel.dataset.projectId);
+    });
+  });
+
   async function openUnifiedClientProject(proyecto, options){
     show('Proyecto',options.projectName||proyecto,'<div class="mg-empty">Preparando expediente unificado del cliente...</div>');
     const projectName=String(options.projectName||'').trim();
@@ -704,7 +874,8 @@
     const overview='<div class="mg-project-overview '+(coverHtml?'':'no-photo')+'">'+coverHtml+'<section class="mg-detail-section"><h3>Información general del proyecto</h3>'+grid(projectGeneral(coreRows,options))+'</section></div>';
     const stageBars='<section class="mg-stage-bars"><div class="mg-stage-row"><div class="mg-stage-meta"><span>Avance General</span><strong>'+generalPct+'%</strong></div><div class="mg-stage-track"><div class="mg-stage-fill general" style="width:'+generalPct+'%"></div></div></div>'+phaseBars.map((item,index)=>{const key=['oc','mo','aj'][index];const weight=['40%','40%','20%'][index];const pct=toPct(item.value);return '<div class="mg-stage-row"><div class="mg-stage-meta"><span>'+esc(item.label)+' ('+weight+')</span><strong>'+pct+'%</strong></div><div class="mg-stage-track"><div class="mg-stage-fill '+key+'" style="width:'+pct+'%"></div></div></div>';}).join('')+'</section>';
     const folderManager='<section class="mg-folder-manager" data-project-id="'+esc(proyecto)+'" aria-label="Gestor de la carpeta"><div class="mg-folder-manager-head"><span>Gestor de la carpeta</span><div class="mg-folder-manager-actions"><button type="button" class="mg-folder-oauth-btn mg-folder-oauth-connect" hidden>Conectar Google</button><button type="button" class="mg-folder-oauth-btn disconnect mg-folder-oauth-disconnect" hidden>Desconectar</button><button type="button" class="mg-folder-manager-open" hidden>Abrir en Drive</button></div></div><div class="mg-folder-manager-tabs" role="tablist" aria-label="Vistas de carpeta"><button type="button" class="mg-folder-manager-tab active" data-folder-tab="proyecto">Carpeta del proyecto</button><button type="button" class="mg-folder-manager-tab" data-folder-tab="raiz">Carpeta raíz</button></div><div class="mg-folder-manager-body"><div class="mg-folder-status">Preparando gestor...</div></div></section>';
-    const coreHtml='<section class="mg-company-block corellian"><div class="mg-company-content mg-corellian-content">'+overview+stageBars+folderManager+'<section class="mg-detail-section"><h3>Equipos del proyecto</h3><div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Referencia en sitio</th><th>Estatus</th><th>Fecha visita</th><th>Fin montaje real</th><th>Fin ajuste real</th><th>Avance</th></tr></thead><tbody>'+coreEquipmentRows+'</tbody></table></div></section><div class="mg-chart-grid"><article class="mg-chart-card"><h4>Avance individual por equipo</h4>'+barsHtml(equipmentBars)+'</article></div></div></section>';
+    const bitacoraObra='<section class="mg-bitacora-panel" data-project-id="'+esc(proyecto)+'" aria-label="Bitácora de Obra" hidden><div class="mg-bitacora-head"><span>Bitácora de Obra</span><div class="mg-bitacora-actions"><span class="mg-bitacora-lastsync">Preparando bitácora...</span><button type="button" class="mg-bitacora-refresh" title="Actualizar bitácora" aria-label="Actualizar bitácora">Actualizar</button></div></div><div class="mg-bitacora-body"><div class="mg-folder-status">Preparando bitácora...</div></div></section>';
+    const coreHtml='<section class="mg-company-block corellian"><div class="mg-company-content mg-corellian-content">'+overview+stageBars+folderManager+bitacoraObra+'<section class="mg-detail-section"><h3>Equipos del proyecto</h3><div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Referencia en sitio</th><th>Estatus</th><th>Fecha visita</th><th>Fin montaje real</th><th>Fin ajuste real</th><th>Avance</th></tr></thead><tbody>'+coreEquipmentRows+'</tbody></table></div></section><div class="mg-chart-grid"><article class="mg-chart-card"><h4>Avance individual por equipo</h4>'+barsHtml(equipmentBars)+'</article></div></div></section>';
     const unitedRoot=unitedResponse&&(unitedResponse.data||unitedResponse);
     const unitedSource=String(unitedResponse&&(unitedResponse.origen||unitedResponse.source)||'').trim().toUpperCase();
     const isUnitedPortafolio=unitedSource==='PORTAFOLIO'||unitedSource==='AIVEN-PORTAFOLIO';
@@ -719,6 +890,7 @@
     bindLinks(detailRoot);
     bindProjectPhotoCover(detailRoot,{projectId:proyecto,projectName:resolvedName,photos,principalUrl,photoDomain:PROJECT_PHOTO_DOMAIN_COR});
     initProjectFolderManager(proyecto);
+    initBitacoraObra(proyecto);
   }
 
   async function openProyecto(proyecto, options){
@@ -737,7 +909,7 @@
     const normalizeResponsibility=v=>{const value=String(v||'').trim();return value||'—';};
 
     function equipmentRows(equipos,tickets){
-      if(!equipos.length)return '<tr><td colspan="9" class="mg-empty">Sin equipos</td></tr>';
+      if(!equipos.length)return '<tr><td colspan="10" class="mg-empty">Sin equipos</td></tr>';
       return equipos.map(e=>{
         const equipoKey=String(e.numero_equipo||'').trim();
         const equipoCodes=[];
@@ -745,7 +917,7 @@
         if(isStopped(e)) equipoCodes.push('NO_FUNCIONANDO_PROYECTO');
         const equipoCell=equipoKey?renderIdentifierVisual(equipoCodes,equipoKey):'—';
         return '<tr class="mg-project-equipment-row mg-clickable-row" data-equipo="'+esc(equipoKey)+'" data-is-stopped="'+(isStopped(e)?'1':'0')+'" tabindex="0" role="button">'+
-          '<td>'+equipoCell+'</td><td>'+esc(e.identificacion_sitio)+'</td><td>'+esc(e.estado_operativo)+'</td><td>'+esc(e.fallas_blt_anio||0)+'</td><td>'+fmtDate(e.ultimo_blt)+'</td><td>'+esc(e.resp_cliente_anio||0)+'</td><td>'+fmtDate(e.ultimo_cliente)+'</td><td>'+fmtMtbc(e.mtbc_anio)+'</td><td>'+fmtMtbc(e.mtbc_365)+'</td></tr>';
+          '<td>'+equipoCell+'</td><td>'+esc(e.identificacion_sitio)+'</td><td>'+esc(e.estado_operativo)+'</td><td>'+esc(e.fallas_anio||0)+'</td><td>'+esc(e.resp_blt_anio||0)+'</td><td>'+fmtDate(e.ultimo_blt)+'</td><td>'+esc(e.resp_cliente_anio||0)+'</td><td>'+fmtDate(e.ultimo_cliente)+'</td><td>'+fmtMtbc(e.mtbc_anio)+'</td><td>'+fmtMtbc(e.mtbc_365)+'</td></tr>';
       }).join('');
     }
 
@@ -813,7 +985,7 @@
       show('Proyecto · '+proyectoVisible,proyectoCodigoVisible,
         overview+
         '<section class="mg-detail-section"><h3>Indicadores del Proyecto</h3><div class="mg-project-dashboard">'+equipmentKpis+callKpis+debtKpis+rings+'</div></section>'+ 
-        '<section class="mg-detail-section"><h3>Equipos del Proyecto</h3>'+legendHostVisual(['CRITICO','NO_FUNCIONANDO_PROYECTO'])+'<div class="mg-table-wrap"><table class="mg-table mg-project-equipment-table"><thead><tr><th>Equipo</th><th>Referencia</th><th>Operativo</th><th>Fallas al año</th><th>Resp. BLT Última</th><th>Resp. Cliente</th><th>Última Resp. Cliente</th><th>MTBC Año</th><th>MTBC U365</th></tr></thead><tbody>'+equipmentRows(equipos,tickets)+'</tbody></table></div></section>'+ 
+        '<section class="mg-detail-section"><h3>Equipos del Proyecto</h3>'+legendHostVisual(['CRITICO','NO_FUNCIONANDO_PROYECTO'])+'<div class="mg-table-wrap"><table class="mg-table mg-project-equipment-table"><thead><tr><th>Equipo</th><th>Referencia</th><th>Operativo</th><th>Fallas al año</th><th>Resp BLT</th><th>Resp. BLT Última</th><th>Resp. Cliente</th><th>Última Resp. Cliente</th><th>MTBC Año</th><th>MTBC U365</th></tr></thead><tbody>'+equipmentRows(equipos,tickets)+'</tbody></table></div></section>'+ 
         '<section class="mg-detail-section"><div class="mg-section-toolbar"><h3>Tickets del Proyecto</h3><label>Año <select id="mg-project-ticket-year">'+yearOptions+'</select></label></div>'+legendHostVisual(['CRITICO','ATRAPADO','FILTRACION','VOLTAJE','NO_FUNCIONANDO','FUERA_SLA'])+'<div class="mg-table-wrap"><table class="mg-table mg-project-ticket-table"><thead><tr><th>No. ticket</th><th>Fecha Rep</th><th>Hora Rep</th><th>Estado</th><th>Asunto</th><th>Estatus inicial</th><th>F. Llegada</th><th>H. Llegada</th><th>T. Llegada</th><th>F. Solución</th><th>H. Solución</th><th>T. Solución</th><th>Estatus final</th><th>Causa</th><th>Acción en cierre</th><th>Resp.</th></tr></thead><tbody>'+groupedTicketRows(tickets)+'</tbody></table></div></section>');
       const detailRoot=document.getElementById('mg-detail-body');
       bindLinks(detailRoot);
@@ -1250,27 +1422,72 @@
     list.innerHTML=(comments||[]).length?(comments||[]).map(c=>'<article class="mg-ticket-message '+(uid&&String(c.id_usuario)===uid?'mine':'')+'"><div class="mg-ticket-message-meta"><span>'+esc(c.autor_nombre||c.autor_iniciales||'Usuario')+'</span><span>'+esc(c.fecha_formateada||c.fecha_creacion||'')+'</span></div><div class="mg-ticket-message-text">'+esc(c.comentario)+'</div></article>').join(''):'<div class="mg-ticket-empty">Sin comentarios todavía.</div>';
     if(nearBottom) list.scrollTop=list.scrollHeight;
   }
+  function ticketCommentId(comment){
+    return Math.max(0, Number(comment && (comment.id_comentario || comment.id_interaccion || comment.id) || 0));
+  }
+  function mergeTicketComments(current, incoming){
+    const merged=[];
+    const seen=new Set();
+    [...(Array.isArray(current)?current:[]), ...(Array.isArray(incoming)?incoming:[])].forEach(comment=>{
+      const id=ticketCommentId(comment);
+      const key=id>0 ? 'id:'+id : 'legacy:'+String(comment?.fecha_creacion||'')+'|'+String(comment?.comentario||'');
+      if(seen.has(key))return;
+      seen.add(key);
+      merged.push(comment);
+    });
+    merged.sort((a,b)=>{
+      const ai=ticketCommentId(a), bi=ticketCommentId(b);
+      if(ai&&bi)return ai-bi;
+      return String(a?.fecha_creacion||'').localeCompare(String(b?.fecha_creacion||''));
+    });
+    return merged;
+  }
+  function scheduleTicketChatRefresh(ticketId){
+    if(ticketChatRefreshTimer) window.clearTimeout(ticketChatRefreshTimer);
+    ticketChatRefreshTimer=null;
+    if(document.hidden||ticketChatRefreshId!==String(ticketId))return;
+    ticketChatRefreshTimer=window.setTimeout(function(){
+      ticketChatRefreshTimer=null;
+      refreshTicketChat(ticketId);
+    },ticketChatRefreshDelay);
+  }
   async function refreshTicketChat(ticketId){
     if(ticketChatRefreshBusy || ticketChatRefreshId!==String(ticketId)) return;
     if(!currentDetailMatches('ticket', ticketId) || document.hidden){ return; }
     ticketChatRefreshBusy=true;
     try{
-      const ix=await fetchJson('/api/tickets/'+encodeURIComponent(ticketId)+'/interacciones');
+      const path='/api/tickets/'+encodeURIComponent(ticketId)+'/interacciones?mode=comments&after_comment_id='+encodeURIComponent(ticketChatLastCommentId);
+      const ix=await fetchJson(path);
       const interactions=ix.data||ix||{};
-      const comments=interactions.comentarios||[];
-      renderTicketComments(comments);
-      if(!comments.length) stopTicketChatRefresh();
+      const incoming=Array.isArray(interactions.comentarios)?interactions.comentarios:[];
+      if(incoming.length){
+        ticketChatComments=mergeTicketComments(ticketChatComments,incoming);
+        ticketChatLastCommentId=Math.max(
+          ticketChatLastCommentId,
+          Number(interactions.ultimo_comentario_id||0),
+          ...incoming.map(ticketCommentId)
+        );
+        ticketChatRefreshDelay=TICKET_CHAT_REFRESH_ACTIVE_MS;
+        renderTicketComments(ticketChatComments);
+      }else{
+        ticketChatLastCommentId=Math.max(ticketChatLastCommentId,Number(interactions.ultimo_comentario_id||0));
+        ticketChatRefreshDelay=Math.min(TICKET_CHAT_REFRESH_MAX_MS,Math.max(TICKET_CHAT_REFRESH_IDLE_MS,ticketChatRefreshDelay*2));
+      }
     }catch(e){
+      ticketChatRefreshDelay=Math.min(TICKET_CHAT_REFRESH_MAX_MS,Math.max(TICKET_CHAT_REFRESH_IDLE_MS,ticketChatRefreshDelay*2));
       console.warn('[ManttoDetails] No se pudo actualizar el chat del ticket.', e);
     }finally{
       ticketChatRefreshBusy=false;
+      if(ticketChatRefreshId===String(ticketId))scheduleTicketChatRefresh(ticketId);
     }
   }
   function startTicketChatRefresh(ticketId, comments){
     stopTicketChatRefresh();
-    if(!Array.isArray(comments) || comments.length===0) return;
     ticketChatRefreshId=String(ticketId);
-    ticketChatRefreshTimer=window.setInterval(function(){ refreshTicketChat(ticketId); }, TICKET_CHAT_REFRESH_MS);
+    ticketChatComments=Array.isArray(comments)?comments.slice():[];
+    ticketChatLastCommentId=ticketChatComments.reduce((maximo,comment)=>Math.max(maximo,ticketCommentId(comment)),0);
+    ticketChatRefreshDelay=TICKET_CHAT_REFRESH_ACTIVE_MS;
+    scheduleTicketChatRefresh(ticketId);
   }
   function bindTicketInteractions(t, ticketId){
     scrollTicketChat();
@@ -1356,7 +1573,11 @@
     if(!detail || detail.route!=='detalle' || !detail.payload || detail.payload.type!=='ticket') stopTicketChatRefresh();
   });
   document.addEventListener('visibilitychange', function(){
-    if(!document.hidden && ticketChatRefreshId) refreshTicketChat(ticketChatRefreshId);
+    if(!document.hidden && ticketChatRefreshId){
+      if(ticketChatRefreshTimer) window.clearTimeout(ticketChatRefreshTimer);
+      ticketChatRefreshTimer=null;
+      refreshTicketChat(ticketChatRefreshId);
+    }
   });
 
   window.ManttoDetails = { show, close, render, openProyecto, openProjectPhotos:openProjectPhotoLightbox, openEquipo:openEquipo_gnral, openEquipo_uni, openEquipo_cor, openEquipo_gnral, openTicket, openEquipoCritico, bindLinks, ticketsTable, registerTickets };

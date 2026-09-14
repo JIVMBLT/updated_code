@@ -6,6 +6,8 @@ const $=(s,r=document)=>r.querySelector(s);const esc=v=>String(v??'').replace(/&
 const fmtDate=v=>{if(!v)return '—';const d=new Date(String(v).slice(0,10)+'T12:00:00');return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});};
 const headers=()=>Object.assign({'Accept':'application/json'},window.ManttoAuth?.authHeaders?window.ManttoAuth.authHeaders():{});
 async function request(path){const r=await fetch(API+path,{cache:'no-store',headers:headers()});const t=await r.text();let j={};try{j=t?JSON.parse(t):{};}catch(_){throw new Error('El backend respondió contenido no JSON.');}if(!r.ok||j.ok===false)throw new Error(j.message||j.error||('Error HTTP '+r.status));return j;}
+const CATALOG_CACHE_MS=5*60*1000;
+function catalogRequest(path){return window.ManttoHttp&&typeof window.ManttoHttp.get==='function'?window.ManttoHttp.get(path,{cacheTtlMs:CATALOG_CACHE_MS,cacheKey:'catalog:'+path}):request(path);}
 function setStatus(text,error=false){const el=$('#vv-status');if(!el)return;el.className='vv-status'+(error?' error':'');el.innerHTML='<i></i><span>'+esc(text)+'</span>';}
 function toast(text,error=false){const el=$('#vv-toast');if(!el)return;el.textContent=text;el.className='vv-toast show'+(error?' error':'');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className='vv-toast',2600);}
 function personOption(p){const id=p.id_SB??p.id_usuario??p.id;const label=(p.iniciales?p.iniciales+' · ':'')+(p.nombre||('Usuario '+id));return '<option value="'+esc(id)+'">'+esc(label)+'</option>';}
@@ -33,7 +35,8 @@ function renderRows(){
     const quoteId=resolveQuoteId(r);
     const viewAttr=quoteId?' data-view="'+esc(quoteId)+'"':'';
     const indicators=recordIndicators(r);
-    return '<tr data-row-index="'+index+'"'+viewAttr+'>'
+    const interest=r.proyecto_interes===true;
+    return '<tr data-row-index="'+index+'" data-quote-id="'+esc(quoteId||'')+'"'+viewAttr+' class="'+(interest?'vv-interest-row':'')+'"'+(interest?' title="Proyecto de interés para tu usuario"':'')+'>'
       +'<td><button class="vv-project vv-project-link"'+viewAttr+' data-row-index="'+index+'" type="button">'+(indicators?indicators+' ':'')+esc(r.nombre_proyecto||'Sin proyecto')+'</button></td>'
       +'<td>'+esc(r.cliente||'—')+'</td>'
       +'<td>'+esc(r.asesor||'—')+'</td>'
@@ -46,7 +49,7 @@ function renderRows(){
   }).join('');
 }
 function renderPagination(p={}){state.totalPages=Number(p.total_paginas||0);const el=$('#vv-pagination');const total=Number(p.total_registros||0);if(!total){el.innerHTML='';return;}const pages=[];for(let i=Math.max(1,state.page-2);i<=Math.min(state.totalPages,state.page+2);i++)pages.push('<button class="'+(i===state.page?'active':'')+'" data-page="'+i+'">'+i+'</button>');el.innerHTML='<span>'+total.toLocaleString('es-MX')+' ventas</span><div class="pages"><button data-page="'+Math.max(1,state.page-1)+'">‹</button>'+pages.join('')+'<button data-page="'+Math.min(state.totalPages,state.page+1)+'">›</button></div>';}
-async function loadCatalogs(){const j=await request('/api/ventas/cotizaciones/catalogos');state.catalogs=Object.assign({},j.catalogos||{}, {anios_cierre:j.catalogos?.anios_cierre||[]});fillCatalogs();}
+async function loadCatalogs(){const j=await catalogRequest('/api/ventas/cotizaciones/catalogos');state.catalogs=Object.assign({},j.catalogos||{}, {anios_cierre:j.catalogos?.anios_cierre||[]});fillCatalogs();}
 function dataSignature(payload){
   try{return JSON.stringify({cotizaciones:payload?.cotizaciones||[],resumen:payload?.resumen||{},paginacion:payload?.paginacion||{}});}
   catch(_){return String(Date.now());}
@@ -83,7 +86,9 @@ async function load(options={}){
   }
 }
 function openDetail(id,rowIndex){let quoteId=Number(id);if(!Number.isInteger(quoteId)||quoteId<=0){const row=state.rows[Number(rowIndex)];quoteId=resolveQuoteId(row);}if(!Number.isInteger(quoteId)||quoteId<=0){console.error('[Ventas Vendidos] Registro sin id_cotizacion válido:',state.rows[Number(rowIndex)]||null);toast('La venta no incluye el ID interno de la cotización.',true);return;}if(!window.ManttoRouter?.go){toast('No se pudo abrir el detalle de cotización.',true);return;}window.ManttoRouter.go('ventas-cotizaciones-detalle',{id:quoteId,id_cotizacion:quoteId,origen:'ventas-vendidos'});}
+function updateInterestRow(id,active){const quoteId=Number(id);if(!Number.isInteger(quoteId)||quoteId<=0)return;const row=state.rows.find(item=>resolveQuoteId(item)===quoteId);if(row)row.proyecto_interes=active===true;const element=$('#vv-body tr[data-quote-id="'+quoteId+'"]');if(!element)return;element.classList.toggle('vv-interest-row',active===true);if(active===true)element.title='Proyecto de interés para tu usuario';else element.removeAttribute('title');}
 function bind(){let timer;$('#vv-search').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{state.page=1;load();},350);});['vv-filter-year','vv-filter-advisor','vv-filter-admin','vv-filter-zone'].forEach(id=>$('#'+id)?.addEventListener('change',()=>{state.page=1;load();}));$('#vv-clear').addEventListener('click',()=>{$('#vv-search').value='';$('#vv-filter-year').value=String(new Date().getFullYear());$('#vv-filter-advisor').value='';$('#vv-filter-admin').value='';$('#vv-filter-zone').value='';state.page=1;load();});$('#vv-refresh').addEventListener('click',load);$('#vv-body').addEventListener('click',e=>{const target=e.target.closest('[data-view], tr[data-row-index]');if(!target)return;const rowIndex=target.dataset.rowIndex??target.closest('tr')?.dataset.rowIndex;openDetail(target.dataset.view,rowIndex);});$('#vv-pagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(!b)return;state.page=Number(b.dataset.page)||1;load();});}
-async function init(){const view=$('#view-ventas-vendidos');if(!view)return;if(!view.dataset.loaded){const r=await fetch('./modules/ventas-vendidos/ventas-vendidos.html',{cache:'no-store'});if(!r.ok)throw new Error('No se pudo cargar la vista Vendidos.');view.innerHTML=await r.text();view.dataset.loaded='1';bind();await loadCatalogs();}await load();state.initialized=true;}
+async function init(){const view=$('#view-ventas-vendidos');if(!view)return;if(!view.dataset.loaded){const r=await fetch('./modules/ventas-vendidos/ventas-vendidos.html',{cache:'default'});if(!r.ok)throw new Error('No se pudo cargar la vista Vendidos.');view.innerHTML=await r.text();view.dataset.loaded='1';bind();await loadCatalogs();}await load();state.initialized=true;}
+window.addEventListener('mantto:ventas-cotizacion-actualizada',event=>{const detail=event?.detail||{};if(detail.tipo!=='proyecto_interes'&&!Object.prototype.hasOwnProperty.call(detail,'proyecto_interes'))return;updateInterestRow(detail.id_cotizacion||detail.id,detail.proyecto_interes===true);});
 window.ManttoVentasVendidos={init,refresh:()=>load(),backgroundSync:()=>load({silent:true})};
 })();

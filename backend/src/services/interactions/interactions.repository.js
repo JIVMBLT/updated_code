@@ -40,7 +40,9 @@ async function insert_gnral(row, executor = db) {
     row.user_agent
   ]);
 
-  return Number(result.insertId || 0);
+  const idInteraccion = Number(result.insertId || 0);
+
+  return idInteraccion;
 }
 
 async function listForUser_gnral({ userId, limit = 100, offset = 0 }) {

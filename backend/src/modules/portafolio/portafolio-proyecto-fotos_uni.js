@@ -52,8 +52,6 @@ async function presentProjectPhotoUrl_uni(value) {
     const access = await azureStorage.createReadSas_gnral(blobName);
     return access.url;
   } catch (_error) {
-    // Se conserva la URL estable para no romper la lectura completa si Azure
-    // no puede emitir temporalmente un SAS.
     return raw;
   }
 }
@@ -157,9 +155,6 @@ async function uploadPortafolioProyectoFotografia_uni(req, res) {
       return res.status(400).json({ ok: false, message: 'Selecciona una fotografía.' });
     }
 
-    // Mismo contrato visual vigente en Corellian: aunque la política IMAGE
-    // reconoce HEIC/HEIF, el carrusel trabaja con formatos renderizables por
-    // el frontend actual.
     const extension = String(file.originalname || '').toLowerCase().match(/\.[a-z0-9]+$/)?.[0] || '';
     if (extension === '.heic' || extension === '.heif') {
       return res.status(415).json({
@@ -189,8 +184,6 @@ async function uploadPortafolioProyectoFotografia_uni(req, res) {
 
     const canonicalProject = normalizeProject_uni(projectRows[0].proyecto) || requestedProject;
 
-    // Garantiza una sola fila por proyecto y permite tomar el bloqueo de la
-    // fila aun cuando dos cargas intenten crearla simultáneamente.
     await conn.query(
       `INSERT INTO portafolio_proyecto_fotos
          (proyecto, activo, created_by, updated_by)
@@ -244,8 +237,6 @@ async function uploadPortafolioProyectoFotografia_uni(req, res) {
       }
     });
 
-    // Igual que Corellian: antes del COMMIT se comprueba que Azure pueda
-    // generar la URL temporal. Si falla, se revierte Aiven y se compensa Blob.
     const access = await azureStorage.createReadSas_gnral(uploaded.storage_blob_name);
     const firstPhoto = !PROJECT_PHOTO_FIELDS_UNI.some(
       (field) => String(row[field] || '').trim()

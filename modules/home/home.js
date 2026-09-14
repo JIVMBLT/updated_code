@@ -23,6 +23,194 @@
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  function richTextSanitize(value){
+    if(window.ManttoRichText?.sanitizeHtml) return window.ManttoRichText.sanitizeHtml(value);
+    return safeText(value || '').replace(/\r\n?|\n/g, '<br>');
+  }
+
+  function richTextEditorHtml(value){
+    if(window.ManttoRichText?.toEditorHtml) return window.ManttoRichText.toEditorHtml(value);
+    return richTextSanitize(value);
+  }
+
+  function richTextPlain(value){
+    if(window.ManttoRichText?.toPlainText) return window.ManttoRichText.toPlainText(value);
+    return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function richTextHasContent(value){
+    if(window.ManttoRichText?.hasContent) return window.ManttoRichText.hasContent(value);
+    return Boolean(richTextPlain(value));
+  }
+
+  function taskRichTextEditor(value){
+    const html = richTextEditorHtml(value);
+    const serialized = richTextSanitize(html);
+    return `<div class="task-rich-field">
+      <span class="task-rich-label" id="task-description-label">Descripción</span>
+      <div class="task-rich-editor" data-rich-editor>
+        <div class="task-rich-toolbar" role="toolbar" aria-label="Formato de la descripción">
+          <div class="task-rich-toolbar-group" aria-label="Historial">
+            <button type="button" data-rich-command="undo" title="Deshacer" aria-label="Deshacer">↶</button>
+            <button type="button" data-rich-command="redo" title="Rehacer" aria-label="Rehacer">↷</button>
+          </div>
+          <div class="task-rich-toolbar-group" aria-label="Estilo de texto">
+            <button type="button" data-rich-command="bold" title="Negrita (Ctrl+B)" aria-label="Negrita"><strong>N</strong></button>
+            <button type="button" data-rich-command="italic" title="Cursiva (Ctrl+I)" aria-label="Cursiva"><em>C</em></button>
+            <button type="button" data-rich-command="underline" title="Subrayado (Ctrl+U)" aria-label="Subrayado"><u>S</u></button>
+            <button type="button" data-rich-command="strikeThrough" title="Tachado (Ctrl+Mayús+X)" aria-label="Tachado"><s>T</s></button>
+          </div>
+          <div class="task-rich-toolbar-group" aria-label="Listas">
+            <button type="button" data-rich-command="insertUnorderedList" title="Lista con viñetas" aria-label="Lista con viñetas">• Lista</button>
+            <button type="button" data-rich-command="insertOrderedList" title="Lista numerada" aria-label="Lista numerada">1. Lista</button>
+          </div>
+          <label class="task-rich-select" title="Tamaño de fuente">
+            <select data-rich-font-size aria-label="Tamaño de fuente">
+              <option value="14px">Normal</option>
+              <option value="12px">Pequeño</option>
+              <option value="16px">Mediano</option>
+              <option value="18px">Grande</option>
+              <option value="22px">Muy grande</option>
+            </select>
+          </label>
+          <div class="task-rich-toolbar-group task-rich-colors" aria-label="Colores">
+            <label class="task-rich-color" title="Color de fuente">
+              <span aria-hidden="true">A</span>
+              <input type="color" value="#1f2937" data-rich-color="foreColor" aria-label="Color de fuente">
+            </label>
+            <label class="task-rich-color is-highlight" title="Color de resaltado">
+              <span aria-hidden="true">A</span>
+              <input type="color" value="#fef08a" data-rich-color="hiliteColor" aria-label="Color de resaltado">
+            </label>
+          </div>
+          <button type="button" class="task-rich-clear" data-rich-command="removeFormat" title="Quitar formato" aria-label="Quitar formato">Quitar formato</button>
+        </div>
+        <div class="task-rich-input" contenteditable="true" role="textbox" aria-labelledby="task-description-label" aria-multiline="true" data-rich-input data-placeholder="Escribe la descripción de la tarea...">${html}</div>
+        <textarea name="descripcion" data-rich-output hidden>${safeText(serialized)}</textarea>
+      </div>
+      <small class="task-rich-help">Selecciona texto para aplicarle formato. Al pegar contenido se conserva el texto sin estilos externos.</small>
+    </div>`;
+  }
+
+  function syncRichTextEditors(scope){
+    (scope || document).querySelectorAll('[data-rich-editor]').forEach(container => {
+      const editor = container.querySelector('[data-rich-input]');
+      const output = container.querySelector('[data-rich-output]');
+      if(editor && output) output.value = richTextSanitize(editor.innerHTML);
+    });
+  }
+
+  function bindRichTextEditors(scope){
+    (scope || document).querySelectorAll('[data-rich-editor]').forEach(container => {
+      if(container.dataset.richBound === '1') return;
+      container.dataset.richBound = '1';
+      const editor = container.querySelector('[data-rich-input]');
+      const output = container.querySelector('[data-rich-output]');
+      const toolbar = container.querySelector('.task-rich-toolbar');
+      if(!editor || !output || !toolbar) return;
+      let savedRange = null;
+
+      const rememberSelection = () => {
+        const selection = window.getSelection?.();
+        if(!selection || !selection.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        if(editor.contains(range.commonAncestorContainer)) savedRange = range.cloneRange();
+      };
+
+      const restoreSelection = () => {
+        editor.focus({ preventScroll:true });
+        if(!savedRange) return;
+        const selection = window.getSelection?.();
+        if(!selection) return;
+        selection.removeAllRanges();
+        selection.addRange(savedRange);
+      };
+
+      const updateButtons = () => {
+        toolbar.querySelectorAll('[data-rich-command]').forEach(button => {
+          const command = button.dataset.richCommand;
+          if(!['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'].includes(command)) return;
+          let active = false;
+          try{ active = document.queryCommandState(command); }catch(_error){}
+          button.classList.toggle('active', Boolean(active));
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+      };
+
+      const sync = () => {
+        output.value = richTextSanitize(editor.innerHTML);
+        rememberSelection();
+        updateButtons();
+      };
+
+      const runCommand = (command, value) => {
+        restoreSelection();
+        try{
+          if(command === 'hiliteColor'){
+            const applied = document.execCommand('hiliteColor', false, value);
+            if(!applied) document.execCommand('backColor', false, value);
+          }else{
+            document.execCommand(command, false, value ?? null);
+          }
+        }catch(_error){}
+        sync();
+      };
+
+      toolbar.addEventListener('pointerdown', rememberSelection);
+      toolbar.querySelectorAll('button[data-rich-command]').forEach(button => {
+        button.addEventListener('mousedown', event => event.preventDefault());
+        button.addEventListener('click', () => runCommand(button.dataset.richCommand));
+      });
+      toolbar.querySelector('[data-rich-font-size]')?.addEventListener('change', event => {
+        const sizes = { '12px':'1', '14px':'3', '16px':'4', '18px':'5', '22px':'7' };
+        runCommand('fontSize', sizes[event.target.value] || '3');
+      });
+      toolbar.querySelectorAll('[data-rich-color]').forEach(input => {
+        const showSelectedColor = () => {
+          const glyph = input.closest('.task-rich-color')?.querySelector('span');
+          if(!glyph) return;
+          if(input.dataset.richColor === 'hiliteColor') glyph.style.backgroundColor = input.value;
+          else glyph.style.borderBottomColor = input.value;
+        };
+        showSelectedColor();
+        input.addEventListener('change', () => {
+          showSelectedColor();
+          runCommand(input.dataset.richColor, input.value);
+        });
+      });
+      editor.addEventListener('input', sync);
+      editor.addEventListener('focus', () => { rememberSelection(); updateButtons(); });
+      editor.addEventListener('keyup', () => { rememberSelection(); updateButtons(); });
+      editor.addEventListener('mouseup', () => { rememberSelection(); updateButtons(); });
+      editor.addEventListener('keydown', event => {
+        if((event.ctrlKey || event.metaKey) && event.shiftKey && String(event.key).toLowerCase() === 'x'){
+          event.preventDefault();
+          runCommand('strikeThrough');
+        }
+      });
+      editor.addEventListener('paste', event => {
+        event.preventDefault();
+        const text = event.clipboardData?.getData('text/plain') || '';
+        restoreSelection();
+        let inserted = false;
+        try{ inserted = document.execCommand('insertText', false, text); }catch(_error){}
+        if(!inserted){
+          const safe = safeText(text).replace(/\r\n?|\n/g, '<br>');
+          try{ document.execCommand('insertHTML', false, safe); }catch(_error){}
+        }
+        sync();
+      });
+      editor.addEventListener('blur', () => {
+        sync();
+        if(!richTextHasContent(output.value)){
+          editor.innerHTML = '';
+          output.value = '';
+        }
+      });
+      sync();
+    });
+  }
+
   function authHeaders(){
     if(window.ManttoAuth && typeof window.ManttoAuth.authHeaders === 'function'){
       const headers = window.ManttoAuth.authHeaders() || {};
@@ -43,6 +231,10 @@
 
   async function apiRequest(path, options){
     const opts = options || {};
+
+    if(window.ManttoHttp && typeof window.ManttoHttp.request === 'function'){
+      return window.ManttoHttp.request(path, opts);
+    }
 
     // Home debe usar el flujo central de autenticacion. ManttoAuth.api()
     // resuelve 401 mediante refresh + reintento y solo expira la sesion
@@ -122,19 +314,29 @@
     return false;
   }
 
+  function dateOnlyParts(value){
+    if(!value) return null;
+    const raw = String(value).trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(!match) return null;
+    return {
+      year: match[1],
+      month: match[2],
+      day: match[3],
+      iso: `${match[1]}-${match[2]}-${match[3]}`
+    };
+  }
+
   function formatDateInput(value){
-    if(!value) return '';
-    if(/^\d{4}-\d{2}-\d{2}/.test(String(value))) return String(value).slice(0,10);
-    const d = new Date(value);
-    if(Number.isNaN(d.getTime())) return '';
-    return d.toISOString().slice(0,10);
+    const parts = dateOnlyParts(value);
+    return parts ? parts.iso : '';
   }
 
   function formatDate(value){
     if(!value) return 'Sin fecha';
-    const d = new Date(value);
-    if(Number.isNaN(d.getTime())) return safeText(value);
-    return d.toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' });
+    const parts = dateOnlyParts(value);
+    if(!parts) return safeText(value);
+    return `${parts.day}/${parts.month}/${parts.year}`;
   }
 
   function formatRelativeDate(value){
@@ -250,7 +452,7 @@
       raw: row,
       tipo,
       titulo: row.pendiente || row.titulo || 'Tarea sin titulo',
-      descripcion: row.descripcion || '',
+      descripcion: richTextPlain(row.descripcion || ''),
       prioridad: row.prioridad || '',
       estatus: row.estatus || 'Pendiente',
       proyecto: row.proyecto || '',
@@ -321,8 +523,24 @@
       text: row.mensaje_notificacion || row.mensaje || '',
       time: formatRelativeDate(row.fecha_lectura || row.fecha_creacion || row.created_at || row.fecha),
       unread: row.leido === 0 || row.leido === false,
+      visualCodes: [...new Set((Array.isArray(row.codigos_visuales) ? row.codigos_visuales : [])
+        .map(code=>String(code||'').trim().toUpperCase()).filter(Boolean))],
       route: notificationRoute(row, id)
     };
+  }
+
+  function notificationVisualMarkup(notification){
+    const codes = Array.isArray(notification?.visualCodes) ? notification.visualCodes : [];
+    if(!codes.length) return '';
+    if(window.EstadosVisuales_gnral && window.EstadosVisuales_gnral.isLoaded()){
+      return window.EstadosVisuales_gnral.renderMany(codes,{empty:'',separator:' '});
+    }
+    return codes.map(code=>`<span class="estado-visual-gnral" data-estado-visual="${safeText(code)}"><span data-estado-visual-icon></span></span>`).join(' ');
+  }
+
+  function notificationTitleMarkup(notification){
+    const visual = notificationVisualMarkup(notification);
+    return (visual ? visual+' ' : '')+safeText(notification?.title || 'Notificacion');
   }
 
   function notificationIcon(type){
@@ -384,7 +602,7 @@
     const markNew = cls === 'notif-item' && i.id && !i.unread ? `<button type="button" class="notif-mark-new" data-mark-new="${safeText(i.id)}">Marcar como nuevo</button>` : '';
     return `<article class="${cls} clickable ${i.unread?'unread':''}" data-target='${toTargetAttr(i.route)}'${notifAttr}>
       <div class="${prefix}-icon">${safeText(i.icon)}</div>
-      <div><div class="${prefix}-title">${safeText(i.title)}</div><div class="${prefix}-text">${safeText(i.text)}</div><div class="${prefix}-time">${safeText(i.time)}</div>${markNew}</div>
+      <div><div class="${prefix}-title">${notificationTitleMarkup(i)}</div><div class="${prefix}-text">${safeText(i.text)}</div><div class="${prefix}-time">${safeText(i.time)}</div>${markNew}</div>
     </article>`;
   }
 
@@ -678,7 +896,7 @@
           <label>Proyecto<select name="proyecto" id="task-project"><option value="">Sin proyecto</option>${projectOptionList(state.catalogs.proyectos || [], row.proyecto)}</select></label>
           <label>Equipo<select name="equipo" id="task-equipment"><option value="">Sin equipo</option>${(state.catalogs.equipos || []).map(e => `<option value="${safeText(e.numero_equipo)}" ${String(e.numero_equipo)===String(row.equipo||'')?'selected':''}>${safeText(e.identificacion_sitio || e.numero_equipo)} · ${safeText(e.numero_equipo)}</option>`).join('')}</select></label>
         </div>
-        <label>Descripción<textarea name="descripcion" rows="4">${safeText(row.descripcion || '')}</textarea></label>
+        ${taskRichTextEditor(row.descripcion || '')}
         <section class="form-block">
           <div class="block-title"><strong>Evidencia directa</strong><span>Máximo un archivo de 25 MB. Al seleccionar uno nuevo se sustituirá la evidencia activa.</span></div>
           ${renderStoredFiles(currentFiles)}
@@ -695,6 +913,7 @@
     </section></div>`;
 
     bindFileOpenActions(root, currentFiles);
+    bindRichTextEditors(root);
     document.getElementById('task-modal-close')?.addEventListener('click', closeTaskModal);
     document.getElementById('task-cancel')?.addEventListener('click', closeTaskModal);
     document.getElementById('add-subtask')?.addEventListener('click',()=>{
@@ -747,6 +966,7 @@
   async function saveTaskForm(ev){
     ev.preventDefault();
     const form = ev.target;
+    syncRichTextEditors(form);
     const raw = new FormData(form);
     const photo = document.getElementById('task-photo-file')?.files?.[0] || null;
     const attachment = document.getElementById('task-attachment-file')?.files?.[0] || null;
@@ -855,7 +1075,7 @@
     root.innerHTML = `<div class="task-modal-backdrop"><section class="task-modal task-detail card">
       <div class="task-modal-head"><div><p>Detalle de tarea</p><h2>${safeText(p.pendiente)}</h2></div><button class="modal-close" id="task-modal-close">×</button></div>
       <div class="detail-grid">
-        <section class="detail-card"><h3>Información</h3><p>${safeText(p.descripcion || 'Sin descripción')}</p><div class="detail-tags"><span class="badge ${safeText(String(p.prioridad || 'sin-prioridad').toLowerCase())}">${priorityIcon(p.prioridad)} ${safeText(p.prioridad || 'Sin prioridad')}</span><span class="badge estado">${safeText(p.estatus)}</span><span>${safeText(tipo)}</span><span>Fecha compromiso: ${safeText(formatDate(p.due_date))}</span></div><dl><dt>Área</dt><dd>${safeText(p.area || 'Sin área')}</dd><dt>Empresa</dt><dd>${safeText(p.empresa || 'Sin empresa')}</dd><dt>Proyecto</dt><dd>${safeText(p.proyecto || 'Sin proyecto')}</dd><dt>Equipo</dt><dd>${safeText(p.equipo || 'Sin equipo')}</dd><dt>Creador</dt><dd>${safeText(p.creado_por_iniciales)} · ${safeText(p.creado_por_email)}</dd></dl><h3>Evidencia directa</h3>${renderStoredFiles(allEvidence, { canDelete: canEdit })}</section>
+        <section class="detail-card"><h3>Información</h3><div class="task-rich-content">${p.descripcion ? richTextEditorHtml(p.descripcion) : '<p>Sin descripción</p>'}</div><div class="detail-tags"><span class="badge ${safeText(String(p.prioridad || 'sin-prioridad').toLowerCase())}">${priorityIcon(p.prioridad)} ${safeText(p.prioridad || 'Sin prioridad')}</span><span class="badge estado">${safeText(p.estatus)}</span><span>${safeText(tipo)}</span><span>Fecha compromiso: ${safeText(formatDate(p.due_date))}</span></div><dl><dt>Área</dt><dd>${safeText(p.area || 'Sin área')}</dd><dt>Empresa</dt><dd>${safeText(p.empresa || 'Sin empresa')}</dd><dt>Proyecto</dt><dd>${safeText(p.proyecto || 'Sin proyecto')}</dd><dt>Equipo</dt><dd>${safeText(p.equipo || 'Sin equipo')}</dd><dt>Creador</dt><dd>${safeText(p.creado_por_iniciales)} · ${safeText(p.creado_por_email)}</dd></dl><h3>Evidencia directa</h3>${renderStoredFiles(allEvidence, { canDelete: canEdit })}</section>
         <section class="detail-card"><h3>${safeText(relationLabel)}</h3><p>${users}</p><h3>Estado</h3>${statusControl}${canSetPriority ? `<h3>Prioridad del responsable</h3><select id="detail-priority"><option value="">Sin prioridad</option><option value="CRITICA" ${p.prioridad==='CRITICA'?'selected':''}>⚠️ Crítica</option><option value="ALTA" ${p.prioridad==='ALTA'?'selected':''}>🔴 Alta</option><option value="MEDIA" ${p.prioridad==='MEDIA'?'selected':''}>🟡 Media</option><option value="BAJA" ${p.prioridad==='BAJA'?'selected':''}>🟢 Baja</option></select>` : ''}${creatorActions}</section>
       </div>
       <section class="detail-card"><h3>Subtareas</h3><div class="subtask-list">${(detail.subtareas || []).length ? detail.subtareas.map(st => `<label class="subtask-row"><input type="checkbox" data-subtask-id="${safeText(st.id_subtarea)}" ${st.estatus==='Cerrado'?'checked':''}><span>${safeText(st.subtarea)}</span></label>`).join('') : '<div class="empty-state">Sin subtareas.</div>'}</div></section>
@@ -894,8 +1114,18 @@
       catch(error){ alert(error.message); }
     });
     document.querySelectorAll('[data-subtask-id]').forEach(chk=>chk.addEventListener('change', async ev=>{
-      try{ await apiRequest('/api/pendientes/' + encodeURIComponent(p.id_pendiente) + '/subtareas/' + encodeURIComponent(ev.target.dataset.subtaskId), { method:'PATCH', body: JSON.stringify({ estatus: ev.target.checked ? 'Cerrado' : 'Pendiente' }) }); await loadHomeData(); }
-      catch(error){ alert(error.message); }
+      const input = ev.currentTarget;
+      const requestedChecked = Boolean(input.checked);
+      input.disabled = true;
+      try{
+        await apiRequest('/api/pendientes/' + encodeURIComponent(p.id_pendiente) + '/subtareas/' + encodeURIComponent(input.dataset.subtaskId), { method:'PATCH', body: JSON.stringify({ estatus: requestedChecked ? 'Cerrado' : 'Pendiente' }) });
+        await loadHomeData();
+      }catch(error){
+        input.checked = !requestedChecked;
+        alert(error.message);
+      }finally{
+        input.disabled = false;
+      }
     }));
     const commentInput = document.getElementById('comment-file');
     commentInput?.addEventListener('change', () => {
@@ -926,10 +1156,18 @@
     });
   }
 
-  async function loadHomeData(){
+  let homeLoadPromise = null;
+
+  async function performHomeLoad(){
+    // [Aster | 2026-09-07 | ASTER-MG | FIX GENERAL TAREAS MODAL PERSISTENTE V001]
+    // Si una tarea esta abierta en ventana flotante, el refresh de Home actualiza
+    // listas/KPIs sin reconstruir el shell que contiene el modal.
+    const taskModalRoot = document.getElementById('home-task-modal-root');
+    const preserveTaskModal = Boolean(taskModalRoot && taskModalRoot.firstElementChild);
+
     state.loading = true;
     state.user = getCurrentUser();
-    renderShell();
+    if(!preserveTaskModal) renderShell();
 
     try{
       const snapshot = await apiRequest('/api/home/snapshot');
@@ -982,6 +1220,12 @@
       state.loading = false;
       renderCounters(); renderTasks(); renderRails();
     }
+  }
+
+  function loadHomeData(){
+    if(homeLoadPromise) return homeLoadPromise;
+    homeLoadPromise = performHomeLoad().finally(()=>{ homeLoadPromise = null; });
+    return homeLoadPromise;
   }
 
 
@@ -1037,7 +1281,7 @@
     if(!pop) return;
     const rows = items || state.unreadNotifications || [];
     pop.innerHTML = `<div class="hdr-notif-head"><strong>Notificaciones nuevas</strong><button type="button" id="hdr-notif-close">×</button></div>` +
-      (rows.length ? `<div class="hdr-notif-list">${rows.map(n => `<button type="button" class="hdr-notif-row" data-header-notification="${safeText(n.id)}" data-target='${toTargetAttr(n.route)}'><span>${safeText(n.icon)}</span><b>${safeText(n.title)}</b><small>${safeText(n.text)}</small><em>${safeText(n.time)}</em></button>`).join('')}</div>` : '<div class="hdr-notif-empty">Sin notificaciones nuevas.</div>');
+      (rows.length ? `<div class="hdr-notif-list">${rows.map(n => `<button type="button" class="hdr-notif-row" data-header-notification="${safeText(n.id)}" data-target='${toTargetAttr(n.route)}'><span>${safeText(n.icon)}</span><b>${notificationTitleMarkup(n)}</b><small>${safeText(n.text)}</small><em>${safeText(n.time)}</em></button>`).join('')}</div>` : '<div class="hdr-notif-empty">Sin notificaciones nuevas.</div>');
     pop.hidden = false;
     if(btn) btn.setAttribute('aria-expanded', 'true');
     document.getElementById('hdr-notif-close')?.addEventListener('click', ev=>{ ev.stopPropagation(); closeHeaderNotificationDropdown(); });
@@ -1077,7 +1321,11 @@
     });
   }
 
-  function init(){ bindHeaderNotifications(); loadHomeData(); }
+  function init(options){
+    bindHeaderNotifications();
+    if(options && options.loadData === false) return Promise.resolve(false);
+    return loadHomeData();
+  }
 
   window.ManttoHome={init, reload:loadHomeData, refreshHeaderNotificationState, refreshHeaderNotifications, openTaskForm, openTaskDetail, openTaskContext};
 })();

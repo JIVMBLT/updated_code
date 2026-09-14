@@ -1,31 +1,13 @@
 'use strict';
 
-const db = require('../config/db');
-const { buildInsFlScopeSql_gnral } = require('../services/information-record-scope-gnral.service');
-
-const PHOTO_MANAGER_ROLE_NAMES_GNRAL = Object.freeze(new Set([
-  'Programador',
-  'Director General',
-  'Gestor de Fotografías'
-]));
-
-const PHOTO_MANAGER_ROLE_CODES_GNRAL = Object.freeze(new Set([
-  'GESTOR_FOTOGRAFIAS'
-]));
-
 const PHOTO_MANAGER_ROLE_TOKENS_GNRAL = Object.freeze(new Set([
-  'PROGRAMADOR',
-  'DIRECTOR GENERAL',
   'GESTOR DE FOTOGRAFIAS',
   'GESTOR_FOTOGRAFIAS'
 ]));
 
-function normalizeRoleValue_gnral(value) {
-  return String(value || '').trim();
-}
-
 function normalizeRoleToken_gnral(value) {
-  return normalizeRoleValue_gnral(value)
+  return String(value || '')
+    .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase();
@@ -66,8 +48,6 @@ function userRoleTokens_gnral(user) {
     values.push(...roleValues_gnral(role));
   }
 
-  if (user.is_programador) values.push('Programador');
-
   return new Set(
     values
       .filter(Boolean)
@@ -90,11 +70,15 @@ function requireProjectPhotoManager_gnral(req, res, next) {
   return res.status(403).json({
     ok: false,
     code: 'PROJECT_PHOTO_MANAGEMENT_DENIED',
-    message: 'No tienes permisos para administrar fotografías de proyecto.'
+    message: 'Se requiere el rol Gestor de Fotografías para administrar fotografías de proyecto.'
   });
 }
 
 async function requireCorellianProjectPhotoScope_gnral(req, res, next) {
+  // Se cargan sólo al evaluar alcance: las reglas puras de rol no deben depender
+  // de credenciales ni de una conexión de base de datos para poder verificarse.
+  const db = require('../config/db');
+  const { buildInsFlScopeSql_gnral } = require('../services/information-record-scope-gnral.service');
   const project = String(req.params && req.params.id_ppns || '').trim();
   if (!project) {
     return res.status(400).json({ ok: false, message: 'ID de proyecto requerido.' });
@@ -113,8 +97,6 @@ async function requireCorellianProjectPhotoScope_gnral(req, res, next) {
     );
 
     if (!rows.length) {
-      // Igual que los guards de registro existentes: 404 evita revelar si el
-      // proyecto existe fuera del alcance efectivo del usuario.
       return res.status(404).json({ ok: false, message: 'Proyecto no encontrado.' });
     }
 
@@ -125,8 +107,6 @@ async function requireCorellianProjectPhotoScope_gnral(req, res, next) {
 }
 
 module.exports = {
-  PHOTO_MANAGER_ROLE_NAMES_GNRAL,
-  PHOTO_MANAGER_ROLE_CODES_GNRAL,
   PHOTO_MANAGER_ROLE_TOKENS_GNRAL,
   normalizeRoleToken_gnral,
   userRoleTokens_gnral,

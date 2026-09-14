@@ -1,10 +1,29 @@
 'use strict';
 
+// [Aster | 2026-09-07 | ASTER-MG | FASE_1_NOTIFICACIONES_CRITICOS_PERSONA_ATRAPADA_V001]
+// Persona atrapada en equipo ya critico se evalua por la transicion de persona atrapada,
+// independiente de la responsabilidad del Ticket. BLT solo conserva la regla de criticidad 3/35.
+// [Aster | 2026-08-25 | ASTER-MG | FIX_NOTIFICACIONES_FASE_4_CRITICOS_V001]
+// Fase 4: los tres eventos criticos de Tickets se emiten exclusivamente por el
+// motor central. La sincronizacion de negocio permanece independiente.
+
+const crypto = require('crypto');
 const db = require('../../config/db');
+const logger = require('../../shared/logger');
+const {
+  emitBusinessEventSafe_gnral
+} = require('./notification-business-emitter.service');
 
 const EVENT_FALLA_EQUIPO_CRITICO_UNI = 'FALLA_EQUIPO_CRITICO';
 const EVENT_PERSONA_ATRAPADA_UNI = 'PERSONA_ATRAPADA';
 const EVENT_NUEVO_EQUIPO_CRITICO_UNI = 'NUEVO_EQUIPO_CRITICO';
+const EVENT_PERSONA_ATRAPADA_EQUIPO_CRITICO_UNI = 'PERSONA_ATRAPADA_EQUIPO_CRITICO';
+const EVENT_PERSONA_ATRAPADA_NUEVO_EQUIPO_CRITICO_UNI = 'PERSONA_ATRAPADA_NUEVO_EQUIPO_CRITICO';
+const EVENT_TICKET_CREADO_UNI = 'TICKET_CREADO';
+const EVENT_TICKET_ESTATUS_CAMBIADO_UNI = 'TICKET_ESTATUS_CAMBIADO';
+const EVENT_TICKET_PRIORIDAD_CAMBIADA_UNI = 'TICKET_PRIORIDAD_CAMBIADA';
+const EVENT_TICKET_ASIGNACION_CAMBIADA_UNI = 'TICKET_ASIGNACION_CAMBIADA';
+const EVENT_TICKET_RESPONSABILIDAD_CAMBIADA_UNI = 'TICKET_RESPONSABILIDAD_CAMBIADA';
 const CRITICOS_DIAS_UNI = 35;
 const CRITICOS_MIN_FALLAS_BLT_UNI = 3;
 const PERSONA_ATRAPADA_KEYWORDS_UNI = Object.freeze([
@@ -28,14 +47,15 @@ function normalizeText_uni(value) {
 function uniquePositiveIds_uni(values) {
   return [...new Set((Array.isArray(values) ? values : [])
     .map(Number)
-    .filter(value => Number.isInteger(value) && value > 0))];
+    .filter((value) => Number.isInteger(value) && value > 0))]
+    .sort((a, b) => a - b);
 }
 
 function candidateRows_uni(body) {
   const inserts = Array.isArray(body?.inserts) ? body.inserts : [];
   const updates = Array.isArray(body?.updates) ? body.updates : [];
   return [...inserts, ...updates]
-    .filter(row => row && Number.isInteger(Number(row.id)) && Number(row.id) > 0)
+    .filter((row) => row && Number.isInteger(Number(row.id)) && Number(row.id) > 0)
     .map((row, index) => ({
       ...row,
       id: Number(row.id),
@@ -53,12 +73,33 @@ function isPersonaAtrapada_uni(ticketRow) {
     ticketRow?.causa,
     ticketRow?.accion_en_cierre
   ].filter(Boolean).join(' '));
-  return PERSONA_ATRAPADA_KEYWORDS_UNI.some(keyword => blob.includes(keyword));
+  return PERSONA_ATRAPADA_KEYWORDS_UNI.some((keyword) => blob.includes(keyword));
+}
+
+function dateKey_uni(value) {
+  if (!value) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value).trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : text;
+}
+
+function requiresPostSyncEvaluation_uni(candidate, beforeRow) {
+  if (!beforeRow) return true;
+
+  return (
+    normalizeText_uni(candidate?.responsabilidad) !== normalizeText_uni(beforeRow.responsabilidad) ||
+    normalizeText_uni(candidate?.codigo_equipo) !== normalizeText_uni(beforeRow.codigo_equipo) ||
+    dateKey_uni(candidate?.fecha_reporte) !== dateKey_uni(beforeRow.fecha_reporte) ||
+    isPersonaAtrapada_uni(candidate) !== isPersonaAtrapada_uni(beforeRow)
+  );
 }
 
 async function listCriticalState_uni(executor, equipmentCodes) {
   const codes = [...new Set((equipmentCodes || [])
-    .map(value => String(value || '').trim())
+    .map((value) => String(value || '').trim())
     .filter(Boolean))];
 
   if (!codes.length) return new Map();
@@ -67,14 +108,13 @@ async function listCriticalState_uni(executor, equipmentCodes) {
   const [rows] = await executor.query(`
     SELECT
       p.numero_equipo,
-      MAX(p.zona_operativa) AS zona_operativa,
-      MAX(p.proyecto) AS proyecto,
       COUNT(DISTINCT t.id) AS fallas_blt_periodo
     FROM portafolio p
     LEFT JOIN tickets t
       ON t.codigo_equipo = p.numero_equipo
      AND t.fecha_reporte IS NOT NULL
      AND t.fecha_reporte >= DATE_SUB(CURDATE(), INTERVAL ${CRITICOS_DIAS_UNI} DAY)
+     AND t.fecha_reporte < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
      AND UPPER(COALESCE(t.responsabilidad, '')) LIKE '%BLT%'
     WHERE p.numero_equipo IN (${placeholders})
       AND p.estado_registro = 1
@@ -83,327 +123,412 @@ async function listCriticalState_uni(executor, equipmentCodes) {
     GROUP BY p.numero_equipo
   `, codes);
 
-  return new Map(rows.map(row => [String(row.numero_equipo || '').trim(), {
-    fallas: Number(row.fallas_blt_periodo || 0),
-    zona_operativa: row.zona_operativa || null,
-    proyecto: row.proyecto || null
+  return new Map(rows.map((row) => [String(row.numero_equipo || '').trim(), {
+    fallas: Number(row.fallas_blt_periodo || 0)
   }]));
 }
 
 async function captureBeforeSync_uni(body) {
   const candidates = candidateRows_uni(body);
-  const candidateIds = uniquePositiveIds_uni(candidates.map(row => row.id));
-  const equipmentCodes = [...new Set(candidates
-    .map(row => String(row.codigo_equipo || '').trim())
-    .filter(Boolean))];
+  const candidateIds = uniquePositiveIds_uni(candidates.map((row) => row.id));
 
   if (!candidateIds.length) {
     return {
       candidateIds: [],
+      receivedCandidateIds: [],
       candidateOrder: new Map(),
       existingIds: new Set(),
+      beforeTickets: new Map(),
       criticalBefore: new Map()
     };
   }
 
   const idPlaceholders = candidateIds.map(() => '?').join(', ');
   const [existingRows] = await db.query(
-    `SELECT id FROM tickets WHERE id IN (${idPlaceholders})`,
+    `SELECT
+       t.*,
+       CASE
+         WHEN t.fecha_reporte IS NOT NULL
+          AND t.fecha_reporte >= DATE_SUB(CURDATE(), INTERVAL ${CRITICOS_DIAS_UNI} DAY)
+          AND t.fecha_reporte < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND UPPER(COALESCE(t.responsabilidad, '')) LIKE '%BLT%'
+         THEN 1 ELSE 0
+       END AS calificaba_blt_periodo
+     FROM tickets t
+     WHERE t.id IN (${idPlaceholders})`,
     candidateIds
   );
 
+  const beforeTickets = new Map(existingRows.map((row) => [Number(row.id), row]));
+  const evaluationCandidates = candidates.filter((row) =>
+    requiresPostSyncEvaluation_uni(row, beforeTickets.get(Number(row.id)) || null)
+  );
+  const evaluationIds = uniquePositiveIds_uni(evaluationCandidates.map((row) => row.id));
+  const evaluationEquipmentCodes = new Set([
+    ...evaluationCandidates.map((row) => String(row.codigo_equipo || '').trim()),
+    ...evaluationIds.map((id) => String(beforeTickets.get(id)?.codigo_equipo || '').trim())
+  ].filter(Boolean));
+
   return {
-    candidateIds,
+    candidateIds: evaluationIds,
+    receivedCandidateIds: candidateIds,
     candidateOrder: new Map(candidates.map((row, index) => [Number(row.id), index])),
-    existingIds: new Set(existingRows.map(row => Number(row.id))),
-    criticalBefore: await listCriticalState_uni(db, equipmentCodes)
+    existingIds: new Set(existingRows.map((row) => Number(row.id))),
+    beforeTickets,
+    criticalBefore: await listCriticalState_uni(
+      db,
+      [...evaluationEquipmentCodes]
+    )
   };
 }
 
-async function findZoneId_uni(executor, zoneValue) {
-  const raw = String(zoneValue || '').trim();
-  if (!raw) return null;
-
-  const normalized = raw.toUpperCase().replace(/[-\s]/g, '');
-  const [rows] = await executor.query(`
-    SELECT id_zona
-    FROM z_op
-    WHERE estado = 1
-      AND (
-        UPPER(TRIM(zona)) = UPPER(TRIM(?))
-        OR UPPER(REPLACE(REPLACE(TRIM(zona), '-', ''), ' ', '')) = ?
-      )
-    ORDER BY id_zona ASC
-    LIMIT 1
-  `, [raw, normalized]);
-
-  return rows[0] ? Number(rows[0].id_zona) || null : null;
-}
-
+/**
+ * Resuelve la zona con la misma frontera estructural del alcance UNITED:
+ * - si existe codigo_equipo, solo Portafolio por numero_equipo puede resolverla;
+ * - sin codigo_equipo, proyecto/proyecto_padre deben resolver de forma no
+ *   ambigua a una unica zona_id;
+ * - tickets.zona nunca concede alcance por si solo.
+ */
 async function resolveTicketZoneId_uni(executor, ticketRow) {
-  const candidates = [];
-  const directZone = String(ticketRow?.zona || '').trim();
-  if (directZone) candidates.push(directZone);
-
   const equipment = String(ticketRow?.codigo_equipo || '').trim();
-  const project = String(ticketRow?.proyecto || ticketRow?.proyecto_padre || '').trim();
 
-  if (equipment || project) {
-    const clauses = [];
-    const params = [];
-
-    if (equipment) {
-      clauses.push("TRIM(COALESCE(numero_equipo, '')) = TRIM(?)");
-      params.push(equipment);
-    }
-    if (project) {
-      clauses.push("TRIM(COALESCE(proyecto, '')) = TRIM(?)");
-      params.push(project);
-    }
-
+  if (equipment) {
     const [rows] = await executor.query(`
-      SELECT zona_operativa
-      FROM portafolio
-      WHERE estado_registro = 1
-        AND (${clauses.join(' OR ')})
-        AND zona_operativa IS NOT NULL
-        AND TRIM(zona_operativa) <> ''
-      ORDER BY CASE WHEN TRIM(COALESCE(numero_equipo, '')) = TRIM(?) THEN 0 ELSE 1 END,
-               id_portafolio DESC
-      LIMIT 5
-    `, [...params, equipment || '']);
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN p.zona_id IS NULL THEN 1 ELSE 0 END) AS zonas_nulas,
+        COUNT(DISTINCT p.zona_id) AS zonas_distintas,
+        MIN(p.zona_id) AS zona_id
+      FROM portafolio p
+      WHERE p.estado_registro = 1
+        AND TRIM(COALESCE(p.numero_equipo, '')) = TRIM(?)
+    `, [equipment]);
 
-    rows.forEach(row => {
-      const value = String(row.zona_operativa || '').trim();
-      if (value && !candidates.includes(value)) candidates.push(value);
-    });
+    const row = rows[0] || {};
+    if (
+      Number(row.total || 0) > 0 &&
+      Number(row.zonas_nulas || 0) === 0 &&
+      Number(row.zonas_distintas || 0) === 1
+    ) {
+      const zoneId = Number(row.zona_id);
+      return Number.isInteger(zoneId) && zoneId > 0 ? zoneId : null;
+    }
+    return null;
   }
 
-  for (const candidate of candidates) {
-    const zoneId = await findZoneId_uni(executor, candidate);
-    if (zoneId) return zoneId;
+  const projectRefs = [...new Set([
+    String(ticketRow?.proyecto || '').trim(),
+    String(ticketRow?.proyecto_padre || '').trim()
+  ].filter(Boolean))];
+
+  if (!projectRefs.length) return null;
+
+  const clauses = projectRefs.map(() => "LOWER(TRIM(COALESCE(p.proyecto, ''))) = LOWER(TRIM(?))");
+  const [rows] = await executor.query(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN p.zona_id IS NULL THEN 1 ELSE 0 END) AS zonas_nulas,
+      COUNT(DISTINCT p.zona_id) AS zonas_distintas,
+      MIN(p.zona_id) AS zona_id
+    FROM portafolio p
+    WHERE p.estado_registro = 1
+      AND (${clauses.join(' OR ')})
+  `, projectRefs);
+
+  const row = rows[0] || {};
+  if (
+    Number(row.total || 0) > 0 &&
+    Number(row.zonas_nulas || 0) === 0 &&
+    Number(row.zonas_distintas || 0) === 1
+  ) {
+    const zoneId = Number(row.zona_id);
+    return Number.isInteger(zoneId) && zoneId > 0 ? zoneId : null;
   }
 
   return null;
 }
 
-async function loadEvent_uni(executor, eventCode) {
+async function listActiveUserIds_uni(executor) {
   const [rows] = await executor.query(`
-    SELECT
-      codigo_evento,
-      nombre_evento,
-      titulo_default,
-      mensaje_default,
-      icono_default,
-      campana_default,
-      push_default,
-      accion_destino,
-      ruta_default
-    FROM notificacion_eventos
-    WHERE codigo_evento = ?
-      AND activo = 1
-    LIMIT 1
-  `, [eventCode]);
-  return rows[0] || null;
-}
-
-async function matrixConfigured_uni(executor, eventCode) {
-  const [rows] = await executor.query(`
-    SELECT COUNT(*) AS total
-    FROM notificacion_evento_roles
-    WHERE codigo_evento = ?
-      AND activo = 1
-  `, [eventCode]);
-  return Number(rows[0]?.total || 0) > 0;
-}
-
-async function listMatrixRecipients_uni(executor, event, zoneId, actorUserId) {
-  const params = [event.codigo_evento, zoneId];
-  let actorClause = '';
-
-  if (Number.isInteger(Number(actorUserId)) && Number(actorUserId) > 0) {
-    actorClause = 'AND u.id_SB <> ?';
-    params.push(Number(actorUserId));
-  }
-
-  const [rows] = await executor.query(`
-    SELECT DISTINCT
-      u.id_SB AS id_usuario,
-      ner.politica,
-      COALESCE(np.campana, ?, 1) AS campana,
-      COALESCE(np.push, ?, 0) AS push,
-      COALESCE(np.silenciada, 0) AS silenciada
+    SELECT u.id_SB
     FROM usuarios u
-    INNER JOIN usuario_roles ur
-      ON ur.id_usuario = u.id_SB
-     AND ur.activo = 1
-     AND ur.principal = 1
-    INNER JOIN roles r
-      ON r.id_rol = ur.id_rol
-     AND r.estado = 1
-    INNER JOIN notificacion_evento_roles ner
-      ON ner.codigo_evento = ?
-     AND ner.id_rol = ur.id_rol
-     AND ner.activo = 1
-    INNER JOIN usuario_zop uz
-      ON uz.usuario_id = u.id_SB
-     AND uz.zona_id = ?
-     AND uz.estado = 1
-    LEFT JOIN notificacion_preferencias np
-      ON np.id_usuario = u.id_SB
-     AND np.codigo_evento = ner.codigo_evento
     WHERE u.estado = 1
-      AND (
-        SELECT COUNT(*)
-        FROM usuario_roles ur_count
-        INNER JOIN roles r_count
-          ON r_count.id_rol = ur_count.id_rol
-         AND r_count.estado = 1
-        WHERE ur_count.id_usuario = u.id_SB
-          AND ur_count.activo = 1
-          AND ur_count.principal = 1
-      ) = 1
-      ${actorClause}
-  `, [
-    Number(event.campana_default ?? 1),
-    Number(event.push_default ?? 0),
-    ...params
-  ]);
+    ORDER BY u.id_SB ASC
+  `);
+  return uniquePositiveIds_uni(rows.map((row) => row.id_SB));
+}
 
-  return rows.map(row => {
-    const policy = String(row.politica || '').trim().toUpperCase();
-    if (policy === 'OBLIGATORIA') {
-      return {
-        id_usuario: Number(row.id_usuario),
-        politica: policy,
-        campana: true,
-        push: true
-      };
+async function listCurrentPeriodBltCandidateIds_uni(executor, candidateRows) {
+  const ids = uniquePositiveIds_uni((candidateRows || []).map((row) => row.id));
+  if (!ids.length) return new Set();
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const [rows] = await executor.query(`
+    SELECT t.id
+    FROM tickets t
+    WHERE t.id IN (${placeholders})
+      AND t.fecha_reporte IS NOT NULL
+      AND t.fecha_reporte >= DATE_SUB(CURDATE(), INTERVAL ${CRITICOS_DIAS_UNI} DAY)
+      AND t.fecha_reporte < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+      AND UPPER(COALESCE(t.responsabilidad, '')) LIKE '%BLT%'
+  `, ids);
+
+  return new Set(rows.map((row) => Number(row.id)));
+}
+
+function evaluateCandidateTransitions_uni(candidateRows, beforeContext, currentPeriodBltIds) {
+  const criticalBefore = beforeContext?.criticalBefore || new Map();
+  const beforeTickets = beforeContext?.beforeTickets || new Map();
+  const runningByEquipment = new Map(
+    [...criticalBefore.entries()].map(([equipment, value]) => [
+      equipment,
+      Number(value?.fallas || 0)
+    ])
+  );
+
+  return (candidateRows || []).map((row) => {
+    const ticketId = Number(row?.id);
+    const beforeRow = beforeTickets.get(ticketId) || null;
+    const beforeEquipment = String(beforeRow?.codigo_equipo || '').trim();
+    const equipment = String(row?.codigo_equipo || '').trim();
+    const qualifiedBefore = Boolean(beforeRow && Number(beforeRow.calificaba_blt_periodo) === 1);
+    const qualifiedAfter = Boolean(
+      equipment && currentPeriodBltIds.has(ticketId) && isBlt_uni(row)
+    );
+    const trappedBefore = Boolean(beforeRow && isPersonaAtrapada_uni(beforeRow));
+    const trappedAfter = isPersonaAtrapada_uni(row);
+    const eligibleEquipment = Boolean(equipment && criticalBefore.has(equipment));
+
+    // El conteo inicial representa el estado previo completo. Si el Ticket
+    // deja de calificar o cambia de equipo, primero se retira de su conjunto
+    // anterior para mantener la secuencia real dentro del lote.
+    if (
+      qualifiedBefore &&
+      beforeEquipment &&
+      (!qualifiedAfter || beforeEquipment !== equipment)
+    ) {
+      const previousCount = Number(runningByEquipment.get(beforeEquipment) || 0);
+      runningByEquipment.set(beforeEquipment, Math.max(0, previousCount - 1));
     }
 
-    const silenced = Number(row.silenciada || 0) === 1;
+    const beforeCount = equipment
+      ? Number(runningByEquipment.get(equipment) || 0)
+      : 0;
+    let afterCount = beforeCount;
+
+    if (
+      qualifiedAfter &&
+      !(qualifiedBefore && beforeEquipment === equipment)
+    ) {
+      afterCount = beforeCount + 1;
+      runningByEquipment.set(equipment, afterCount);
+    }
+
+    const enteredBltSet = !qualifiedBefore && qualifiedAfter;
+
     return {
-      id_usuario: Number(row.id_usuario),
-      politica: policy,
-      campana: !silenced && Number(row.campana || 0) === 1,
-      push: !silenced && Number(row.push || 0) === 1
+      row,
+      beforeRow,
+      operation: beforeRow ? 'UPDATE' : 'INSERT',
+      equipment,
+      qualifiedBefore,
+      qualifiedAfter,
+      trappedBefore,
+      trappedAfter,
+      trappedTransition: !trappedBefore && trappedAfter,
+      enteredBltSet,
+      eligibleEquipment,
+      beforeCount,
+      afterCount,
+      wasCritical: Boolean(eligibleEquipment && beforeCount >= CRITICOS_MIN_FALLAS_BLT_UNI),
+      becameCritical: Boolean(
+        eligibleEquipment &&
+        enteredBltSet &&
+        beforeCount < CRITICOS_MIN_FALLAS_BLT_UNI &&
+        afterCount >= CRITICOS_MIN_FALLAS_BLT_UNI
+      ),
+      criticalFailure: Boolean(
+        !beforeRow &&
+        eligibleEquipment &&
+        beforeCount >= CRITICOS_MIN_FALLAS_BLT_UNI
+      )
     };
-  }).filter(row => row.id_usuario > 0 && (row.campana || row.push));
+  });
 }
 
-async function insertNotification_uni(executor, payload) {
-  const [result] = await executor.query(`
-    INSERT INTO sup_notificaciones (
-      id_usuario,
-      tipo_notificacion,
-      titulo_notificacion,
-      mensaje_notificacion,
-      icono_notificacion,
-      accion_notificacion,
-      id_referencia,
-      ruta_destino,
-      leido,
-      activo
-    )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, 0, 1
-    FROM DUAL
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM sup_notificaciones existing
-      WHERE existing.id_usuario = ?
-        AND existing.tipo_notificacion = ?
-        AND existing.id_referencia = ?
-        AND existing.activo = 1
-    )
-  `, [
-    payload.id_usuario,
-    payload.codigo_evento,
-    payload.titulo,
-    payload.mensaje,
-    payload.icono,
-    'ABRIR_TICKET',
-    payload.id_referencia,
-    payload.ruta_destino,
-    payload.id_usuario,
-    payload.codigo_evento,
-    payload.id_referencia
-  ]);
-
-  return Number(result.affectedRows || 0);
+function comparableText_uni(value) {
+  return String(value == null ? '' : value).trim();
 }
 
-async function emitTicketEvent_uni(executor, {
+function anyChanged_uni(before, after, fields) {
+  return fields.some((field) => comparableText_uni(before?.[field]) !== comparableText_uni(after?.[field]));
+}
+
+function nativeTicketTransition_uni(before, after) {
+  if (!after) return null;
+  if (!before) return {
+    eventCode: EVENT_TICKET_CREADO_UNI,
+    kind: 'CREACION',
+    fields: ['ticket']
+  };
+  if (anyChanged_uni(before, after, ['estado_ticket', 'estado', 'estatus_equipo_final', 'fecha_cierre'])) {
+    return {
+      eventCode: EVENT_TICKET_ESTATUS_CAMBIADO_UNI,
+      kind: 'ESTATUS',
+      fields: ['estado_ticket', 'estado', 'estatus_equipo_final', 'fecha_cierre']
+    };
+  }
+  if (anyChanged_uni(before, after, ['prioridad'])) {
+    return {
+      eventCode: EVENT_TICKET_PRIORIDAD_CAMBIADA_UNI,
+      kind: 'PRIORIDAD',
+      fields: ['prioridad']
+    };
+  }
+  if (anyChanged_uni(before, after, ['responsabilidad'])) {
+    return {
+      eventCode: EVENT_TICKET_RESPONSABILIDAD_CAMBIADA_UNI,
+      kind: 'RESPONSABILIDAD',
+      fields: ['responsabilidad']
+    };
+  }
+  if (anyChanged_uni(before, after, ['tecnico', 'supervisor', 'persona_que_atiende', 'blt_empleado', 'ejecutivo_call'])) {
+    return {
+      eventCode: EVENT_TICKET_ASIGNACION_CAMBIADA_UNI,
+      kind: 'ASIGNACION',
+      fields: ['tecnico', 'supervisor', 'persona_que_atiende', 'blt_empleado', 'ejecutivo_call']
+    };
+  }
+  return null;
+}
+
+function ticketTransitionIdentity_uni(before, after, transition) {
+  const selected = {};
+  for (const field of transition.fields) {
+    selected[field] = {
+      before: comparableText_uni(before?.[field]),
+      after: comparableText_uni(after?.[field])
+    };
+  }
+  return crypto.createHash('sha256').update(JSON.stringify({
+    id: Number(after?.id || before?.id || 0),
+    event: transition.eventCode,
+    selected
+  })).digest('hex');
+}
+
+function ticketTransitionPresentation_uni(transition, before, after) {
+  const ticket = String(after?.ticket || before?.ticket || after?.id || '').trim();
+  if (transition.kind === 'CREACION') {
+    return { title: `Nuevo Ticket ${ticket}`, message: `Se generó el ticket ${ticket}.` };
+  }
+  if (transition.kind === 'ESTATUS') {
+    const previous = before?.estado_ticket || before?.estado || before?.estatus_equipo_final || 'Sin estatus';
+    const current = after?.estado_ticket || after?.estado || after?.estatus_equipo_final || 'Sin estatus';
+    return { title: `Estatus de Ticket ${ticket}`, message: `El ticket ${ticket} cambió de ${previous} a ${current}.` };
+  }
+  if (transition.kind === 'PRIORIDAD') {
+    return { title: `Prioridad de Ticket ${ticket}`, message: `El ticket ${ticket} cambió su prioridad de ${before?.prioridad || 'Sin prioridad'} a ${after?.prioridad || 'Sin prioridad'}.` };
+  }
+  if (transition.kind === 'RESPONSABILIDAD') {
+    return { title: `Responsabilidad de Ticket ${ticket}`, message: `El ticket ${ticket} cambió su responsabilidad de ${before?.responsabilidad || 'Sin definir'} a ${after?.responsabilidad || 'Sin definir'}.` };
+  }
+  return { title: `Asignación de Ticket ${ticket}`, message: `Se actualizó la asignación del ticket ${ticket}.` };
+}
+
+function primaryReason_uni(result) {
+  if (result?.reason) return result.reason;
+  const skippedReasons = result?.skipped_reasons || {};
+  const keys = Object.keys(skippedReasons).filter((key) => Number(skippedReasons[key] || 0) > 0);
+  if (keys.length === 1) return keys[0];
+
+  const reasons = [...new Set((Array.isArray(result?.decisions) ? result.decisions : [])
+    .map((decision) => String(decision?.reason || '').trim())
+    .filter(Boolean))];
+  return reasons.length === 1 ? reasons[0] : null;
+}
+
+async function emitTicketEvent_uni({
   eventCode,
   ticketRow,
   actorUserId,
   title,
   message,
-  icon
+  icon,
+  activeUserIds,
+  eventInstanceKey: providedEventInstanceKey = null
 }) {
-  const event = await loadEvent_uni(executor, eventCode);
-  if (!event) {
-    return { created: 0, reason: 'EVENTO_NO_REGISTRADO', recipients: [] };
-  }
-
-  if (!(await matrixConfigured_uni(executor, eventCode))) {
-    return { created: 0, reason: 'MATRIZ_ROLES_NO_CONFIGURADA', recipients: [] };
-  }
-
-  const zoneId = await resolveTicketZoneId_uni(executor, ticketRow);
+  const zoneId = await resolveTicketZoneId_uni(db, ticketRow);
   if (!zoneId) {
-    return { created: 0, reason: 'ZONA_OPERATIVA_NO_RESUELTA', recipients: [] };
-  }
-
-  const recipients = await listMatrixRecipients_uni(executor, event, zoneId, actorUserId);
-  if (!recipients.length) {
-    return { created: 0, reason: 'SIN_DESTINATARIOS_ELEGIBLES', recipients: [], zona_id: zoneId };
-  }
-
-  let created = 0;
-  const createdRecipients = [];
-
-  for (const recipient of recipients) {
-    const inserted = await insertNotification_uni(executor, {
-      id_usuario: recipient.id_usuario,
+    logger.warn('[NOTIFICATION_CRITICAL_TICKET_SKIPPED]', {
       codigo_evento: eventCode,
-      titulo: String(title || event.titulo_default || event.nombre_evento).slice(0, 255),
-      mensaje: String(message || event.mensaje_default || event.nombre_evento).slice(0, 2000),
-      icono: icon || event.icono_default || null,
-      id_referencia: Number(ticketRow?.id) || null,
-      ruta_destino: ticketRow?.ticket ? `detalle:ticket:${ticketRow.ticket}` : event.ruta_default || null
+      ticket_id: Number(ticketRow?.id) || null,
+      ticket: ticketRow?.ticket || null,
+      reason: 'ZONA_OPERATIVA_NO_RESUELTA'
     });
-
-    if (inserted) {
-      created += inserted;
-      createdRecipients.push({
-        id_usuario: recipient.id_usuario,
-        politica: recipient.politica,
-        campana: recipient.campana,
-        push: recipient.push
-      });
-    }
+    return {
+      ok: true,
+      created: 0,
+      skipped: (activeUserIds || []).length,
+      recipients: [],
+      bell_recipients: [],
+      push_recipients: [],
+      decisions: [],
+      reason: 'ZONA_OPERATIVA_NO_RESUELTA',
+      zona_id: null
+    };
   }
+
+  const ticketId = Number(ticketRow?.id) || null;
+  const ticketRef = String(ticketRow?.ticket || ticketId || '').trim();
+  const eventInstanceKey = providedEventInstanceKey || `ticket-critical:${eventCode}:ticket-id:${ticketId}`;
+
+  const result = await emitBusinessEventSafe_gnral({
+    codigoEvento: eventCode,
+    destinatarios: activeUserIds || [],
+    actorUserId: Number(actorUserId) || null,
+    zonaOperativaId: zoneId,
+    requireRoleMatrix: true,
+    allowMissingEvent: true,
+    titulo: title,
+    mensaje: message,
+    icono: icon,
+    accion: 'ABRIR_TICKET',
+    idReferencia: ticketId,
+    ruta: ticketRef ? `detalle:ticket:${ticketRef}` : null,
+    eventInstanceKey,
+    contextoSeguimiento: {
+      dominio: 'UNITED',
+      tipo: 'TICKET',
+      id_ticket: ticketId,
+      ticket: ticketRow?.ticket || null,
+      numero_equipo: ticketRow?.codigo_equipo || ticketRow?.equipo || null,
+      proyecto: ticketRow?.proyecto || ticketRow?.proyecto_padre || null,
+      zona_id: zoneId,
+      identificador_operacion: eventInstanceKey
+    }
+  }, {
+    label: `tickets-critical:${eventCode}`
+  });
 
   return {
-    created,
-    reason: created ? null : 'YA_EXISTENTE',
-    recipients: createdRecipients,
-    zona_id: zoneId
+    ...result,
+    reason: primaryReason_uni(result),
+    zona_id: zoneId,
+    event_instance_key: eventInstanceKey
   };
 }
 
-async function loadInsertedRows_uni(beforeContext) {
-  const newCandidateIds = (beforeContext?.candidateIds || [])
-    .filter(id => !beforeContext.existingIds.has(Number(id)));
+async function loadAffectedRows_uni(beforeContext) {
+  const candidateIds = uniquePositiveIds_uni(beforeContext?.candidateIds || []);
+  if (!candidateIds.length) return [];
 
-  if (!newCandidateIds.length) return [];
-
-  const placeholders = newCandidateIds.map(() => '?').join(', ');
+  const placeholders = candidateIds.map(() => '?').join(', ');
   const [rows] = await db.query(`
     SELECT *
     FROM tickets
     WHERE id IN (${placeholders})
-  `, newCandidateIds);
+  `, candidateIds);
 
   const order = beforeContext?.candidateOrder || new Map();
   return rows.sort((a, b) =>
@@ -412,122 +537,293 @@ async function loadInsertedRows_uni(beforeContext) {
   );
 }
 
-async function processAfterSync_uni(beforeContext, actorUser) {
-  const insertedRows = await loadInsertedRows_uni(beforeContext);
-  const summary = {
-    inserted_tickets: insertedRows.length,
+async function loadReceivedRows_uni(beforeContext) {
+  const candidateIds = uniquePositiveIds_uni(
+    beforeContext?.receivedCandidateIds || beforeContext?.candidateIds || []
+  );
+  if (!candidateIds.length) return [];
+
+  const placeholders = candidateIds.map(() => '?').join(', ');
+  const [rows] = await db.query(`
+    SELECT *
+    FROM tickets
+    WHERE id IN (${placeholders})
+  `, candidateIds);
+
+  const order = beforeContext?.candidateOrder || new Map();
+  return rows.sort((a, b) =>
+    Number(order.get(Number(a.id)) ?? Number.MAX_SAFE_INTEGER) -
+    Number(order.get(Number(b.id)) ?? Number.MAX_SAFE_INTEGER)
+  );
+}
+
+function emptySummary_uni() {
+  return {
+    affected_tickets: 0,
+    inserted_tickets: 0,
+    updated_tickets: 0,
+    persona_atrapada_equipo_critico: 0,
+    persona_atrapada_nuevo_equipo_critico: 0,
     falla_equipo_critico: 0,
     persona_atrapada: 0,
     nuevo_equipo_critico: 0,
+    ticket_creado: 0,
+    ticket_estatus_cambiado: 0,
+    ticket_prioridad_cambiada: 0,
+    ticket_asignacion_cambiada: 0,
+    ticket_responsabilidad_cambiada: 0,
     eventos: []
   };
+}
 
-  if (!insertedRows.length) return summary;
+function transitionMetadata_uni(evaluation) {
+  return {
+    operacion: evaluation.operation,
+    responsabilidad_antes: evaluation.beforeRow?.responsabilidad || null,
+    responsabilidad_despues: evaluation.row?.responsabilidad || null,
+    calificaba_blt_antes: evaluation.qualifiedBefore,
+    califica_blt_despues: evaluation.qualifiedAfter,
+    fallas_blt_35d_antes: evaluation.beforeCount,
+    fallas_blt_35d_despues: evaluation.afterCount,
+    // Alias conservados para consumidores y validaciones de la Fase 4.
+    fallas_blt_antes_del_ticket: evaluation.beforeCount,
+    fallas_blt_despues_del_ticket: evaluation.afterCount,
+    fallas_blt_antes: evaluation.beforeCount
+  };
+}
 
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
+function reasonWithoutEvent_uni(evaluation) {
+  if (!evaluation.qualifiedAfter) return 'NO_ERA_BLT';
+  if (evaluation.qualifiedBefore) return 'NO_ENTRO_EN_TRANSICION';
+  if (!evaluation.eligibleEquipment) return 'EQUIPO_NO_ELEGIBLE';
+  if (evaluation.afterCount < CRITICOS_MIN_FALLAS_BLT_UNI) return 'NO_ALCANZO_3';
+  return 'NINGUNO';
+}
 
-    const equipmentCodes = insertedRows
-      .map(row => String(row.codigo_equipo || '').trim())
-      .filter(Boolean);
-    const criticalAfter = await listCriticalState_uni(connection, equipmentCodes);
-    const actorId = Number(actorUser?.id_SB || actorUser?.id || 0) || null;
+function traceEvaluation_uni(evaluation, eventCode, result, fallbackReason) {
+  const created = Number(result?.created || 0);
+  logger.info('[NOTIFICATION_CRITICAL_TICKET_EVALUATED]', {
+    ticket_id: Number(evaluation.row?.id) || null,
+    numero_ticket: evaluation.row?.ticket || null,
+    codigo_equipo: evaluation.equipment || null,
+    ...transitionMetadata_uni(evaluation),
+    evento_resultante: eventCode || 'NINGUNO',
+    motivo: created > 0
+      ? 'NOTIFICACION_CREADA'
+      : (result?.reason || fallbackReason || 'NINGUNO'),
+    trace_id: result?.trace_id || null
+  });
+}
 
-    for (const row of insertedRows) {
-      if (isPersonaAtrapada_uni(row)) {
-        const result = await emitTicketEvent_uni(connection, {
-          eventCode: EVENT_PERSONA_ATRAPADA_UNI,
-          ticketRow: row,
-          actorUserId: actorId,
-          title: 'Ticket de persona atrapada',
-          message: `Se genero el ticket ${row.ticket} relacionado con una persona atrapada.`,
-          icon: '🚨'
-        });
-        summary.persona_atrapada += Number(result.created || 0);
-        summary.eventos.push({
-          codigo_evento: EVENT_PERSONA_ATRAPADA_UNI,
-          ticket: row.ticket,
-          created: Number(result.created || 0),
-          reason: result.reason || null
-        });
-      }
+function appendEventResult_uni(summary, eventCode, row, result, counterField, extra = {}) {
+  summary[counterField] += Number(result?.created || 0);
+  summary.eventos.push({
+    codigo_evento: eventCode,
+    ticket_id: Number(row?.id) || null,
+    ticket: row?.ticket || null,
+    created: Number(result?.created || 0),
+    skipped: Number(result?.skipped || 0),
+    reason: result?.reason || null,
+    trace_id: result?.trace_id || null,
+    zona_id: result?.zona_id || null,
+    event_instance_key: result?.event_instance_key || null,
+    ...extra
+  });
+}
 
-      const equipment = String(row.codigo_equipo || '').trim();
-      const before = beforeContext.criticalBefore.get(equipment);
-      if (
-        equipment &&
-        before &&
-        Number(before.fallas || 0) >= CRITICOS_MIN_FALLAS_BLT_UNI &&
-        isBlt_uni(row)
-      ) {
-        const result = await emitTicketEvent_uni(connection, {
-          eventCode: EVENT_FALLA_EQUIPO_CRITICO_UNI,
-          ticketRow: row,
-          actorUserId: actorId,
-          title: 'Nueva falla en equipo critico',
-          message: `Se genero el ticket ${row.ticket} con responsabilidad BLT sobre el equipo critico ${equipment}.`,
-          icon: '💥'
-        });
-        summary.falla_equipo_critico += Number(result.created || 0);
-        summary.eventos.push({
-          codigo_evento: EVENT_FALLA_EQUIPO_CRITICO_UNI,
-          ticket: row.ticket,
-          created: Number(result.created || 0),
-          reason: result.reason || null
-        });
-      }
-    }
+async function processAfterSync_uni(beforeContext, actorUser) {
+  const affectedRows = await loadAffectedRows_uni(beforeContext);
+  const receivedRows = await loadReceivedRows_uni(beforeContext);
+  const summary = emptySummary_uni();
+  const beforeTickets = beforeContext?.beforeTickets || new Map();
+  summary.affected_tickets = receivedRows.length;
+  summary.inserted_tickets = receivedRows.filter((row) => !beforeTickets.has(Number(row.id))).length;
+  summary.updated_tickets = receivedRows.length - summary.inserted_tickets;
 
-    const firstNewBltByEquipment = new Map();
-    insertedRows.filter(isBlt_uni).forEach(row => {
-      const equipment = String(row.codigo_equipo || '').trim();
-      if (equipment && !firstNewBltByEquipment.has(equipment)) {
-        firstNewBltByEquipment.set(equipment, row);
-      }
-    });
+  if (!receivedRows.length) return summary;
 
-    for (const [equipment, triggerRow] of firstNewBltByEquipment.entries()) {
-      const before = beforeContext.criticalBefore.get(equipment);
-      const after = criticalAfter.get(equipment);
-      const beforeCount = Number(before?.fallas || 0);
-      const afterCount = Number(after?.fallas || 0);
+  // Se listan todos los usuarios activos. El motor central es la unica capa que
+  // decide Evento + Rol, politica obligatoria/opcional, actor, alcance UNITED,
+  // preferencias, campana, push y deduplicacion.
+  const activeUserIds = await listActiveUserIds_uni(db);
+  const actorId = Number(actorUser?.id_SB || actorUser?.id || 0) || null;
+  const currentPeriodBltIds = await listCurrentPeriodBltCandidateIds_uni(db, affectedRows);
+  const evaluations = evaluateCandidateTransitions_uni(
+    affectedRows,
+    beforeContext,
+    currentPeriodBltIds
+  );
+  const nativeWinnerTicketIds = new Set();
 
-      if (
-        beforeCount >= CRITICOS_MIN_FALLAS_BLT_UNI ||
-        afterCount < CRITICOS_MIN_FALLAS_BLT_UNI
-      ) {
-        continue;
-      }
+  for (const evaluation of evaluations) {
+    const row = evaluation.row;
+    const equipment = evaluation.equipment;
+    let event = null;
 
-      const result = await emitTicketEvent_uni(connection, {
+    // La clasificacion es mutuamente excluyente y conserva la precedencia
+    // operativa acordada para evitar dos Push por el mismo Ticket:
+    // 1) atrapada + critico existente; 2) atrapada + nuevo critico;
+    // 3) atrapada; 4) falla en critico; 5) nuevo critico.
+    if (
+      evaluation.trappedAfter &&
+      evaluation.trappedTransition &&
+      evaluation.wasCritical
+    ) {
+      event = {
+        eventCode: EVENT_PERSONA_ATRAPADA_EQUIPO_CRITICO_UNI,
+        title: 'Persona atrapada en equipo crítico',
+        message: `Se generó el ticket ${row.ticket} por una persona atrapada en el equipo crítico ${equipment}.`,
+        icon: '🚨🆘',
+        counterField: 'persona_atrapada_equipo_critico',
+        extra: { numero_equipo: equipment }
+      };
+    } else if (evaluation.trappedAfter && evaluation.becameCritical) {
+      event = {
+        eventCode: EVENT_PERSONA_ATRAPADA_NUEVO_EQUIPO_CRITICO_UNI,
+        title: 'Persona atrapada en un nuevo equipo crítico',
+        message: `Se generó el ticket ${row.ticket} por una persona atrapada y el equipo ${equipment} pasó a condición crítica.`,
+        icon: '🚨💥',
+        counterField: 'persona_atrapada_nuevo_equipo_critico',
+        extra: { numero_equipo: equipment }
+      };
+    } else if (evaluation.trappedTransition) {
+      event = {
+        eventCode: EVENT_PERSONA_ATRAPADA_UNI,
+        title: 'Ticket de persona atrapada',
+        message: `Se genero el ticket ${row.ticket} relacionado con una persona atrapada.`,
+        icon: '🚨',
+        counterField: 'persona_atrapada',
+        extra: {}
+      };
+    } else if (evaluation.criticalFailure) {
+      event = {
+        eventCode: EVENT_FALLA_EQUIPO_CRITICO_UNI,
+        title: 'Falla en equipo crítico',
+        message: `Se generó el ticket ${row.ticket} sobre el equipo crítico ${equipment}.`,
+        icon: '🆘',
+        counterField: 'falla_equipo_critico',
+        extra: { numero_equipo: equipment }
+      };
+    } else if (evaluation.becameCritical) {
+      event = {
         eventCode: EVENT_NUEVO_EQUIPO_CRITICO_UNI,
-        ticketRow: triggerRow,
-        actorUserId: actorId,
-        title: 'Nuevo equipo critico',
-        message: `El equipo ${equipment} paso a condicion critica al alcanzar ${afterCount} fallas BLT en los ultimos ${CRITICOS_DIAS_UNI} dias.`,
-        icon: '💥'
-      });
-      summary.nuevo_equipo_critico += Number(result.created || 0);
-      summary.eventos.push({
-        codigo_evento: EVENT_NUEVO_EQUIPO_CRITICO_UNI,
-        ticket: triggerRow.ticket,
-        created: Number(result.created || 0),
-        reason: result.reason || null
-      });
+        title: 'Nuevo equipo crítico',
+        message: `El equipo ${equipment} pasó a condición crítica al alcanzar ${evaluation.afterCount} fallas BLT en los últimos ${CRITICOS_DIAS_UNI} días.`,
+        icon: '💥',
+        counterField: 'nuevo_equipo_critico',
+        extra: { numero_equipo: equipment }
+      };
     }
 
-    await connection.commit();
-    return summary;
-  } catch (error) {
-    try { await connection.rollback(); } catch (_rollbackError) {}
-    throw error;
-  } finally {
-    connection.release();
+    if (!event) {
+      traceEvaluation_uni(evaluation, null, null, reasonWithoutEvent_uni(evaluation));
+      continue;
+    }
+
+    // La seleccion del ganador, y no el resultado del canal, bloquea cualquier
+    // evento nativo de menor precedencia para el mismo Ticket.
+    nativeWinnerTicketIds.add(Number(row.id));
+
+    let result;
+    try {
+      result = await emitTicketEvent_uni({
+        eventCode: event.eventCode,
+        ticketRow: row,
+        actorUserId: actorId,
+        title: event.title,
+        message: event.message,
+        icon: event.icon,
+        activeUserIds
+      });
+    } catch (error) {
+      logger.error('[NOTIFICATION_CRITICAL_TICKET_EMIT_FAILED]', {
+        ticket_id: Number(row?.id) || null,
+        ticket: row?.ticket || null,
+        codigo_equipo: equipment || null,
+        codigo_evento: event.eventCode,
+        error: error.message
+      });
+      result = {
+        created: 0,
+        skipped: activeUserIds.length,
+        reason: 'ERROR_EMISION',
+        trace_id: null
+      };
+    }
+
+    appendEventResult_uni(
+      summary,
+      event.eventCode,
+      row,
+      result,
+      event.counterField,
+      { ...event.extra, ...transitionMetadata_uni(evaluation) }
+    );
+    traceEvaluation_uni(evaluation, event.eventCode, result, 'ERROR_EMISION');
   }
+
+  for (const row of receivedRows) {
+    const ticketId = Number(row.id);
+    if (nativeWinnerTicketIds.has(ticketId)) continue;
+
+    const beforeRow = beforeTickets.get(ticketId) || null;
+    const transition = nativeTicketTransition_uni(beforeRow, row);
+    if (!transition) continue;
+
+    const presentation = ticketTransitionPresentation_uni(transition, beforeRow, row);
+    const eventInstanceKey = `ticket-native:${transition.eventCode}:${ticketTransitionIdentity_uni(beforeRow, row, transition)}`;
+    const counterFieldByEvent = {
+      [EVENT_TICKET_CREADO_UNI]: 'ticket_creado',
+      [EVENT_TICKET_ESTATUS_CAMBIADO_UNI]: 'ticket_estatus_cambiado',
+      [EVENT_TICKET_PRIORIDAD_CAMBIADA_UNI]: 'ticket_prioridad_cambiada',
+      [EVENT_TICKET_ASIGNACION_CAMBIADA_UNI]: 'ticket_asignacion_cambiada',
+      [EVENT_TICKET_RESPONSABILIDAD_CAMBIADA_UNI]: 'ticket_responsabilidad_cambiada'
+    };
+
+    let result;
+    try {
+      result = await emitTicketEvent_uni({
+        eventCode: transition.eventCode,
+        ticketRow: row,
+        actorUserId: actorId,
+        title: presentation.title,
+        message: presentation.message,
+        icon: 'ti ti-ticket',
+        activeUserIds,
+        eventInstanceKey
+      });
+    } catch (error) {
+      logger.error('[NOTIFICATION_NATIVE_TICKET_EMIT_FAILED]', {
+        ticket_id: ticketId,
+        ticket: row?.ticket || null,
+        codigo_evento: transition.eventCode,
+        error: error.message
+      });
+      result = {
+        created: 0,
+        skipped: activeUserIds.length,
+        reason: 'ERROR_EMISION',
+        trace_id: null,
+        event_instance_key: eventInstanceKey
+      };
+    }
+
+    appendEventResult_uni(
+      summary,
+      transition.eventCode,
+      row,
+      result,
+      counterFieldByEvent[transition.eventCode],
+      { transicion: transition.kind }
+    );
+  }
+
+  return summary;
 }
 
 module.exports = {
   captureBeforeSync_uni,
-  processAfterSync_uni
+  processAfterSync_uni,
+  nativeTicketTransition_uni,
+  ticketTransitionIdentity_uni
 };

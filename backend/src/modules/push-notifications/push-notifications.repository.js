@@ -1,11 +1,45 @@
+// [Aster | 2026-08-27 | ASTER-MG | FASE_1_CIERRE_LUMBRE_CURSOR_ID_UNICO_V001]
 const db = require('../../config/db');
 const { pushVisibilitySql_gnral } = require('../../services/notifications/notification-policy');
+
+let visualMetadataColumnCache = { value: false, checkedAt: 0 };
+
+async function hasVisualMetadataColumn_gnral(queryable = db) {
+  const now = Date.now();
+  if (now - visualMetadataColumnCache.checkedAt < 60000) {
+    return visualMetadataColumnCache.value;
+  }
+  try {
+    const [rows] = await queryable.query(`
+      SELECT COUNT(*) AS total
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'sup_notificaciones'
+        AND COLUMN_NAME = 'codigos_visuales_json'
+    `);
+    visualMetadataColumnCache = {
+      value: Number(rows[0]?.total || 0) === 1,
+      checkedAt: now
+    };
+  } catch (_error) {
+    visualMetadataColumnCache = { value: false, checkedAt: now };
+  }
+  return visualMetadataColumnCache.value;
+}
 
 async function upsertSubscription({ userId, endpoint, p256dh, auth, userAgent, deviceName }) {
   const [result] = await db.query(`
     INSERT INTO notificaciones_push_suscripciones (
-      id_usuario, endpoint, p256dh, auth, user_agent, dispositivo_nombre, activo, ultimo_uso_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+      id_usuario, endpoint, p256dh, auth, user_agent, dispositivo_nombre,
+      activo, ultimo_uso_at, ultimo_id_notificacion
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, 1, NOW(),
+      (
+        SELECT COALESCE(MAX(n_cursor.id_notificacion), 0)
+        FROM sup_notificaciones n_cursor
+        WHERE n_cursor.id_usuario = ?
+      )
+    )
     ON DUPLICATE KEY UPDATE
       id_usuario = VALUES(id_usuario),
       p256dh = VALUES(p256dh),
@@ -15,7 +49,7 @@ async function upsertSubscription({ userId, endpoint, p256dh, auth, userAgent, d
       activo = 1,
       ultimo_uso_at = COALESCE(ultimo_uso_at, NOW()),
       updated_at = NOW()
-  `, [userId, endpoint, p256dh, auth, userAgent || null, deviceName || null]);
+  `, [userId, endpoint, p256dh, auth, userAgent || null, deviceName || null, userId]);
   return result;
 }
 
@@ -30,7 +64,7 @@ async function deactivateSubscription({ userId, endpoint }) {
 
 async function getSubscriptionStatus({ userId, endpoint }) {
   const [rows] = await db.query(`
-    SELECT id_suscripcion, activo, ultimo_uso_at, updated_at
+    SELECT id_suscripcion, activo, ultimo_uso_at, ultimo_id_notificacion, updated_at
     FROM notificaciones_push_suscripciones
     WHERE id_usuario = ? AND endpoint = ?
     LIMIT 1
@@ -40,16 +74,35 @@ async function getSubscriptionStatus({ userId, endpoint }) {
 
 async function listActiveSubscriptions(limit = 300) {
   const [rows] = await db.query(`
-    SELECT id_suscripcion, id_usuario, endpoint, p256dh, auth, ultimo_uso_at, created_at
-    FROM notificaciones_push_suscripciones
-    WHERE activo = 1
-    ORDER BY COALESCE(ultimo_uso_at, created_at) ASC, id_suscripcion ASC
+    SELECT
+      s.id_suscripcion,
+      s.id_usuario,
+      s.endpoint,
+      s.p256dh,
+      s.auth,
+      s.ultimo_uso_at,
+      s.ultimo_id_notificacion,
+      s.created_at
+    FROM notificaciones_push_suscripciones s
+    WHERE s.activo = 1
+    ORDER BY COALESCE(s.ultimo_uso_at, s.created_at) ASC, s.id_suscripcion ASC
     LIMIT ?
   `, [Number(limit)]);
   return rows;
 }
 
-async function listPendingNotifications({ userId, cursor, cycleCutoff, limit = 20 }) {
+async function getNotificationWatermark() {
+  const [rows] = await db.query(`
+    SELECT COALESCE(MAX(id_notificacion), 0) AS watermark_id
+    FROM sup_notificaciones
+  `);
+  return Number(rows[0]?.watermark_id || 0);
+}
+
+async function listPendingNotifications({ userId, cursorId, watermarkId, limit = 20 }) {
+  const visualColumn = await hasVisualMetadataColumn_gnral()
+    ? 'n.codigos_visuales_json'
+    : 'NULL AS codigos_visuales_json';
   const [rows] = await db.query(`
     SELECT
       n.id_notificacion,
@@ -60,7 +113,9 @@ async function listPendingNotifications({ userId, cursor, cycleCutoff, limit = 2
       n.accion_notificacion,
       n.id_referencia,
       n.ruta_destino,
-      n.fecha_creacion
+      n.fecha_creacion,
+      ${visualColumn},
+      COALESCE(e.prioridad_default, 'MEDIA') AS prioridad_notificacion
     FROM sup_notificaciones n
     LEFT JOIN notificacion_eventos e
       ON e.codigo_evento = n.tipo_notificacion
@@ -71,21 +126,40 @@ async function listPendingNotifications({ userId, cursor, cycleCutoff, limit = 2
     WHERE n.id_usuario = ?
       AND n.activo = 1
       AND n.leido = 0
-      AND n.fecha_creacion > ?
-      AND n.fecha_creacion <= ?
+      AND n.id_notificacion > ?
+      AND n.id_notificacion <= ?
       AND ${pushVisibilitySql_gnral('n', 'e', 'p')}
-    ORDER BY n.fecha_creacion ASC, n.id_notificacion ASC
+    ORDER BY n.id_notificacion ASC
     LIMIT ?
-  `, [userId, cursor, cycleCutoff, Number(limit)]);
+  `, [userId, Number(cursorId || 0), Number(watermarkId || 0), Number(limit)]);
   return rows;
 }
 
-async function advanceSubscriptionCursor({ subscriptionId, cycleCutoff }) {
+async function listActiveVisualStates(codes) {
+  const normalized = [...new Set((Array.isArray(codes) ? codes : [])
+    .map((code) => String(code || '').trim().toUpperCase())
+    .filter(Boolean))];
+  if (!normalized.length) return [];
+  const [rows] = await db.query(`
+    SELECT codigo, nombre, categoria, emoji, icono, prioridad
+    FROM estados_visuales
+    WHERE activo = 1
+      AND UPPER(codigo) IN (?)
+    ORDER BY prioridad ASC, codigo ASC
+  `, [normalized]);
+  return rows;
+}
+
+async function advanceSubscriptionCursor({ subscriptionId, cursorId, caughtUp = false }) {
+  const normalizedCursorId = Math.max(0, Number(cursorId || 0));
   const [result] = await db.query(`
     UPDATE notificaciones_push_suscripciones
-    SET ultimo_uso_at = ?, updated_at = NOW()
+    SET
+      ultimo_id_notificacion = GREATEST(COALESCE(ultimo_id_notificacion, 0), ?),
+      ultimo_uso_at = CASE WHEN ? = 1 THEN NOW() ELSE ultimo_uso_at END,
+      updated_at = NOW()
     WHERE id_suscripcion = ? AND activo = 1
-  `, [cycleCutoff, subscriptionId]);
+  `, [normalizedCursorId, caughtUp ? 1 : 0, subscriptionId]);
   return result;
 }
 
@@ -103,7 +177,10 @@ module.exports = {
   deactivateSubscription,
   getSubscriptionStatus,
   listActiveSubscriptions,
+  getNotificationWatermark,
   listPendingNotifications,
+  listActiveVisualStates,
   advanceSubscriptionCursor,
-  deactivateById
+  deactivateById,
+  hasVisualMetadataColumn_gnral
 };

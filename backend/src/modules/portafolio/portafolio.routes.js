@@ -1,8 +1,10 @@
 // [Aster | 2026-08-21 | ASTER-MG | FASE 9/11: Movimientos Portafolio por cuartos UNITED]
+// [Aster | 2026-09-08 | ASTER-MG | FIX: INTERES PERSONAL PROYECTO/EQUIPO MANTTO V001]
+// [Aster | 2026-09-08 | ASTER-MG | FIX: SEGUIMIENTO ESPECIAL MANTTO V002]
 const express = require('express');
-const multer = require('multer');
 const router = express.Router();
 const portafolioController = require('./portafolio.controller');
+const portafolioSeguimientoEspecialController = require('./portafolio-seguimiento-especial.controller');
 const { requireIntegrationAuthFor } = require('../../middleware/integration-auth.middleware');
 const {
   humanInformationGuard_gnral,
@@ -16,8 +18,36 @@ const {
 } = require('../../services/information-record-scope-gnral.service');
 const filePolicy = require('../../services/storage/storage-file-policy.service');
 const { requireProjectPhotoManager_gnral } = require('../../middleware/project-photo.middleware');
+const multer = require('multer');
 
 const requirePortafolioIntegration = requireIntegrationAuthFor('INTEGRATION_PORTAFOLIO_ID');
+const { requireProgrammerRole } = require('../../middleware/historical-sync.middleware');
+
+const uploadProjectPhotoMulter_uni = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 1,
+    fileSize: filePolicy.getLimits_gnral().maxFileBytes
+  }
+}).single('foto');
+
+function uploadProjectPhoto_uni(req, res, next) {
+  uploadProjectPhotoMulter_uni(req, res, error => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ ok: false, message: 'La fotografía supera el tamaño máximo permitido.' });
+    }
+    return res.status(400).json({
+      ok: false,
+      message: error.message || 'No fue posible leer la fotografía.'
+    });
+  });
+}
+
+const PORTAFOLIO_SEGUIMIENTO_ESPECIAL_ACCESS_PERMISSION =
+  'PORTAFOLIO_SEGUIMIENTO_ESPECIAL_ACCESO_VISUAL_MODULO.ACCESO_VISUAL';
+const PORTAFOLIO_SEGUIMIENTO_ESPECIAL_MANAGE_PERMISSION =
+  'PORTAFOLIO_SEGUIMIENTO_ESPECIAL_SEGUIMIENTO_PROYECTO_EQUIPO.GESTIONAR_SEGUIMIENTO';
 
 const PORTAFOLIO_READ_PERMISSIONS = Object.freeze([
   'PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER',
@@ -96,6 +126,24 @@ const portafolioDetailGuard = humanInformationGuard_gnral({
   groupingPermissionPairsAny: unitedGroupingPermissionPairs(PORTAFOLIO_DETAIL_PERMISSIONS)
 });
 
+// Seguimiento Especial: lectura del módulo y gestión son facultades separadas.
+// La lectura acepta ACCESO_VISUAL o GESTIONAR_SEGUIMIENTO para tolerar asignaciones
+// parciales; toda mutación exige explícitamente GESTIONAR_SEGUIMIENTO.
+const portafolioSeguimientoEspecialReadGuard = humanInformationGuard_gnral({
+  permissionCodesAny: [
+    PORTAFOLIO_SEGUIMIENTO_ESPECIAL_ACCESS_PERMISSION,
+    PORTAFOLIO_SEGUIMIENTO_ESPECIAL_MANAGE_PERMISSION
+  ],
+  domain: 'UNITED',
+  groupingCode: 'PORTAFOLIO'
+});
+
+const portafolioSeguimientoEspecialManageGuard = humanInformationGuard_gnral({
+  permissionCode: PORTAFOLIO_SEGUIMIENTO_ESPECIAL_MANAGE_PERMISSION,
+  domain: 'UNITED',
+  groupingCode: 'PORTAFOLIO'
+});
+
 // FASE 9/11: Movimientos tiene puerta funcional propia. No se hereda acceso
 // desde Dashboard Portafolio, Operacion ni Experimental.
 const movimientosGuard = humanInformationGuard_gnral({
@@ -121,30 +169,6 @@ const contextualEquipmentGuard = dynamicHumanInformationGuard_gnral((req) => {
     groupingPermissionPairsAny: unitedGroupingPermissionPairs(PORTAFOLIO_DETAIL_PERMISSIONS)
   };
 });
-
-const uploadProjectPhotoMulter_uni = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    files: 1,
-    fileSize: filePolicy.getLimits_gnral().maxFileBytes
-  }
-}).single('foto');
-
-function uploadProjectPhoto_uni(req, res, next) {
-  uploadProjectPhotoMulter_uni(req, res, error => {
-    if (!error) return next();
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({
-        ok: false,
-        message: 'La fotografia supera el tamano maximo permitido.'
-      });
-    }
-    return res.status(400).json({
-      ok: false,
-      message: error.message || 'No fue posible leer la fotografia.'
-    });
-  });
-}
 
 router.get(
   '/portafolio/dashboard/inicial',
@@ -179,6 +203,12 @@ router.get(
   ...movimientosGuard,
   portafolioController.getPortafolioMovimientosSemanales
 );
+router.post(
+  '/portafolio/movimientos-semanales/corte',
+  ...movimientosGuard,
+  requireProgrammerRole,
+  portafolioController.ejecutarCorteSemanalManual
+);
 router.get(
   '/portafolio/movimientos/:codigo/detalle',
   ...movimientosGuard,
@@ -191,6 +221,39 @@ router.post(
   filterPortafolioEquipmentBodyScope_gnral,
   portafolioController.getPortafolioEquipoTicketsLote
 );
+
+// Seguimiento Especial personal. Mantto no tiene tabla maestra de proyectos:
+// marcar Proyecto materializa sus equipos visibles en portafolio_interes.
+router.get(
+  '/portafolio/seguimiento-especial',
+  ...portafolioSeguimientoEspecialReadGuard,
+  portafolioSeguimientoEspecialController.list
+);
+router.get(
+  '/proyectos/:proyecto/seguimiento-especial',
+  ...portafolioSeguimientoEspecialReadGuard,
+  requirePortafolioProjectScope_gnral,
+  portafolioSeguimientoEspecialController.getProject
+);
+router.put(
+  '/proyectos/:proyecto/seguimiento-especial',
+  ...portafolioSeguimientoEspecialManageGuard,
+  requirePortafolioProjectScope_gnral,
+  portafolioSeguimientoEspecialController.setProject
+);
+router.get(
+  '/equipos/:codigo/seguimiento-especial',
+  ...portafolioSeguimientoEspecialReadGuard,
+  requirePortafolioEquipmentScope_gnral,
+  portafolioSeguimientoEspecialController.getEquipment
+);
+router.put(
+  '/equipos/:codigo/seguimiento-especial',
+  ...portafolioSeguimientoEspecialManageGuard,
+  requirePortafolioEquipmentScope_gnral,
+  portafolioSeguimientoEspecialController.setEquipment
+);
+
 router.get(
   '/portafolio/equipos/:codigo',
   ...contextualEquipmentGuard,
@@ -198,10 +261,8 @@ router.get(
   portafolioController.getPortafolioEquipoDetalle
 );
 router.get('/portafolio/equipos', ...portafolioReadGuard, portafolioController.getPortafolioEquipos);
-
-// Fotografías de proyecto UNITED. La lectura no agrega un permiso fotográfico
-// independiente: quien puede abrir el proyecto y pasa su alcance territorial
-// puede ver la galería. Las mutaciones añaden el rol de gestión de fotografías.
+// La lectura usa exclusivamente el permiso y el alcance del detalle United.
+// POST/PATCH agregan el rol funcional de escritura GESTOR_FOTOGRAFIAS.
 router.get(
   '/portafolio/proyectos/:proyecto/fotografias',
   ...portafolioDetailGuard,
@@ -223,7 +284,6 @@ router.patch(
   requireProjectPhotoManager_gnral,
   portafolioController.updatePortafolioProyectoFotoPrincipal
 );
-
 router.get(
   '/portafolio/proyectos/detalle/:proyecto',
   ...portafolioDetailGuard,

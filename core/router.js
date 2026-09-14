@@ -1,4 +1,5 @@
 (function(){
+  // [Aster | 2026-09-03 | ASTER-MG | FASE 1 PVO-PRODUCCION NAVEGACION V001]
   const routeNames = {
     home:'Inicio', resumen:'Resumen del día', tickets:'Tickets', callcenter:'Dashboard Call Center',
     operativo:'Dashboard Operativo', portafolio:'Dashboard Portafolio', movimientos:'Movimientos Portafolio',
@@ -7,14 +8,15 @@
     help:'Centro de Ayuda', notifications:'Notificaciones', services:'Estado de servicios',
     profile:'Perfil de usuario', 'support-request':'Solicitud de soporte', detalle:'Detalle',
     'cobranza-dashboard':'Dashboard Cobranza', 'cobranza-estados-cuenta':'Estados de Cuenta', 'cobranza-aditivas':'Aditivas',
-    'logistica-dashboard':'Dashboard Logística', 'logistica-reporte':'Reporte de Logística', 'logistica-pvo':'PVO', 'logistica-produccion':'Producción', 'logistica-documentos':'Documentos de Producción',
+    'logistica-dashboard':'Dashboard Logística', 'logistica-reporte':'Reporte de Logística', 'logistica-pvo':'PVO', 'logistica-produccion':'PVO-Producción', 'logistica-produccion-nuevo':'Agregar PVO-Producción', 'logistica-produccion-detalle':'Detalle de PVO-Producción', 'logistica-documentos':'Documentos de Producción',
     'instalaciones-dashboard':'Dashboard Instalaciones', 'instalaciones-proyectos':'Proyectos de Instalación',
     'instalaciones-concentrado-cliente':'Concentrado Cliente', 'instalaciones-reporte':'Reporte de Instalaciones',
     'instalaciones-ajuste':'Ajuste', 'instalaciones-carpetas':'Carpetas', 'instalaciones-pmm':'PM&M', 'instalaciones-documentacion':'Documentación Pendiente', 'instalaciones-cerrados':'Proyectos Cerrados',
     'ventas-dashboard':'Dashboard Ventas', 'ventas-vendidos':'Vendidos', 'ventas-proyeccion':'Proyección', 'ventas-perdidos':'Perdidos',
     'ventas-fotos-mapa':'Fotos Mapa', 'ventas-clientes':'Clientes', 'ventas-clientes-nuevo':'Nuevo cliente', 'ventas-clientes-detalle':'Detalle del cliente', 'ventas-cotizaciones':'Cotizaciones', 'ventas-cotizaciones-nueva':'Nueva cotización', 'ventas-cotizaciones-editar':'Editar cotización', 'ventas-cotizaciones-detalle':'Detalle de cotización',
     'ventas-prospeccion':'Prospección', 'ventas-prospeccion-nueva':'Nueva visita', 'ventas-prospeccion-detalle':'Detalle de visita', 'ventas-mapa-prospeccion':'Mapa Prospección', 'ventas-asignacion-redes':'Asignación Redes', 'ventas-asignacion-redes-detalle':'Detalle de Asignación a Redes', 'ventas-asignacion-redes-formulario':'Formulario de Asignación a Redes',
-    'almacen-dashboard':'Dashboard Almacén', 'almacen-inventarios':'Inventarios', 'almacen-movimientos':'Movimientos Almacén',
+    'almacen-dashboard':'Dashboard Almacén', 'almacen-inventario':'Inventario', 'almacen-stock':'Stock',
+    'almacen-prestamos':'Préstamos', 'almacen-resguardos':'Resguardos', 'almacen-auditoria':'Auditoría', 'almacen-carga':'Carga de Información',
     'cx-dashboard':'Dashboard CX', 'cx-encuestas':'Encuestas', 'cx-visitas':'Visitas',
     'legal-dashboard':'Dashboard Legal', 'legal-contratos':'Contratos', 'legal-suspendidos':'Suspendidos',
     'soporte-dashboard':'Dashboard de Soporte', 'soporte-solicitudes':'Solicitudes de Soporte', 'soporte-chats':'Chats de Soporte',
@@ -39,11 +41,22 @@
     'cobranza-uni-aditivas'
   ]);
 
+  const ALMACEN_ROUTES = new Set([
+    'almacen-dashboard',
+    'almacen-inventario',
+    'almacen-stock',
+    'almacen-prestamos',
+    'almacen-resguardos',
+    'almacen-auditoria',
+    'almacen-carga'
+  ]);
+
   let currentRoute = 'home';
   let currentPayload = null;
   const historyStack = [];
   let browserNavActive = false;
   let initialRouteRestored = false;
+  let navigationSequence = 0;
   const NAV_CURRENT_KEY = 'mantto:navigation:current';
 
   function readSession(key, fallback){
@@ -135,6 +148,11 @@
     return { route:route, payload:parts[1] ? { id:parts.slice(1).join('/') } : null };
   }
 
+  function canonicalRoute(route){
+    const value = String(route || 'home');
+    return value === 'logistica-pvo' || value === 'logistica-documentos' ? 'logistica-produccion' : value;
+  }
+
   function label(route){ return routeNames[route] || route || 'Inicio'; }
   function safeText(value){
     const text = value === null || value === undefined ? '' : String(value);
@@ -191,9 +209,12 @@
   }
 
   function setActiveSide(route){
+    const sideRoute = route === 'logistica-produccion-nuevo' || route === 'logistica-produccion-detalle'
+      ? 'logistica-produccion'
+      : route;
     let activeItem = null;
     document.querySelectorAll('.side-item').forEach(function(button){
-      const active = button.dataset.route === route;
+      const active = button.dataset.route === sideRoute;
       button.classList.toggle('active', active);
       if(active) activeItem = button;
     });
@@ -362,7 +383,7 @@
     }
     setActiveSide('instalaciones-proyectos');
     updateContext('instalaciones-proyectos','Proyectos de Instalación · gestión integral desde Aiven');
-    if(window.ManttoInstalacionesProyectos) window.ManttoInstalacionesProyectos.init();
+    if(window.ManttoInstalacionesProyectos) window.ManttoInstalacionesProyectos.init(currentPayload || null);
     return true;
   }
 
@@ -646,6 +667,23 @@
     return true;
   }
 
+  function showAlmacen(route){
+    const view=document.getElementById('view-'+route);
+    if(!view) return false;
+    activateViewById('view-'+route);
+    setActiveSide(route);
+    updateContext(route, route === 'almacen-carga' ? 'Gestión de Almacén · carga controlada hacia Aiven' : 'Gestión de Almacén · datos reales desde Aiven');
+    if(route === 'almacen-carga'){
+      if(window.ManttoAlmacenCarga && typeof window.ManttoAlmacenCarga.init === 'function'){
+        window.ManttoAlmacenCarga.init(route);
+      }
+    } else if(window.ManttoAlmacen && typeof window.ManttoAlmacen.init === 'function'){
+      window.ManttoAlmacen.init(route);
+    }
+    return true;
+  }
+
+
   function showLogisticaDashboard(){
     const view=document.getElementById('view-logistica-dashboard');
     if(!view) return false;
@@ -703,6 +741,30 @@
     return true;
   }
 
+  function notificationVisualCodes_gnral(row){
+    const raw=row&&row.codigos_visuales;
+    if(Array.isArray(raw)){
+      return [...new Set(raw.map(code=>String(code||'').trim().toUpperCase()).filter(Boolean))];
+    }
+    return [];
+  }
+
+  function notificationVisualMarkup_gnral(row){
+    const codes=notificationVisualCodes_gnral(row);
+    if(!codes.length)return '';
+    const catalog=window.EstadosVisuales_gnral;
+    if(catalog&&typeof catalog.renderMany==='function'){
+      const rendered=catalog.renderMany(codes,{empty:'',separator:' '});
+      if(rendered)return rendered;
+    }
+    return codes.map(code=>`<span class="estado-visual-gnral" data-estado-visual="${safeText(code)}"><span data-estado-visual-icon></span></span>`).join(' ');
+  }
+
+  function applyNotificationVisuals_gnral(root){
+    const catalog=window.EstadosVisuales_gnral;
+    if(catalog&&typeof catalog.apply==='function')catalog.apply(root||document);
+  }
+
   async function showNotifications(payload){
     const view = activateViewById('view-placeholder');
     setActiveSide('notifications');
@@ -721,7 +783,11 @@
       }
       view.innerHTML = `<div class="placeholder"><div class="card placeholder-card construction-card"><div class="construction-icon">🔔</div><h1>Notificaciones nuevas</h1><p>Solo aparecen notificaciones que todavía no han sido abiertas.</p><div id="notif-new-list" class="rail-list" style="max-height:60vh;overflow:auto;margin-top:14px"></div></div></div>`;
       const list = document.getElementById('notif-new-list');
-      list.innerHTML = rows.map(n => `<article class="notif-item unread clickable" data-id="${safeText(n.id_notificacion || '')}" data-ref="${safeText(n.id_referencia || '')}" data-action="${safeText(n.accion_notificacion || '')}" data-tipo="${safeText(n.tipo_notificacion || '')}" data-title="${safeText(n.titulo_notificacion || '')}" data-message="${safeText(n.mensaje_notificacion || '')}" data-ruta="${safeText(n.ruta_destino || '')}"><div class="notif-icon">${safeText(n.icono_notificacion || '🔔')}</div><div><div class="notif-title">${safeText(n.titulo_notificacion || 'Notificación')}</div><div class="notif-text">${safeText(n.mensaje_notificacion || '')}</div><div class="notif-time">${new Date(n.fecha_creacion).toLocaleString('es-MX')}</div></div></article>`).join('');
+      list.innerHTML = rows.map(n => {
+        const visual=notificationVisualMarkup_gnral(n);
+        return `<article class="notif-item unread clickable" data-id="${safeText(n.id_notificacion || '')}" data-ref="${safeText(n.id_referencia || '')}" data-action="${safeText(n.accion_notificacion || '')}" data-tipo="${safeText(n.tipo_notificacion || '')}" data-title="${safeText(n.titulo_notificacion || '')}" data-message="${safeText(n.mensaje_notificacion || '')}" data-ruta="${safeText(n.ruta_destino || '')}"><div class="notif-icon">${safeText(n.icono_notificacion || '🔔')}</div><div><div class="notif-title">${visual?visual+' ':''}${safeText(n.titulo_notificacion || 'Notificación')}</div><div class="notif-text">${safeText(n.mensaje_notificacion || '')}</div><div class="notif-time">${new Date(n.fecha_creacion).toLocaleString('es-MX')}</div></div></article>`;
+      }).join('');
+      applyNotificationVisuals_gnral(list);
       list.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', async () => {
         const id = el.dataset.id;
         const ref = el.dataset.ref;
@@ -751,6 +817,7 @@
           window.ManttoRouter.go('detalle', { type:'ticket', id:ruta.split(':').slice(2).join(':') || ref, focus:focusChat ? 'chat' : null });
         }
         else if(ruta === 'soporte-solicitudes' || el.dataset.action === 'ABRIR_SOLICITUD') window.ManttoRouter.go('soporte-solicitudes', { id: ref });
+        else if(ruta && document.getElementById('view-' + ruta)) window.ManttoRouter.go(ruta, { id: ref });
         else window.ManttoRouter.go('home');
       }));
     }catch(error){
@@ -846,8 +913,13 @@
     if(route==='instalaciones-carpetas' && showInstalacionesCarpetas_cor()) return;
     if(route==='instalaciones-documentacion' && showInstalacionesDocumentacion_cor()) return;
     if(route==='instalaciones-pmm' && showInstalacionesPmm_cor()) return;
+    if(ALMACEN_ROUTES.has(route) && showAlmacen(route)) return;
     if(route==='logistica-dashboard' && showLogisticaDashboard()) return;
     if(route==='logistica-reporte' && showLogisticaReporte()) return;
+    if(['logistica-produccion','logistica-produccion-nuevo','logistica-produccion-detalle'].includes(route) && showView(route,'Logística · seguimiento de PVO-Producción')){
+      if(window.ManttoLogisticaProduccion) window.ManttoLogisticaProduccion.init(route,currentPayload||null);
+      return;
+    }
     if(route==='soporte-solicitudes' && showSoporteSolicitudes()) return;
     if(route==='usuarios' && showUsuarios()) return;
     if(route==='panel-control' && showPanelControl()) return;
@@ -896,6 +968,28 @@
     activateViewById('view-home');
     setActiveSide('home');
     updateContext('home', 'Home operativo · datos reales desde Aiven cuando existan registros');
+    const authenticated = !window.ManttoAuth || Boolean(window.ManttoAuth.getUser && window.ManttoAuth.getUser());
+    if(authenticated && window.ManttoHome && window.ManttoHome.init) window.ManttoHome.init();
+  }
+
+  async function ensureRouteModule(route){
+    if(!window.ManttoModuleLoader || typeof window.ManttoModuleLoader.ensure !== 'function') return true;
+    return window.ManttoModuleLoader.ensure(route || 'home');
+  }
+
+  function showModuleLoadError(route, error){
+    const view = activateViewById('view-' + route) || activateViewById('view-placeholder');
+    if(view){
+      view.innerHTML = '<div class="placeholder"><div class="card placeholder-card construction-card">' +
+        '<div class="construction-icon">⚠️</div>' +
+        '<h1>' + safeText(label(route)) + '</h1>' +
+        '<h2>No fue posible cargar el módulo</h2>' +
+        '<p>Recarga la pantalla. Si el problema continúa, informa a Soporte.</p>' +
+        '<span class="route-chip">' + safeText(error && error.message ? error.message : 'Error de carga') + '</span>' +
+      '</div></div>';
+    }
+    setActiveSide(route);
+    updateContext(route, 'No fue posible cargar los recursos del módulo');
   }
 
   function render(route, payload){
@@ -905,12 +999,13 @@
     return showPlaceholder(route, payload);
   }
 
-  function internalGo(route, payload, opts){
+  async function internalGo(route, payload, opts){
     const options = opts || {};
     const navigationType = options.navigationType || 'forward';
-    const nextRoute = route || 'home';
+    const nextRoute = canonicalRoute(route);
     const nextPayload = payload || null;
     const same = currentRoute === nextRoute && payloadKey(currentPayload) === payloadKey(nextPayload);
+    const sequence = ++navigationSequence;
 
     if(!options.replace && !options.skipHistory && currentRoute && !same){
       const previousContext = captureContext(currentRoute, currentPayload);
@@ -921,57 +1016,85 @@
 
     currentRoute = nextRoute;
     currentPayload = nextPayload;
-    render(currentRoute, currentPayload);
     saveCurrentRoute();
+    syncBrowserHistory(currentRoute, currentPayload, !!options.replace, 0);
+
+    try{
+      await ensureRouteModule(currentRoute);
+    }catch(error){
+      if(sequence === navigationSequence) showModuleLoadError(currentRoute, error);
+      return false;
+    }
+    if(sequence !== navigationSequence) return false;
+
+    render(currentRoute, currentPayload);
 
     if(navigationType === 'back' && options.context) restoreContext(options.context);
     else window.setTimeout(resetScroll,0);
 
-    syncBrowserHistory(currentRoute, currentPayload, !!options.replace, 0);
     document.dispatchEvent(new CustomEvent('mantto:navigation',{ detail:{ type:navigationType, route:currentRoute, payload:currentPayload } }));
+    return true;
   }
 
-  function internalBack(opts){
+  async function internalBack(opts){
     const options = opts || {};
     const previous = historyStack.pop();
+    const sequence = ++navigationSequence;
+    let context = null;
     if(previous){
-      currentRoute = previous.route;
+      currentRoute = canonicalRoute(previous.route);
       currentPayload = previous.payload || null;
-      render(currentRoute, currentPayload);
-      saveCurrentRoute();
-      restoreContext(previous.context);
+      context = previous.context || null;
     } else if(currentRoute !== 'home') {
       currentRoute = 'home';
       currentPayload = null;
-      render('home', null);
-      saveCurrentRoute();
-      window.setTimeout(resetScroll,0);
-    } else {
-      render('home', null);
-      window.setTimeout(resetScroll,0);
     }
+    saveCurrentRoute();
     if(!options.fromBrowser) syncBrowserHistory(currentRoute, currentPayload, true, 0);
+
+    try{
+      await ensureRouteModule(currentRoute);
+    }catch(error){
+      if(sequence === navigationSequence) showModuleLoadError(currentRoute, error);
+      return false;
+    }
+    if(sequence !== navigationSequence) return false;
+
+    render(currentRoute, currentPayload);
+    if(context) restoreContext(context);
+    else window.setTimeout(resetScroll,0);
     document.dispatchEvent(new CustomEvent('mantto:navigation',{ detail:{ type:'back', route:currentRoute, payload:currentPayload } }));
+    return true;
   }
 
   window.addEventListener('popstate', function(ev){
     browserNavActive = true;
-    try{
-      const state = ev.state;
-      if(state && state.mantto){
-        currentRoute = state.route || 'home';
-        currentPayload = state.payload || null;
-        render(currentRoute, currentPayload);
-        saveCurrentRoute();
-        if(state.context) restoreContext(state.context);
-        else window.setTimeout(resetScroll,0);
-        document.dispatchEvent(new CustomEvent('mantto:navigation',{ detail:{ type:'back', route:currentRoute, payload:currentPayload } }));
-      } else {
-        internalBack({fromBrowser:true});
+    (async function(){
+      try{
+        const state = ev.state;
+        if(state && state.mantto){
+          const sequence = ++navigationSequence;
+          currentRoute = canonicalRoute(state.route);
+          currentPayload = state.payload || null;
+          saveCurrentRoute();
+          try{
+            await ensureRouteModule(currentRoute);
+          }catch(error){
+            if(sequence === navigationSequence) showModuleLoadError(currentRoute, error);
+            return;
+          }
+          if(sequence !== navigationSequence) return;
+          render(currentRoute, currentPayload);
+          if(state.context) restoreContext(state.context);
+          else window.setTimeout(resetScroll,0);
+          document.dispatchEvent(new CustomEvent('mantto:navigation',{ detail:{ type:'back', route:currentRoute, payload:currentPayload } }));
+        } else {
+          await internalBack({fromBrowser:true});
+        }
+      } finally {
+        browserNavActive = false;
       }
-    } finally {
-      browserNavActive = false;
-    }
+    })();
   });
 
   function isCommentNotification(target){
@@ -1029,16 +1152,16 @@
   }
 
   window.ManttoRouter = {
-    go(route, payload, opts){ internalGo(route, payload, opts); },
-    open(route, payload){ internalGo(route, payload, { navigationType:'open' }); },
-    back(){ internalBack(); },
+    go(route, payload, opts){ return internalGo(route, payload, opts); },
+    open(route, payload){ return internalGo(route, payload, { navigationType:'open' }); },
+    back(){ return internalBack(); },
     openTarget(target){
       const destination = normalizeOpenTarget(target);
       this.go(destination.route, destination.payload);
     },
     getHistory(){ return historyStack.slice(); },
     getCurrent(){ return { route: currentRoute, payload: currentPayload }; },
-    reset(){ historyStack.length = 0; internalGo('home', null, {replace:true,navigationType:'open',skipHistory:true}); }
+    reset(){ historyStack.length = 0; return internalGo('home', null, {replace:true,navigationType:'open',skipHistory:true}); }
   };
 
   function restoreInitialRoute(){
@@ -1051,8 +1174,9 @@
       const sameDetail = hashRoute.route !== 'detalle' || (hashRoute.payload && stored.payload && String(hashRoute.payload.type||'')===String(stored.payload.type||'') && String(hashRoute.payload.id||'')===String(stored.payload.id||''));
       if(sameDetail) target = { route:hashRoute.route, payload:Object.assign({}, stored.payload || {}, hashRoute.payload || {}) };
     }
-    internalGo(target.route || 'home', target.payload || null, { replace:true, skipHistory:true, navigationType:'refresh' });
-    updateBackButton();
+    const task = internalGo(target.route || 'home', target.payload || null, { replace:true, skipHistory:true, navigationType:'refresh' });
+    Promise.resolve(task).finally(updateBackButton);
+    return task;
   }
 
   document.addEventListener('DOMContentLoaded', function(){

@@ -40,12 +40,12 @@ function instalacionesGuard(permissionCodesAny) {
   });
 }
 
+router.post('/sync', requireInsFlIntegration, insFlController.syncInsFl);
+
 const PROJECT_DETAIL_PHOTO_ACCESS = Object.freeze([
   'INSTALACIONES_PROYECTOS_TABLA_ACTIVOS_REGISTROS.ABRIR_DETALLE',
   'INSTALACIONES_PROYECTOS_TABLA_ACTIVOS_REGISTROS.VER'
 ]);
-
-router.post('/sync', requireInsFlIntegration, insFlController.syncInsFl);
 
 router.get('/', ...instalacionesGuard('INSTALACIONES_PROYECTOS_TABLA_ACTIVOS_REGISTROS.VER'), insFlReadController.getInsFl_cor);
 router.get('/proyectos', ...instalacionesGuard('INSTALACIONES_PROYECTOS_TABLA_ACTIVOS_REGISTROS.VER'), insFlReadController.getInsFlProjects_cor);

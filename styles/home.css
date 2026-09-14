@@ -65,3 +65,218 @@
   .home-file-actions{grid-column:1 / -1;justify-content:flex-start}
   .home-file-actions button{flex:1}
 }
+
+/* FIX Tareas - alcance Proyecto/Equipo por razon social v001 */
+/* El backend devuelve una sola razon social salvo cuando existen ambas llaves maestras. */
+#task-company option[value=""]{display:none}
+#task-company:not(:has(option:nth-of-type(3))){
+  pointer-events:none;
+  background:#F8FAFC;
+  color:var(--muted);
+  cursor:default;
+}
+.task-form label:has(> #task-company option:nth-of-type(3))::after{
+  content:"Tienes acceso a ambas razones sociales. Selecciona la empresa para consultar los proyectos disponibles correspondientes a esa razón social.";
+  color:var(--muted);
+  font-size:11px;
+  font-weight:650;
+  line-height:1.35;
+  margin-top:1px;
+}
+
+/* Home tareas v1.0 - editor de texto enriquecido */
+.task-rich-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.task-rich-label{color:var(--navy);font-size:12px;font-weight:850}
+.task-rich-editor{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:#fff;transition:border-color .15s,box-shadow .15s}
+.task-rich-editor:focus-within{border-color:#7aa2f7;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.task-rich-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--line);background:#F8FAFC}
+.task-rich-toolbar-group{display:flex;align-items:center;gap:3px;padding-right:6px;border-right:1px solid var(--line)}
+.task-rich-toolbar button,.task-rich-select select,.task-rich-color{height:32px;box-sizing:border-box;border:1px solid #D8E0EB;border-radius:8px;background:#fff;color:var(--navy);font:inherit;font-size:11px;font-weight:800}
+.task-rich-toolbar button{min-width:32px;padding:0 8px;cursor:pointer}
+.task-rich-toolbar button:hover,.task-rich-toolbar button.active{border-color:#93B4F7;background:#EAF1FF;color:#174EA6}
+.task-rich-toolbar button:focus-visible,.task-rich-select select:focus-visible,.task-rich-color:focus-within{outline:2px solid #2563EB;outline-offset:1px}
+.task-rich-select select{padding:0 26px 0 9px;cursor:pointer}
+.task-rich-colors{gap:5px}
+.task-rich-color{position:relative;display:inline-flex;align-items:center;justify-content:center;width:34px;cursor:pointer}
+.task-rich-color span{font-size:14px;font-weight:900;line-height:1;border-bottom:3px solid #1F2937}
+.task-rich-color.is-highlight span{padding:2px 3px;background:#FEF08A;border-bottom:0}
+.task-rich-color input{position:absolute;inset:0;width:100%;height:100%;padding:0!important;border:0!important;opacity:0;cursor:pointer}
+.task-rich-clear{white-space:nowrap}
+.task-rich-input{min-height:132px;max-height:320px;overflow:auto;padding:12px;color:var(--text);font-size:14px;font-weight:400;line-height:1.5;outline:none;white-space:normal;overflow-wrap:anywhere}
+.task-rich-input:empty::before{content:attr(data-placeholder);color:#98A2B3;pointer-events:none}
+.task-rich-input p,.task-rich-content p{margin:0 0 8px}
+.task-rich-input p:last-child,.task-rich-content p:last-child{margin-bottom:0}
+.task-rich-input ul,.task-rich-input ol,.task-rich-content ul,.task-rich-content ol{margin:7px 0;padding-left:24px}
+.task-rich-input li,.task-rich-content li{margin:3px 0}
+.task-rich-help{color:var(--muted);font-size:11px;font-weight:650;line-height:1.35}
+.task-rich-content{color:var(--text);font-size:14px;font-weight:400;line-height:1.5;overflow-wrap:anywhere}
+.task-rich-content span[style*="background-color"]{padding:1px 2px;border-radius:2px}
+.task-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:pre-line}
+@media(max-width:760px){
+  .task-rich-toolbar{align-items:stretch}
+  .task-rich-toolbar-group{padding-right:4px}
+  .task-rich-toolbar button{min-width:36px}
+  .task-rich-clear{flex:1}
+  .task-rich-input{min-height:150px;max-height:42vh}
+}
+
+/* [Aster | 2026-08-27 | ASTER-MG | FIX_NOTIFICACIONES_POPOVER_WRAP_FECHA_V001] */
+/* Evita que el white-space:nowrap de .hdr-right se herede al popover. */
+.hdr-notif-popover{white-space:normal}
+.hdr-notif-list{overflow-x:hidden}
+.hdr-notif-row{
+  grid-template-columns:32px minmax(0,1fr);
+  min-width:0;
+  overflow:hidden;
+  white-space:normal;
+}
+.hdr-notif-row>b,.hdr-notif-row>small,.hdr-notif-row>em{
+  min-width:0;
+  max-width:100%;
+}
+.hdr-notif-row>b,.hdr-notif-row>small{
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.hdr-notif-row>em{
+  white-space:nowrap;
+  overflow:visible;
+  text-overflow:clip;
+}
+/* BEGIN FIX_NOTIFICACIONES_POPOVER_V002
+   [Aster | 2026-08-31 | ASTER-MG]
+   Popover global de notificaciones: las tarjetas conservan altura natural.
+   La lista hace scroll; las filas NO son flex-items y no pueden comprimirse.
+   Selectores con ID + !important para aislar el componente de CSS lazy de otros modulos.
+*/
+#hdr-notif-popover.hdr-notif-popover{
+  box-sizing:border-box!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:min(440px,calc(100vh - 92px))!important;
+  overflow:hidden!important;
+  white-space:normal!important;
+}
+
+#hdr-notif-popover .hdr-notif-list{
+  box-sizing:border-box!important;
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:min(360px,calc(100vh - 152px))!important;
+  padding:8px!important;
+  margin:0!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior:contain!important;
+  white-space:normal!important;
+}
+
+#hdr-notif-popover .hdr-notif-row{
+  box-sizing:border-box!important;
+  display:grid!important;
+  grid-template-columns:32px minmax(0,1fr)!important;
+  grid-template-rows:auto auto auto!important;
+  column-gap:8px!important;
+  row-gap:3px!important;
+  align-items:start!important;
+  align-content:start!important;
+  width:100%!important;
+  min-width:0!important;
+  height:auto!important;
+  min-height:76px!important;
+  max-height:none!important;
+  margin:0 0 8px 0!important;
+  padding:10px!important;
+  flex:none!important;
+  flex-shrink:0!important;
+  overflow:visible!important;
+  white-space:normal!important;
+  line-height:normal!important;
+  text-overflow:clip!important;
+}
+
+#hdr-notif-popover .hdr-notif-row:last-child{
+  margin-bottom:0!important;
+}
+
+#hdr-notif-popover .hdr-notif-row>span{
+  box-sizing:border-box!important;
+  display:flex!important;
+  position:static!important;
+  grid-column:1!important;
+  grid-row:1 / span 3!important;
+  align-self:start!important;
+  justify-self:start!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:32px!important;
+  min-width:32px!important;
+  max-width:32px!important;
+  height:32px!important;
+  min-height:32px!important;
+  max-height:32px!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+
+#hdr-notif-popover .hdr-notif-row>b,
+#hdr-notif-popover .hdr-notif-row>small,
+#hdr-notif-popover .hdr-notif-row>em{
+  box-sizing:border-box!important;
+  display:block!important;
+  position:static!important;
+  grid-column:2!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+  opacity:1!important;
+  visibility:visible!important;
+}
+
+#hdr-notif-popover .hdr-notif-row>b{
+  grid-row:1!important;
+  font-size:12px!important;
+  line-height:1.25!important;
+}
+
+#hdr-notif-popover .hdr-notif-row>small{
+  grid-row:2!important;
+  font-size:11px!important;
+  line-height:1.35!important;
+}
+
+#hdr-notif-popover .hdr-notif-row>em{
+  grid-row:3!important;
+  font-size:10px!important;
+  line-height:1.25!important;
+  white-space:nowrap!important;
+}
+
+@media(max-width:760px){
+  #hdr-notif-popover.hdr-notif-popover{
+    max-height:calc(100vh - 76px)!important;
+  }
+  #hdr-notif-popover .hdr-notif-list{
+    max-height:calc(100vh - 136px)!important;
+  }
+  #hdr-notif-popover .hdr-notif-row{
+    min-height:76px!important;
+  }
+}
+/* END FIX_NOTIFICACIONES_POPOVER_V002 */
