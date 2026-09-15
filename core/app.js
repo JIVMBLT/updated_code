@@ -491,8 +491,30 @@
   }
 
   document.addEventListener('DOMContentLoaded',()=>{
-    if(window.ManttoAuth) window.ManttoAuth.init();
-    else initAfterAuth();
+    // [CLAUDE | 2026-09-14 | fix] Reparación interna del LAB — no es una integración numerada, sin MD asociado.
+    // Antes se leia window.ManttoAuth de forma sincrona: si core/config.js
+    // tomaba su camino de carga diferido, ManttoAuth todavia no existia en
+    // este instante y la app quedaba con la pantalla "Validando sesion..."
+    // fija (nada mas la oculta). Ahora se espera siempre
+    // window.ManttoAuthReady (publicada por core/auth.js), que resuelve
+    // cuando el arranque LAB realmente terminó, sin importar qué camino
+    // tomó config.js. El catch es una salvaguarda: si el arranque LAB
+    // falla de verdad, igual se oculta la pantalla y se deja usar la app
+    // en vez de congelarla en silencio.
+    const authReady = (window.ManttoAuthReady && typeof window.ManttoAuthReady.then === 'function')
+      ? window.ManttoAuthReady
+      : Promise.resolve(window.ManttoAuth || null);
+    authReady
+      .then(auth => {
+        if(auth && typeof auth.init === 'function') auth.init();
+        else initAfterAuth();
+      })
+      .catch(error => {
+        console.error('No fue posible inicializar la validación de sesión LAB.', error);
+        const bootScreen = document.getElementById('auth-bootstrap-screen');
+        if(bootScreen) bootScreen.classList.add('hidden');
+        initAfterAuth();
+      });
   });
 
   document.addEventListener('mantto:auth-ready',()=>{
