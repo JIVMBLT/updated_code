@@ -188,8 +188,33 @@
     return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;
   }
 
+  // [CLAUDE | 2026-09-15 | fix] Reparación interna del LAB — no es una integración numerada, sin MD asociado.
+  // En el camino sincrono (document.write), Promise.resolve().then(cb) corre
+  // cb como microtarea justo al terminar este script — es decir, ANTES de
+  // que el parser llegue a procesar los <script> recien insertados por
+  // document.write. En ese instante global.ManttoLabPhase10Ready todavia no
+  // existe, el "if" de abajo se salta, y ManttoLabCoreReady se resolvia con
+  // null casi de inmediato, mucho antes de que lab-auth.js (el ultimo
+  // dependency) llegara a ejecutarse. Fix: esperar con polling a que
+  // ManttoLabPhase10Ready exista de verdad antes de resolver, sin asumir
+  // nada sobre el orden microtarea/parser.
+  function waitForPhase10Ready(){
+    return new Promise((resolve,reject)=>{
+      if(global.ManttoLabPhase10Ready)return resolve();
+      const start=Date.now();
+      (function poll(){
+        if(global.ManttoLabPhase10Ready)return resolve();
+        if(Date.now()-start>20000)return reject(new Error('LAB_BOOTSTRAP_TIMEOUT_PHASE10_READY'));
+        setTimeout(poll,15);
+      })();
+    }).then(async()=>{
+      await global.ManttoLabPhase10Ready;
+      return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;
+    });
+  }
+
   const synchronous=parserBootstrap();
   global.ManttoLabCoreReady=synchronous
-    ?Promise.resolve().then(async()=>{if(global.ManttoLabPhase10Ready)await global.ManttoLabPhase10Ready;return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;})
+    ?waitForPhase10Ready()
     :deferredBootstrap();
 })(typeof window!=='undefined'?window:globalThis);
