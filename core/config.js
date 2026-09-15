@@ -171,7 +171,7 @@
     if(!missing.length)return true;
     if(typeof document==='undefined'||document.readyState!=='loading')return false;
     ensureParserStyles();
-    missing.forEach(src=>document.write('<script src="'+src+'?v='+version+'"><\\/script>'));
+    missing.forEach(src=>document.write('<script src="'+src+'?v='+version+'"></script>'));
     return true;
   }
   async function deferredBootstrap(){

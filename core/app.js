@@ -510,10 +510,17 @@
         else initAfterAuth();
       })
       .catch(error => {
-        console.error('No fue posible inicializar la validación de sesión LAB.', error);
+        // [CLAUDE | 2026-09-15 | fix] Si el arranque LAB falla de verdad (no
+        // una carrera), ya NO se continua a initAfterAuth(): eso dejaba la
+        // app "usable" por encima de un backend LAB roto, generando errores
+        // secundarios confusos (ej. "Transporte LAB no disponible") en vez
+        // de un mensaje claro. Ahora se detiene aqui con un estado de error
+        // visible sobre la misma pantalla de arranque.
+        console.error('Arranque LAB fallido: no fue posible inicializar la validación de sesión.', error);
         const bootScreen = document.getElementById('auth-bootstrap-screen');
-        if(bootScreen) bootScreen.classList.add('hidden');
-        initAfterAuth();
+        if(bootScreen){
+          bootScreen.innerHTML = '<div class="auth-bootstrap-card" style="flex-direction:column;align-items:flex-start;gap:6px;max-width:360px"><strong>No se pudo iniciar el Laboratorio.</strong><span style="font-weight:400;font-size:13px">El arranque del backend LAB falló (' + (error && error.message ? error.message : 'error desconocido') + '). Recarga la página; si persiste, revisa la consola del navegador.</span></div>';
+        }
       });
   });
 

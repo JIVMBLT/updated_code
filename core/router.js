@@ -1180,6 +1180,14 @@
   }
 
   document.addEventListener('DOMContentLoaded', function(){
+    // [CLAUDE | 2026-09-15 | fix] En modo LAB, window.ManttoAuth nunca existe
+    // todavia en este instante (el arranque LAB es asincrono), asi que la
+    // rama de abajo (!window.ManttoAuth) siempre ganaba y restauraba la ruta
+    // casi de inmediato, mucho antes de que existiera window.ManttoLabTransport
+    // -> Home fallaba con "Transporte LAB no disponible". En LAB, la
+    // restauracion ahora ocurre EXCLUSIVAMENTE via el listener de
+    // 'mantto:auth-ready' de abajo, que ya espera al arranque LAB completo.
+    if(window.MANTTO_LAB_MODE) return;
     if(!window.ManttoAuth) window.setTimeout(restoreInitialRoute, 0);
     else window.setTimeout(function(){ if(!initialRouteRestored) restoreInitialRoute(); }, 800);
   });
