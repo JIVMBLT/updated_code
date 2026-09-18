@@ -1,0 +1,34 @@
+.inf-page{display:flex;flex-direction:column;gap:16px;padding:4px 2px 24px}
+.inf-card{background:#fff;border:1px solid rgba(13,46,110,.14);border-radius:12px;padding:16px}
+.inf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.inf-head h1{margin:0;color:#0D2E6E;font-size:20px}
+.inf-head p{margin:4px 0 0;color:#64748B;font-size:13px}
+.inf-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px}
+.inf-filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#475569;font-weight:700}
+.inf-filters select,.inf-filters input{border:1px solid #CBD5E1;border-radius:8px;padding:7px 9px;font-size:13px}
+.inf-filters select[multiple]{min-height:88px}
+.inf-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center}
+.inf-btn{border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:800;cursor:pointer}
+.inf-btn-primary{background:#0D2E6E;color:#fff}
+.inf-btn-soft{background:#EFF6FF;color:#0D2E6E}
+.inf-btn:disabled{opacity:.6;cursor:wait}
+.inf-scope-banner{font-size:12px;color:#1B4FD8;background:#EFF6FF;border-radius:8px;padding:8px 12px}
+.inf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.inf-metric-label{font-size:12px;color:#64748B;margin:0 0 6px}
+.inf-metric-value{font-size:26px;font-weight:800;color:#0D2E6E;margin:0}
+.inf-metric-sub{font-size:11px;color:#94A3B8;margin:4px 0 0}
+.inf-bar-row{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;font-size:12.5px}
+.inf-bar-row .inf-bar-labels{display:flex;justify-content:space-between}
+.inf-bar-track{background:#F1F5F9;border-radius:4px;height:6px;overflow:hidden}
+.inf-bar-fill{height:6px;border-radius:4px}
+.inf-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px}
+.inf-badge-danger{background:#FEE2E2;color:#991B1B}
+.inf-badge-ok{background:#DCFCE7;color:#166534}
+.inf-mtbc-toggle{display:flex;gap:6px;margin-bottom:8px}
+.inf-mtbc-toggle button{border:1px solid #CBD5E1;background:#fff;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer}
+.inf-mtbc-toggle button.active{background:#0D2E6E;color:#fff;border-color:#0D2E6E}
+.inf-list-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F1F5F9;font-size:12.5px}
+.inf-list-row:last-child{border-bottom:none}
+.inf-empty{color:#94A3B8;font-size:12.5px;padding:8px 0}
+.inf-status{padding:16px;color:#64748B;font-size:13px}
+@media(max-width:720px){.inf-filters{grid-template-columns:1fr}}

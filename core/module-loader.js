@@ -16,7 +16,7 @@
   // si DataSync no la marco dirty. Formularios/detalles transaccionales quedan fuera.
   const INIT_ARM_TTL_MS = 5000;
   const PERSISTENT_DATA_ROUTES = new Set([
-    'home','resumen','criticos','portafolio','proyectos','seguimiento-especial','callcenter','operativo','movimientos',
+    'home','resumen','criticos','portafolio','proyectos','seguimiento-especial','callcenter','operativo','informes','movimientos',
     'logistica-dashboard','logistica-reporte','logistica-produccion','logistica-pvo','logistica-documentos',
     'instalaciones-dashboard','instalaciones-proyectos','instalaciones-cerrados',
     'instalaciones-concentrado-cliente','instalaciones-reporte','instalaciones-ajuste',
@@ -189,6 +189,8 @@
   const ROUTES = Object.freeze({
     resumen:{css:['./modules/resumen-dia/resumen-dia.css?v=20260716-v117'],js:['./modules/resumen-dia/resumen-dia.js?v=20260814-project-name-v010']},
     criticos:{css:['./modules/equipos-criticos/equipos-criticos.css?v=20260717-fix5'],js:['./modules/equipos-criticos/equipos-criticos.js?v=20260821-pdf-emojis-v001']},
+    // [Claude | 2026-09-17 | CLAUDE-MG | LAB DGB - TRASLADO INFORMES V001]
+    informes:{css:['./modules/operacion-informes/operacion-informes.css?v=20260917-lab-informes-v001'],js:['./modules/operacion-informes/operacion-informes.js?v=20260917-lab-informes-v001']},
     portafolio:{css:['./modules/portafolio/portafolio.css?v=20260817-lote-cobranza-uni-v001'],js:['./modules/portafolio/portafolio.js?v=20260817-lote-cobranza-uni-v001']},
     detalle:{css:[],js:[SEGUIMIENTO_ESPECIAL_GLOBAL_JS]},
     'seguimiento-especial':{css:['./modules/seguimiento-especial/seguimiento-especial.css?v=20260908-seguimiento-especial-v002'],js:[SEGUIMIENTO_ESPECIAL_GLOBAL_JS,'./modules/seguimiento-especial/seguimiento-especial.js?v=20260909-seguimiento-especial-cierre-v003']},

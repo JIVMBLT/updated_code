@@ -16,6 +16,8 @@
   const CRIT_EQ_TICKETS=Object.freeze(['OPERACION_EQUIPOS_CRITICOS_EQUIPOS_CRITICOS_EQUIPOS_CRITICOS.VER_TICKETS']);
   const CRIT_PRO=Object.freeze(['OPERACION_EQUIPOS_CRITICOS_PROYECTOS_CRITICOS_PROYECTOS_CRITICOS.VER']);
   const CRIT_PRO_TICKETS=Object.freeze(['OPERACION_EQUIPOS_CRITICOS_PROYECTOS_CRITICOS_PROYECTOS_CRITICOS.VER_TICKETS']);
+  // [Claude | 2026-09-17 | CLAUDE-MG | LAB DGB - TRASLADO INFORMES V001]
+  const INFORMES=Object.freeze(['OPERACION_INFORMES_INFORMES_INFORMES.VER']);
   const PORT_DASH=Object.freeze(['PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER']);
   const PORT_DETAIL=Object.freeze(['PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.ABRIR_DETALLE','PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER_EQUIPO','PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER_PROYECTO','PORTAFOLIO_PROYECTOS_DE_MANTENIMIENTO_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','OPERACION_RESUMEN_DEL_DIA_TICKET_PERIODO_TICKETS_DEL_PERIODO.VER_EQUIPO','OPERACION_RESUMEN_DEL_DIA_TICKET_PERIODO_TICKETS_DEL_PERIODO.VER_PROYECTO','OPERACION_DASHBOARD_CALL_CENTER_TABLA_EQUIPOS_EQUIPOS_CON_MAS_LLAMADAS_DEL_PERIODO.VER_EQUIPO','OPERACION_DASHBOARD_CALL_CENTER_TABLA_PROYECTOS_PROYECTOS_CON_MAS_LLAMADAS_DEL_PERIODO.VER_PROYECTO','OPERACION_EQUIPOS_CRITICOS_EQUIPOS_CRITICOS_EQUIPOS_CRITICOS.VER_EQUIPO','OPERACION_EQUIPOS_CRITICOS_PROYECTOS_CRITICOS_PROYECTOS_CRITICOS.VER_PROYECTO','RESUMEN_DIA_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','EQUIPOS_CRITICOS_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','DASHBOARD_CALL_CENTER_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','PROYECTOS_CRITICOS_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL']);
   const PROJECT_READ=Object.freeze(['PORTAFOLIO_PROYECTOS_DE_MANTENIMIENTO_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','PORTAFOLIO_DASHBOARD_PORTAFOLIO_TABLA_PROYECTOS_PORTAFOLIO_TABLA_PORTAFOLIO.VER_PROYECTO','OPERACION_RESUMEN_DEL_DIA_TICKET_PERIODO_TICKETS_DEL_PERIODO.VER_PROYECTO','OPERACION_DASHBOARD_CALL_CENTER_TABLA_PROYECTOS_PROYECTOS_CON_MAS_LLAMADAS_DEL_PERIODO.VER_PROYECTO','OPERACION_EQUIPOS_CRITICOS_PROYECTOS_CRITICOS_PROYECTOS_CRITICOS.VER_PROYECTO','RESUMEN_DIA_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','PROYECTOS_CRITICOS_EXP_ACCESO_VISUAL_MODULO.ACCESO_VISUAL']);
@@ -28,7 +30,7 @@
   const REVERT='OPERACION_DASHBOARD_OPERATIVO_KPI_VALIDADOS.REVERTIR_VO_BO';
 
   function services(){
-    const result={op:root?.ManttoLabOperationService,crit:root?.ManttoLabCriticalsService,pf:root?.ManttoLabPortfolioService,mov:root?.ManttoLabMovementsService,tickets:root?.ManttoLabTicketsService,follow:root?.ManttoLabFollowupService,permissions:root?.ManttoLabPermissionsService,scope:root?.ManttoLabScopeService};
+    const result={op:root?.ManttoLabOperationService,crit:root?.ManttoLabCriticalsService,inf:root?.ManttoLabInformesService,pf:root?.ManttoLabPortfolioService,mov:root?.ManttoLabMovementsService,tickets:root?.ManttoLabTicketsService,follow:root?.ManttoLabFollowupService,permissions:root?.ManttoLabPermissionsService,scope:root?.ManttoLabScopeService};
     if(Object.values(result).some(value=>!value))throw new Error('MANTTO_LAB_PHASE7_SERVICES_REQUIRED');return result;
   }
   function actor(req){return req.actorUser||req.context?.actorUser||req.user||null;}
@@ -73,6 +75,10 @@
     router.get('/api/callcenter/u365/equipos',requireAuth,gate(['OPERACION_DASHBOARD_CALL_CENTER_U365D_LLAMADAS_U365D_EQUIPO.VER']),(req,res)=>res.json(services().crit.u365Equipos(effective(req).id_SB,req.query,req.db)));
     router.get('/api/callcenter/u365/proyectos',requireAuth,gate(['OPERACION_DASHBOARD_CALL_CENTER_U365D_LLAMADAS_U365D_PROYECTO.VER']),(req,res)=>res.json(services().crit.u365Proyectos(effective(req).id_SB,req.query,req.db)));
     router.get('/api/criticidad-corporativa',requireAuth,gate([...CRIT_EQ,...CRIT_PRO]),(req,res)=>res.json(services().crit.criticidadCorporativa(effective(req).id_SB,req.db)));
+
+    // [Claude | 2026-09-17 | CLAUDE-MG | LAB DGB - TRASLADO INFORMES V001]
+    router.get('/api/informes/opciones',requireAuth,gate(INFORMES),(req,res)=>res.json(services().inf.getOpciones(effective(req).id_SB,req.db)));
+    router.get('/api/informes/generar',requireAuth,gate(INFORMES),(req,res)=>res.json(services().inf.generarInforme(effective(req).id_SB,req.query,req.db)));
 
     router.get('/api/portafolio/dashboard/inicial',requireAuth,gate(PORT_DASH),(req,res)=>res.json(services().pf.dashboardInitial(effective(req).id_SB,req.query,req.db)));
     router.get('/api/portafolio/dashboard',requireAuth,gate(PORT_DASH),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().pf.dashboard(effective(req).id_SB,req.query,req.db)}));

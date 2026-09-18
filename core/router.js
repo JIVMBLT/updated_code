@@ -281,6 +281,18 @@
   }
 
 
+  // [Claude | 2026-09-17 | CLAUDE-MG | LAB DGB - TRASLADO INFORMES V001]
+  function showInformes(){
+    const view=document.getElementById('view-informes');
+    if(!view) return false;
+    activateViewById('view-informes');
+    setActiveSide('informes');
+    updateContext('informes','Informes ejecutivos de mantenimiento · alcance combinado portafolio + tickets (LAB SQLite)');
+    if(window.ManttoOperacionInformes) window.ManttoOperacionInformes.init();
+    return true;
+  }
+
+
   function showPortafolio(){
     const view=document.getElementById('view-portafolio');
     if(!view) return false;
@@ -880,6 +892,7 @@
     if(COBRANZA_ROUTES_UNI.has(route) && showCobranza_uni(route)) return;
     if(route==='resumen' && showResumen()) return;
     if(route==='criticos' && showCriticos()) return;
+    if(route==='informes' && showInformes()) return;
     if(route==='portafolio' && showPortafolio()) return;
     if(route==='proyectos' && showProyectos()) return;
     if(route==='callcenter' && showCallCenter()) return;
