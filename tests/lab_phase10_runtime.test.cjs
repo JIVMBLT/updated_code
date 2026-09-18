@@ -42,7 +42,7 @@ const read=f=>fs.readFileSync(path.join(ROOT,f),'utf8');
  const diag=require(path.join(ROOT,'lab/backend/services/lab-diagnostics.service.js'));global.ManttoLabDiagnosticsService=diag;
  assert.equal(diag.isProgrammer({id_SB:910006},db),true);
  assert.equal(diag.isProgrammer({id_SB:910025},db),false);
- const coverage=diag.routeCoverage();assert.equal(coverage.total,288);assert.equal(coverage.byMethod.GET,172);
+ const coverage=diag.routeCoverage();assert.equal(coverage.total,290);assert.equal(coverage.byMethod.GET,174);
  const integrity=await jobs.run('integrity-check',{db});assert.equal(integrity.result.foreignKeyViolations,0);
  const notify=await jobs.run('notifications-refresh',{db,user:{id_SB:910006}});assert.equal(notify.result.nuevas,2);
  const storage=await jobs.run('storage-summary',{db,blobStore});assert.equal(storage.result.blobCount,1);
