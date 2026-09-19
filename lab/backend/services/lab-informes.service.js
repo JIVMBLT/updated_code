@@ -111,6 +111,19 @@
     );
   }
 
+  // [CLAUDE | 2026-09-19 | fix] Extraido de generarInforme para reutilizarlo
+  // en detalleTickets (drill-down): mismo alcance de portafolio (activo,
+  // filtros de usuario) + mismo rango de fechas que produce cada estadistica
+  // de "Actividad del periodo". Nada de logica nueva, solo separado de la
+  // funcion que antes lo calculaba en linea.
+  function ticketsEnAlcance(userId,filters,fechaInicio,fechaFin,db){
+    const portfolioActivo=filteredPortfolio(userId,filters,db,false);
+    const codesActivos=new Set(portfolioActivo.map(r=>txt(r.numero_equipo)));
+    const allTickets=root.ManttoLabOperationService.visibleTickets(userId,db,{from:fechaInicio,to:fechaFin});
+    const ticketsAlcance=allTickets.filter(t=>codesActivos.has(txt(t.codigo_equipo||t.equipo)));
+    return {portfolioActivo,codesActivos,ticketsAlcance};
+  }
+
   // ---------------------------------------------------------------------
   // Opciones de filtro
   // ---------------------------------------------------------------------
@@ -146,9 +159,8 @@
     const fechaFin=/^\d{4}-\d{2}-\d{2}$/.test(txt(q.fecha_fin))?txt(q.fecha_fin):defaultFin;
     const ventana=(upper(q.mtbc_ventana)==='365'||upper(q.mtbc_ventana)==='U365D'||upper(q.mtbc_ventana)==='U365')?'365':'anio';
 
-    const portfolioActivo=filteredPortfolio(uid,filters,db,false);
     const portfolioTotal=filteredPortfolio(uid,filters,db,true);
-    const codesActivos=new Set(portfolioActivo.map(r=>txt(r.numero_equipo)));
+    const {portfolioActivo,codesActivos,ticketsAlcance}=ticketsEnAlcance(uid,filters,fechaInicio,fechaFin,db);
 
     const resumenAlcance={
       equipos_activos:portfolioActivo.length,
@@ -157,9 +169,6 @@
       n_zonas:new Set(portfolioActivo.map(r=>txt(rowZona(r))).filter(Boolean)).size,
       n_estados:new Set(portfolioActivo.map(r=>txt(r.estado)).filter(Boolean)).size
     };
-
-    const allTickets=root.ManttoLabOperationService.visibleTickets(uid,db,{from:fechaInicio,to:fechaFin});
-    const ticketsAlcance=allTickets.filter(t=>codesActivos.has(txt(t.codigo_equipo||t.equipo)));
 
     const abiertos=ticketsAlcance.filter(t=>upper(t.estado_ticket).includes('ABIER')).length;
     const cerrados=ticketsAlcance.filter(t=>upper(t.estado_ticket).includes('CERR')).length;
@@ -261,5 +270,49 @@
     };
   }
 
-  return Object.freeze({getOpciones,generarInforme});
+  // ---------------------------------------------------------------------
+  // Detalle de tickets (drill-down): mismo alcance que generarInforme,
+  // filtrado ademas por el criterio de la tarjeta en la que se hizo clic.
+  // Devuelve las filas crudas de tickets (mismas columnas reales de la
+  // tabla `tickets`) para que el frontend las muestre con las mismas
+  // columnas que Operacion > Resumen del dia > Tickets del periodo.
+  // ---------------------------------------------------------------------
+  function detalleTickets(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const q=query||{};
+    const uid=Number(userId);
+    const filters=filtersFromQuery(q);
+
+    const defaultFin=now().toISOString().slice(0,10);
+    const seisMesesAtras=new Date(now()); seisMesesAtras.setMonth(seisMesesAtras.getMonth()-6);
+    const fechaInicio=/^\d{4}-\d{2}-\d{2}$/.test(txt(q.fecha_inicio))?txt(q.fecha_inicio):seisMesesAtras.toISOString().slice(0,10);
+    const fechaFin=/^\d{4}-\d{2}-\d{2}$/.test(txt(q.fecha_fin))?txt(q.fecha_fin):defaultFin;
+
+    const {ticketsAlcance}=ticketsEnAlcance(uid,filters,fechaInicio,fechaFin,db);
+
+    const criterio=upper(q.criterio||'total');
+    const valor=txt(q.valor);
+    let filas;
+    switch(criterio){
+      case 'ABIERTOS': filas=ticketsAlcance.filter(t=>upper(t.estado_ticket).includes('ABIER')); break;
+      case 'CERRADOS': filas=ticketsAlcance.filter(t=>upper(t.estado_ticket).includes('CERR')); break;
+      case 'EN_CURSO': filas=ticketsAlcance.filter(t=>!upper(t.estado_ticket).includes('ABIER')&&!upper(t.estado_ticket).includes('CERR')); break;
+      case 'RESPONSABILIDAD_BLT': filas=blt(ticketsAlcance); break;
+      case 'RESPONSABILIDAD_CLIENTE': filas=cliente(ticketsAlcance); break;
+      case 'CAUSA_BLT': filas=blt(ticketsAlcance).filter(t=>upper(t.causa_falla)===upper(valor)); break;
+      case 'CAUSA_CLIENTE': filas=cliente(ticketsAlcance).filter(t=>upper(t.causa_falla)===upper(valor)); break;
+      case 'TIPO_EQUIPO': filas=ticketsAlcance.filter(t=>upper(t.tipo_equipo)===upper(valor)); break;
+      case 'TIEMPO_LLEGADA': filas=ticketsAlcance.filter(t=>Number.isFinite(Number(t.tiempo_llegada))); break;
+      case 'TIEMPO_LLEGADA_HABIL': filas=ticketsAlcance.filter(t=>esInhabil(t)===false&&Number.isFinite(Number(t.tiempo_llegada))); break;
+      case 'TIEMPO_LLEGADA_INHABIL': filas=ticketsAlcance.filter(t=>esInhabil(t)===true&&Number.isFinite(Number(t.tiempo_llegada))); break;
+      case 'TIEMPO_SOLUCION': filas=ticketsAlcance.filter(t=>upper(t.estado_ticket).includes('CERR')&&Number.isFinite(Number(t.tiempo_solucion))); break;
+      case 'ATRAPADOS': filas=ticketsAlcance.filter(esAtrapado); break;
+      case 'TOTAL': default: filas=ticketsAlcance; break;
+    }
+    filas=[...filas].sort((a,b)=>String(b.fecha_reporte||'').localeCompare(String(a.fecha_reporte||''))||String(b.h_reporte||'').localeCompare(String(a.h_reporte||'')));
+
+    return {ok:true,source:'lab-sqlite',criterio:criterio.toLowerCase(),valor:valor||null,total:filas.length,tickets:filas};
+  }
+
+  return Object.freeze({getOpciones,generarInforme,detalleTickets});
 });

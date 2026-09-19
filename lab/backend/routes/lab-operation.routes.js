@@ -79,6 +79,7 @@
     // [Claude | 2026-09-17 | CLAUDE-MG | LAB DGB - TRASLADO INFORMES V001]
     router.get('/api/informes/opciones',requireAuth,gate(INFORMES),(req,res)=>res.json(services().inf.getOpciones(effective(req).id_SB,req.db)));
     router.get('/api/informes/generar',requireAuth,gate(INFORMES),(req,res)=>res.json(services().inf.generarInforme(effective(req).id_SB,req.query,req.db)));
+    router.get('/api/informes/detalle',requireAuth,gate(INFORMES),(req,res)=>res.json(services().inf.detalleTickets(effective(req).id_SB,req.query,req.db)));
 
     router.get('/api/portafolio/dashboard/inicial',requireAuth,gate(PORT_DASH),(req,res)=>res.json(services().pf.dashboardInitial(effective(req).id_SB,req.query,req.db)));
     router.get('/api/portafolio/dashboard',requireAuth,gate(PORT_DASH),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().pf.dashboard(effective(req).id_SB,req.query,req.db)}));

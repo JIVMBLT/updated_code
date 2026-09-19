@@ -32,3 +32,39 @@
 .inf-empty{color:#94A3B8;font-size:12.5px;padding:8px 0}
 .inf-status{padding:16px;color:#64748B;font-size:13px}
 @media(max-width:720px){.inf-filters{grid-template-columns:1fr}}
+
+/* [Claude | 2026-09-19 | CLAUDE-MG | LAB DGB - INFORMES FILTROS BUSCABLES + DRILL-DOWN V001] */
+.inf-combo{position:relative;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.inf-combo-label{color:#475569;font-weight:700}
+.inf-combo-trigger{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1px solid #CBD5E1;border-radius:8px;padding:7px 9px;font-size:13px;background:#fff;color:#0D2E6E;cursor:pointer;text-align:left}
+.inf-combo-trigger:hover{border-color:#1B4FD8}
+.inf-combo-caret{color:#94A3B8;font-size:10px}
+.inf-combo-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:40;background:#fff;border:1px solid #CBD5E1;border-radius:10px;box-shadow:0 12px 28px rgba(13,46,110,.16);padding:8px;display:flex;flex-direction:column;gap:6px}
+.inf-combo-search{border:1px solid #CBD5E1;border-radius:6px;padding:6px 8px;font-size:12.5px}
+.inf-combo-actions{display:flex;gap:6px}
+.inf-combo-actions button{flex:1;border:1px solid #CBD5E1;background:#EFF6FF;color:#0D2E6E;border-radius:6px;padding:4px 6px;font-size:11px;font-weight:700;cursor:pointer}
+.inf-combo-options{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.inf-combo-option{display:flex;align-items:center;gap:7px;padding:5px 4px;border-radius:6px;font-size:12.5px;color:#334155;cursor:pointer}
+.inf-combo-option:hover{background:#F1F5F9}
+.inf-combo-option input{margin:0}
+.inf-combo-empty{color:#94A3B8;font-size:12px;padding:6px 4px}
+
+.inf-drill{all:unset;cursor:pointer;display:block;width:100%;box-sizing:border-box}
+.inf-drill:hover{background:#F8FAFC;border-radius:8px}
+.inf-drill:focus-visible{outline:2px solid #1B4FD8;outline-offset:2px;border-radius:8px}
+.inf-bar-row.inf-drill{padding:2px 4px}
+.inf-drill-inline{padding:2px 4px;margin:2px -4px}
+
+.inf-modal-overlay{position:fixed;inset:0;background:rgba(13,30,66,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.inf-modal{background:#fff;border-radius:12px;max-width:min(1400px,96vw);max-height:88vh;width:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(13,30,66,.35)}
+.inf-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #F1F5F9}
+.inf-modal-head h2{margin:0;font-size:15px;color:#0D2E6E}
+.inf-modal-close{border:0;background:#F1F5F9;color:#475569;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:14px}
+.inf-modal-close:hover{background:#E2E8F0}
+.inf-modal-body{overflow:auto;padding:14px 18px}
+.inf-table-wrap{overflow-x:auto}
+.inf-table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+.inf-table th{position:sticky;top:0;background:#0D2E6E;color:#fff;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+.inf-table td{padding:7px 10px;border-bottom:1px solid #F1F5F9;color:#334155}
+.inf-table tr:hover td{background:#F8FAFC}
+.inf-cell-wide{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
