@@ -72,7 +72,7 @@ Sí — es el objetivo central de esta integración: los 6 filtros de Informes a
 - Pendiente de sesión anterior, sin relación con esta integración: `rol_permisos` no concede `OPERACION_INFORMES_INFORMES_INFORMES.VER` a ningún rol todavía.
 
 ## SHA del commit final
-`d8b4a1e...` (ver mensaje de confirmación en el chat con el SHA completo tras el push).
+`80fc8a0aaea316e27f686b14aec1e9db96c8a0b2`.
 
 ## Estado final
 **COMPLETADA** — código final aplicado, pruebas ejecutadas (estática + runtime contra datos reales + batería completa), MD de integración (este documento), `docs/integraciones/README.md` creado y actualizado, commit `CLAUDE | INT-1 | Informes | FiltrosBuscablesYDrilldown | v001`, `git diff`/`git status` revisados antes de comitear.
