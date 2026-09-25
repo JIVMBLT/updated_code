@@ -75,6 +75,7 @@
     './lab/backend/services/lab-operation.service.js',
     './lab/backend/services/lab-criticals.service.js',
     './lab/backend/services/lab-informes.service.js',
+    './lab/backend/services/lab-instalaciones-contactos.service.js',
     './lab/backend/services/lab-portfolio.service.js',
     './lab/backend/services/lab-movements.service.js',
     './lab/backend/services/lab-followup.service.js',
@@ -98,6 +99,7 @@
     './lab/backend/routes/lab-technical.routes.js',
     './lab/runtime/lab-phase10-bootstrap.js',
     './lab/runtime/lab-phase11-informes-bootstrap.js',
+    './lab/runtime/lab-phase12-contactos-bootstrap.js',
     './lab/runtime/lab-auth.js'
   ];
 
@@ -135,6 +137,7 @@
     './lab/backend/services/lab-operation.service.js':()=>Boolean(global.ManttoLabOperationService),
     './lab/backend/services/lab-criticals.service.js':()=>Boolean(global.ManttoLabCriticalsService),
     './lab/backend/services/lab-informes.service.js':()=>Boolean(global.ManttoLabInformesService),
+    './lab/backend/services/lab-instalaciones-contactos.service.js':()=>Boolean(global.ManttoLabInstalacionesContactosService),
     './lab/backend/services/lab-portfolio.service.js':()=>Boolean(global.ManttoLabPortfolioService),
     './lab/backend/services/lab-movements.service.js':()=>Boolean(global.ManttoLabMovementsService),
     './lab/backend/services/lab-followup.service.js':()=>Boolean(global.ManttoLabFollowupService),

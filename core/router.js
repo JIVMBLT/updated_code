@@ -11,7 +11,7 @@
     'logistica-dashboard':'Dashboard Logística', 'logistica-reporte':'Reporte de Logística', 'logistica-pvo':'PVO', 'logistica-produccion':'PVO-Producción', 'logistica-produccion-nuevo':'Agregar PVO-Producción', 'logistica-produccion-detalle':'Detalle de PVO-Producción', 'logistica-documentos':'Documentos de Producción',
     'instalaciones-dashboard':'Dashboard Instalaciones', 'instalaciones-proyectos':'Proyectos de Instalación',
     'instalaciones-concentrado-cliente':'Concentrado Cliente', 'instalaciones-reporte':'Reporte de Instalaciones',
-    'instalaciones-ajuste':'Ajuste', 'instalaciones-carpetas':'Carpetas', 'instalaciones-pmm':'PM&M', 'instalaciones-documentacion':'Documentación Pendiente', 'instalaciones-cerrados':'Proyectos Cerrados',
+    'instalaciones-ajuste':'Ajuste', 'instalaciones-carpetas':'Carpetas', 'instalaciones-pmm':'PM&M', 'instalaciones-documentacion':'Documentación Pendiente', 'instalaciones-cerrados':'Proyectos Cerrados', 'instalaciones-contactos':'Base de Datos - Contactos',
     'ventas-dashboard':'Dashboard Ventas', 'ventas-vendidos':'Vendidos', 'ventas-proyeccion':'Proyección', 'ventas-perdidos':'Perdidos',
     'ventas-fotos-mapa':'Fotos Mapa', 'ventas-clientes':'Clientes', 'ventas-clientes-nuevo':'Nuevo cliente', 'ventas-clientes-detalle':'Detalle del cliente', 'ventas-cotizaciones':'Cotizaciones', 'ventas-cotizaciones-nueva':'Nueva cotización', 'ventas-cotizaciones-editar':'Editar cotización', 'ventas-cotizaciones-detalle':'Detalle de cotización',
     'ventas-prospeccion':'Prospección', 'ventas-prospeccion-nueva':'Nueva visita', 'ventas-prospeccion-detalle':'Detalle de visita', 'ventas-mapa-prospeccion':'Mapa Prospección', 'ventas-asignacion-redes':'Asignación Redes', 'ventas-asignacion-redes-detalle':'Detalle de Asignación a Redes', 'ventas-asignacion-redes-formulario':'Formulario de Asignación a Redes',
@@ -406,6 +406,16 @@
     setActiveSide('instalaciones-cerrados');
     updateContext('instalaciones-cerrados','Proyectos Cerrados · datos reales desde Aiven');
     if(window.ManttoInstalacionesCerrados) window.ManttoInstalacionesCerrados.init();
+    return true;
+  }
+
+  function showInstalacionesContactos(){
+    const view=document.getElementById('view-instalaciones-contactos');
+    if(!view) return false;
+    activateViewById('view-instalaciones-contactos');
+    setActiveSide('instalaciones-contactos');
+    updateContext('instalaciones-contactos','Base de Datos - Contactos · directorio ligado a proyectos de Instalación');
+    if(window.ManttoInstalacionesContactos) window.ManttoInstalacionesContactos.init();
     return true;
   }
 
@@ -901,6 +911,7 @@
     if(route==='instalaciones-dashboard' && showInstalacionesDashboard_cor()) return;
     if(route==='instalaciones-proyectos' && showInstalacionesProyectos()) return;
     if(route==='instalaciones-cerrados' && showInstalacionesCerrados()) return;
+    if(route==='instalaciones-contactos' && showInstalacionesContactos()) return;
     if(route==='ventas-dashboard' && showVentasDashboard()) return;
     if(route==='ventas-fotos-mapa' && showVentasFotosMapa()) return;
     if(route==='ventas-clientes' && showVentasClientes()) return;

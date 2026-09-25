@@ -191,6 +191,8 @@
     criticos:{css:['./modules/equipos-criticos/equipos-criticos.css?v=20260717-fix5'],js:['./modules/equipos-criticos/equipos-criticos.js?v=20260821-pdf-emojis-v001']},
     // [Claude | 2026-09-17 | CLAUDE-MG | LAB DGB - TRASLADO INFORMES V001]
     informes:{css:['./modules/operacion-informes/operacion-informes.css?v=20260919-filtros-drilldown-v001'],js:['./modules/operacion-informes/operacion-informes.js?v=20260919-filtros-drilldown-v001']},
+    // [Claude | 2026-09-19 | CLAUDE-MG | LAB DGB - INSTALACIONES CONTACTOS V001]
+    'instalaciones-contactos':{css:['./modules/instalaciones-contactos/instalaciones-contactos.css?v=20260919-instalaciones-contactos-v001'],js:['./modules/instalaciones-contactos/instalaciones-contactos.js?v=20260919-instalaciones-contactos-v001']},
     portafolio:{css:['./modules/portafolio/portafolio.css?v=20260817-lote-cobranza-uni-v001'],js:['./modules/portafolio/portafolio.js?v=20260817-lote-cobranza-uni-v001']},
     detalle:{css:[],js:[SEGUIMIENTO_ESPECIAL_GLOBAL_JS]},
     'seguimiento-especial':{css:['./modules/seguimiento-especial/seguimiento-especial.css?v=20260908-seguimiento-especial-v002'],js:[SEGUIMIENTO_ESPECIAL_GLOBAL_JS,'./modules/seguimiento-especial/seguimiento-especial.js?v=20260909-seguimiento-especial-cierre-v003']},

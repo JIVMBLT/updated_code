@@ -1,0 +1,49 @@
+/* [Claude | 2026-09-19 | CLAUDE-MG | LAB DGB - INSTALACIONES CONTACTOS V001] */
+.ic-page{display:flex;flex-direction:column;gap:16px;padding:4px 2px 24px}
+.ic-card{background:#fff;border:1px solid rgba(13,46,110,.14);border-radius:12px;padding:16px}
+.ic-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.ic-head h1{margin:0;color:#0D2E6E;font-size:20px}
+.ic-head p{margin:4px 0 0;color:#64748B;font-size:13px}
+.ic-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.ic-filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#475569;font-weight:700}
+.ic-filters select,.ic-filters input{border:1px solid #CBD5E1;border-radius:8px;padding:7px 9px;font-size:13px}
+.ic-btn{border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:800;cursor:pointer}
+.ic-btn-primary{background:#0D2E6E;color:#fff}
+.ic-btn-soft{background:#EFF6FF;color:#0D2E6E}
+.ic-btn:disabled{opacity:.6;cursor:wait}
+.ic-status{padding:16px;color:#64748B;font-size:13px}
+
+.ic-combo{position:relative;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.ic-combo-trigger{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1px solid #CBD5E1;border-radius:8px;padding:7px 9px;font-size:13px;background:#fff;color:#0D2E6E;cursor:pointer;text-align:left;width:100%}
+.ic-combo-trigger:hover{border-color:#1B4FD8}
+.ic-combo-caret{color:#94A3B8;font-size:10px}
+.ic-combo-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:40;background:#fff;border:1px solid #CBD5E1;border-radius:10px;box-shadow:0 12px 28px rgba(13,46,110,.16);padding:8px;display:flex;flex-direction:column;gap:6px}
+.ic-combo-search{border:1px solid #CBD5E1;border-radius:6px;padding:6px 8px;font-size:12.5px}
+.ic-combo-options{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.ic-combo-option{padding:6px 6px;border-radius:6px;font-size:12.5px;color:#334155;cursor:pointer}
+.ic-combo-option:hover{background:#F1F5F9}
+.ic-combo-empty{color:#94A3B8;font-size:12px;padding:6px 4px}
+
+.ic-table-wrap{overflow-x:auto}
+.ic-table{border-collapse:collapse;width:100%;font-size:12.5px}
+.ic-table th{position:sticky;top:0;background:#0D2E6E;color:#fff;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+.ic-table td{padding:8px 10px;border-bottom:1px solid #F1F5F9;color:#334155}
+.ic-table tr:hover td{background:#F8FAFC}
+.ic-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:#EFF6FF;color:#0D2E6E}
+.ic-row-actions{display:flex;gap:6px;white-space:nowrap}
+.ic-icon-btn{border:1px solid #CBD5E1;background:#fff;border-radius:6px;padding:4px 7px;cursor:pointer;font-size:13px}
+.ic-icon-btn:hover{background:#F1F5F9}
+
+.ic-modal-overlay{position:fixed;inset:0;background:rgba(13,30,66,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.ic-modal{background:#fff;border-radius:12px;max-width:min(560px,96vw);max-height:88vh;width:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(13,30,66,.35)}
+.ic-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #F1F5F9}
+.ic-modal-head h2{margin:0;font-size:15px;color:#0D2E6E}
+.ic-modal-close{border:0;background:#F1F5F9;color:#475569;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:14px}
+.ic-modal-close:hover{background:#E2E8F0}
+.ic-modal-body{overflow:auto;padding:16px 18px}
+#ic-form{display:flex;flex-direction:column;gap:12px}
+#ic-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#475569;font-weight:700}
+#ic-form input,#ic-form select{border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font-size:13px}
+.ic-form-error{background:#FEE2E2;color:#991B1B;border-radius:8px;padding:8px 12px;font-size:12.5px}
+.ic-form-actions{display:flex;gap:10px;margin-top:4px}
+@media(max-width:720px){.ic-filters{grid-template-columns:1fr}}
