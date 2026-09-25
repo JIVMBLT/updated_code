@@ -133,7 +133,19 @@
   }
 
   const TEMP_SIDEBAR_PERMISSIONS = Object.freeze({
-    home:true
+    home:true,
+    // [Claude | 2026-09-25 | CLAUDE-MG | LAB DGB - VISIBILIDAD SIDEBAR INSTALACIONES/INFORMES V001]
+    operacion_informes:true,
+    instalaciones_dashboard:true,
+    instalaciones_proyectos:true,
+    instalaciones_concentrado_cliente:true,
+    instalaciones_reporte:true,
+    instalaciones_ajuste:true,
+    instalaciones_pmm:true,
+    instalaciones_documentacion:true,
+    instalaciones_carpetas:true,
+    instalaciones_cerrados:true,
+    instalaciones_contactos:true
   });
 
   function applyTemporarySidebarPermissions(){
