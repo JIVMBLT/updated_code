@@ -6,3 +6,4 @@ Registro de integraciones realizadas bajo la Norma Final de Trabajo (repositorio
 |---|---|---|---|---|---|
 | INT-1 | Informes | FiltrosBuscablesYDrilldown | v001 | COMPLETADA | `integracion1_Informes_FiltrosBuscablesYDrilldown_v001.md` |
 | INT-2 | Instalaciones | BaseDatosContactos | v001 | COMPLETADA | `integracion2_Instalaciones_BaseDatosContactos_v001.md` |
+| INT-3 | Instalaciones | AltaMultipleContactos | v001 | COMPLETADA | `integracion3_Instalaciones_AltaMultipleContactos_v001.md` |
