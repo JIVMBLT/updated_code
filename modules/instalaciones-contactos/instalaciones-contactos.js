@@ -12,7 +12,7 @@
     filtros:{ categoria:'', id_ins_fl:'', search:'' },
     contactos:[],
     editando:null,        // id_contacto en edicion, o null = alta
-    proyectoSeleccionado:null  // {id_ins_fl,proyecto} elegido en el formulario
+    multiAlta:false        // true = formulario de alta (permite varios bloques), false = edicion (un solo bloque)
   };
 
   const IC_HTML =
@@ -34,12 +34,10 @@
           '<div class="ic-modal-head"><h2 id="ic-form-titulo">Nuevo contacto</h2><button type="button" class="ic-modal-close" id="ic-form-cerrar" aria-label="Cerrar">✕</button></div>' +
           '<div class="ic-modal-body">' +
             '<form id="ic-form">' +
-              '<label>Nombre*<input type="text" id="ic-form-nombre" required maxlength="180"></label>' +
-              '<label>Puesto<input type="text" id="ic-form-puesto" maxlength="150"></label>' +
-              '<label>Correo<input type="email" id="ic-form-correo" maxlength="200"></label>' +
-              '<label>Teléfono<input type="text" id="ic-form-telefono" maxlength="80"></label>' +
-              '<label>Categoría*<select id="ic-form-categoria" required></select></label>' +
               '<label>Proyecto*<div class="ic-combo" id="ic-form-combo-proyecto"></div></label>' +
+              '<p class="ic-form-hint">Todos los contactos que agregues aquí se ligan a este mismo proyecto.</p>' +
+              '<div id="ic-form-bloques"></div>' +
+              '<button type="button" class="ic-btn ic-btn-add" id="ic-form-agregar">+ Agregar otro contacto</button>' +
               '<div class="ic-form-error" id="ic-form-error" hidden></div>' +
               '<div class="ic-form-actions"><button type="submit" class="ic-btn ic-btn-primary" id="ic-form-guardar">Guardar</button><button type="button" class="ic-btn ic-btn-soft" id="ic-form-cancelar">Cancelar</button></div>' +
             '</form>' +
@@ -123,10 +121,13 @@
   let filtroProyectoCombo = null;
   let formProyectoCombo = null;
 
+  function categoriaOptionsHtml(selected){
+    const opts = state.opciones.categorias.map(c=>'<option value="'+esc(c)+'"'+(c===selected?' selected':'')+'>'+esc(c)+'</option>').join('');
+    return '<option value="">Selecciona una categoría</option>' + opts;
+  }
   function fillCategoriaSelects(){
     const opts = state.opciones.categorias.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
     $('ic-f-categoria').innerHTML = '<option value="">Todas</option>' + opts;
-    $('ic-form-categoria').innerHTML = '<option value="">Selecciona una categoría</option>' + opts;
   }
 
   async function cargarOpciones(){
@@ -180,57 +181,146 @@
 
   function formError(msg){
     const el = $('ic-form-error');
-    if(!msg){ el.hidden = true; el.textContent=''; return; }
-    el.hidden = false; el.textContent = msg;
+    if(!msg){ el.hidden = true; el.innerHTML=''; return; }
+    el.hidden = false;
+    el.innerHTML = Array.isArray(msg) ? msg.map(m=>'<div>'+esc(m)+'</div>').join('') : esc(msg);
+  }
+
+  // ---------------------------------------------------------------------
+  // Bloques de contacto repetibles: en alta se puede agregar tantos como
+  // haga falta (normalmente 6-8 para el mismo proyecto en una sola
+  // exhibición); en edición siempre es un solo bloque, sin botón de
+  // agregar/quitar.
+  // ---------------------------------------------------------------------
+  let bloqueContador = 0;
+  function bloqueHtml(idx, datos){
+    const d = datos || {};
+    return (
+      '<div class="ic-bloque" data-bloque="'+idx+'">' +
+        '<div class="ic-bloque-head"><b class="ic-bloque-titulo">Contacto</b><button type="button" class="ic-bloque-quitar" data-quitar="'+idx+'" title="Quitar este contacto">✕</button></div>' +
+        '<label>Nombre*<input type="text" class="ic-b-nombre" required maxlength="180" value="'+esc(d.nombre||'')+'"></label>' +
+        '<label>Puesto<input type="text" class="ic-b-puesto" maxlength="150" value="'+esc(d.puesto||'')+'"></label>' +
+        '<label>Correo<input type="email" class="ic-b-correo" maxlength="200" value="'+esc(d.correo||'')+'"></label>' +
+        '<label>Teléfono<input type="text" class="ic-b-telefono" maxlength="80" value="'+esc(d.telefono||'')+'"></label>' +
+        '<label>Categoría*<select class="ic-b-categoria" required>'+categoriaOptionsHtml(d.categoria)+'</select></label>' +
+      '</div>'
+    );
+  }
+  function renumerarBloques(){
+    const bloques = $('ic-form-bloques').querySelectorAll('.ic-bloque');
+    bloques.forEach((el,i)=>{
+      el.querySelector('.ic-bloque-titulo').textContent = 'Contacto '+(i+1);
+      const quitar = el.querySelector('.ic-bloque-quitar');
+      quitar.hidden = bloques.length<=1 || !state.multiAlta;
+    });
+    $('ic-form-agregar').hidden = !state.multiAlta;
+  }
+  function agregarBloque(datos){
+    const idx = ++bloqueContador;
+    $('ic-form-bloques').insertAdjacentHTML('beforeend', bloqueHtml(idx, datos));
+    const el = $('ic-form-bloques').querySelector('[data-bloque="'+idx+'"]');
+    el.querySelector('.ic-bloque-quitar').addEventListener('click', ()=>{
+      el.remove();
+      if(!$('ic-form-bloques').querySelector('.ic-bloque')) agregarBloque();
+      renumerarBloques();
+    });
+    renumerarBloques();
+    return el;
+  }
+  function limpiarBloques(){ $('ic-form-bloques').innerHTML=''; bloqueContador=0; }
+  function leerBloque(el){
+    return {
+      nombre: el.querySelector('.ic-b-nombre').value.trim(),
+      puesto: el.querySelector('.ic-b-puesto').value.trim(),
+      correo: el.querySelector('.ic-b-correo').value.trim(),
+      telefono: el.querySelector('.ic-b-telefono').value.trim(),
+      categoria: el.querySelector('.ic-b-categoria').value
+    };
   }
 
   function abrirFormulario(contactId){
     state.editando = contactId || null;
+    state.multiAlta = !contactId;
     formError(null);
+    limpiarBloques();
     const contacto = contactId ? state.contactos.find(c=>c.id_contacto===contactId) : null;
-    $('ic-form-titulo').textContent = contacto ? 'Editar contacto' : 'Nuevo contacto';
-    $('ic-form-nombre').value = contacto ? contacto.nombre||'' : '';
-    $('ic-form-puesto').value = contacto ? contacto.puesto||'' : '';
-    $('ic-form-correo').value = contacto ? contacto.correo||'' : '';
-    $('ic-form-telefono').value = contacto ? contacto.telefono||'' : '';
-    $('ic-form-categoria').value = contacto ? contacto.categoria||'' : '';
+    $('ic-form-titulo').textContent = contacto ? 'Editar contacto' : 'Nuevo contacto (varios a la vez para el mismo proyecto)';
     if(formProyectoCombo){
       const proj = contacto ? state.opciones.proyectos.find(p=>p.id_ins_fl===contacto.id_ins_fl) : null;
       formProyectoCombo.set(proj);
     }
+    agregarBloque(contacto ? { nombre:contacto.nombre, puesto:contacto.puesto, correo:contacto.correo, telefono:contacto.telefono, categoria:contacto.categoria } : null);
     $('ic-form-overlay').hidden = false;
-    $('ic-form-nombre').focus();
+    const primerNombre = $('ic-form-bloques').querySelector('.ic-b-nombre');
+    if(primerNombre) primerNombre.focus();
   }
   function cerrarFormulario(){ $('ic-form-overlay').hidden = true; state.editando = null; }
+
 
   async function guardarFormulario(ev){
     ev.preventDefault();
     formError(null);
     const proyecto = formProyectoCombo ? formProyectoCombo.get() : null;
-    const payload = {
-      nombre: $('ic-form-nombre').value.trim(),
-      puesto: $('ic-form-puesto').value.trim(),
-      correo: $('ic-form-correo').value.trim(),
-      telefono: $('ic-form-telefono').value.trim(),
-      categoria: $('ic-form-categoria').value,
-      id_ins_fl: proyecto ? proyecto.id_ins_fl : ''
-    };
-    if(!payload.nombre){ formError('El nombre es obligatorio.'); return; }
-    if(!payload.categoria){ formError('Selecciona una categoría.'); return; }
-    if(!payload.id_ins_fl){ formError('Selecciona un proyecto.'); return; }
+    if(!proyecto){ formError('Selecciona un proyecto.'); return; }
+    const idInsFl = proyecto.id_ins_fl;
     const btn = $('ic-form-guardar');
-    btn.disabled = true; btn.textContent = 'Guardando...';
-    try{
-      if(state.editando) await requestJson('/api/instalaciones/contactos/'+state.editando, { method:'PUT', body: JSON.stringify(payload) });
-      else await requestJson('/api/instalaciones/contactos', { method:'POST', body: JSON.stringify(payload) });
-      cerrarFormulario();
-      await cargarContactos();
-    }catch(e){
-      formError(e.message);
-    }finally{
-      btn.disabled = false; btn.textContent = 'Guardar';
+
+    if(state.editando){
+      const el = $('ic-form-bloques').querySelector('.ic-bloque');
+      const datos = leerBloque(el);
+      if(!datos.nombre){ formError('El nombre es obligatorio.'); return; }
+      if(!datos.categoria){ formError('Selecciona una categoría.'); return; }
+      btn.disabled = true; btn.textContent = 'Guardando...';
+      try{
+        await requestJson('/api/instalaciones/contactos/'+state.editando, { method:'PUT', body: JSON.stringify({...datos, id_ins_fl:idInsFl}) });
+        cerrarFormulario();
+        await cargarContactos();
+      }catch(e){
+        formError(e.message);
+      }finally{
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+      return;
     }
+
+    // Alta multiple: validar TODOS los bloques antes de enviar nada.
+    const bloques = Array.from($('ic-form-bloques').querySelectorAll('.ic-bloque'));
+    const errores = [];
+    const datosPorBloque = bloques.map((el,i)=>{
+      const datos = leerBloque(el);
+      if(!datos.nombre) errores.push('Contacto '+(i+1)+': el nombre es obligatorio.');
+      else if(!datos.categoria) errores.push('Contacto '+(i+1)+' ('+datos.nombre+'): selecciona una categoría.');
+      return { el, datos };
+    });
+    if(errores.length){ formError(errores); return; }
+
+    btn.disabled = true;
+    let creados = 0;
+    const fallos = [];
+    for(let i=0;i<datosPorBloque.length;i++){
+      const { el, datos } = datosPorBloque[i];
+      btn.textContent = 'Guardando '+(i+1)+' de '+datosPorBloque.length+'...';
+      try{
+        await requestJson('/api/instalaciones/contactos', { method:'POST', body: JSON.stringify({...datos, id_ins_fl:idInsFl}) });
+        creados++;
+        el.remove();
+      }catch(e){
+        fallos.push('"'+(datos.nombre||('Contacto '+(i+1)))+'": '+e.message);
+      }
+    }
+    btn.disabled = false; btn.textContent = 'Guardar';
+
+    if(creados>0) await cargarContactos();
+
+    if(!fallos.length){
+      cerrarFormulario();
+      return;
+    }
+    if(!$('ic-form-bloques').querySelector('.ic-bloque')) agregarBloque();
+    renumerarBloques();
+    formError(['Se guardaron '+creados+' de '+datosPorBloque.length+' contactos. Corrige y vuelve a guardar los que fallaron:', ...fallos]);
   }
+
 
   async function eliminarContacto(contactId){
     const contacto = state.contactos.find(c=>c.id_contacto===contactId);
@@ -262,6 +352,12 @@
         searchTimer = setTimeout(()=>{ state.filtros.search = $('ic-f-buscar').value.trim(); cargarContactos(); }, 300);
       });
       $('ic-nuevo').addEventListener('click', ()=> abrirFormulario(null));
+      $('ic-form-agregar').addEventListener('click', ()=> {
+        agregarBloque();
+        const bloques = $('ic-form-bloques').querySelectorAll('.ic-bloque');
+        const ultimo = bloques[bloques.length-1];
+        if(ultimo) ultimo.querySelector('.ic-b-nombre').focus();
+      });
       $('ic-form-cerrar').addEventListener('click', cerrarFormulario);
       $('ic-form-cancelar').addEventListener('click', cerrarFormulario);
       $('ic-form-overlay').addEventListener('click', ev=>{ if(ev.target.id==='ic-form-overlay') cerrarFormulario(); });

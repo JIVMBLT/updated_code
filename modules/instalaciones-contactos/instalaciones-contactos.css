@@ -47,3 +47,15 @@
 .ic-form-error{background:#FEE2E2;color:#991B1B;border-radius:8px;padding:8px 12px;font-size:12.5px}
 .ic-form-actions{display:flex;gap:10px;margin-top:4px}
 @media(max-width:720px){.ic-filters{grid-template-columns:1fr}}
+
+/* [Claude | 2026-09-25 | CLAUDE-MG | LAB DGB - INSTALACIONES CONTACTOS ALTA MULTIPLE V001] */
+.ic-form-hint{margin:-6px 0 4px;font-size:11.5px;color:#64748B}
+.ic-bloque{border:1px solid #E2E8F0;border-radius:10px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px;background:#F8FAFC}
+.ic-bloque-head{display:flex;align-items:center;justify-content:space-between}
+.ic-bloque-titulo{color:#0D2E6E;font-size:12.5px}
+.ic-bloque-quitar{border:1px solid #FCA5A5;background:#FEF2F2;color:#B91C1C;border-radius:6px;width:24px;height:24px;font-size:12px;cursor:pointer}
+.ic-bloque-quitar:hover{background:#FEE2E2}
+.ic-bloque-quitar[hidden]{display:none}
+.ic-btn-add{align-self:flex-start;border:1px dashed #1B4FD8;background:#EFF6FF;color:#1B4FD8;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:pointer;margin-bottom:10px}
+.ic-btn-add:hover{background:#DBEAFE}
+.ic-btn-add[hidden]{display:none}
