@@ -83,7 +83,7 @@ Sí — filtros por categoría (select) y proyecto (combo con buscador), más b�
 - El selector de "Proyecto" en el formulario no distingue proyectos activos vs. cerrados/inactivos — lista todos los proyectos de `ins_fl` sin filtrar por estatus. No se pidió ese filtro; queda como posible mejora futura si hace falta.
 
 ## SHA del commit final
-Pendiente de push (se completa en el mensaje del chat tras publicar).
+`67c31f2225e1e781ee96022a1aaf3074350b0f74`.
 
 ## Estado final
-**COMPLETADA** — código final aplicado y validado (estática + runtime contra datos reales + batería completa), MD de integración (este documento), `docs/integraciones/README.md` actualizado, commit `CLAUDE | INT-2 | Instalaciones | BaseDatosContactos | v001` pendiente de push, `git diff`/`git status` revisados antes de comitear.
+**COMPLETADA** — código final aplicado y validado (estática + runtime contra datos reales + batería completa), MD de integración (este documento), `docs/integraciones/README.md` actualizado, commit `CLAUDE | INT-2 | Instalaciones | BaseDatosContactos | v001` (`67c31f2225e1e781ee96022a1aaf3074350b0f74`), `git diff`/`git status` revisados antes de comitear.
