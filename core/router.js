@@ -303,6 +303,17 @@
     return true;
   }
 
+  // [Claude | 2026-10-02 | CLAUDE-MG | LAB DGB - CUSTOMER EXPERIENCE DETALLE V001]
+  function showCxEncuestas(){
+    const view=document.getElementById('view-cx-encuestas');
+    if(!view) return false;
+    activateViewById('view-cx-encuestas');
+    setActiveSide('cx-encuestas');
+    updateContext('cx-encuestas','Customer Experience · detalle de encuestas por área (LAB SQLite)');
+    if(window.ManttoCustomerExperienceEncuestas) window.ManttoCustomerExperienceEncuestas.init();
+    return true;
+  }
+
 
   function showPortafolio(){
     const view=document.getElementById('view-portafolio');
@@ -915,6 +926,7 @@
     if(route==='criticos' && showCriticos()) return;
     if(route==='informes' && showInformes()) return;
     if(route==='cx-dashboard' && showCxDashboard()) return;
+    if(route==='cx-encuestas' && showCxEncuestas()) return;
     if(route==='portafolio' && showPortafolio()) return;
     if(route==='proyectos' && showProyectos()) return;
     if(route==='callcenter' && showCallCenter()) return;

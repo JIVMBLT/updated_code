@@ -104,6 +104,7 @@
     './lab/runtime/lab-phase12-contactos-bootstrap.js',
     './lab/runtime/lab-phase13-permisos-director-general-bootstrap.js',
     './lab/runtime/lab-phase14-cx-bootstrap.js',
+    './lab/runtime/lab-phase15-cx-encuestas-permiso-bootstrap.js',
     './lab/runtime/lab-auth.js'
   ];
 
@@ -170,6 +171,7 @@
     './lab/runtime/lab-phase12-contactos-bootstrap.js':()=>Boolean(global.ManttoLabPhase12ContactosReady),
     './lab/runtime/lab-phase13-permisos-director-general-bootstrap.js':()=>Boolean(global.ManttoLabPhase13PermisosReady),
     './lab/runtime/lab-phase14-cx-bootstrap.js':()=>Boolean(global.ManttoLabPhase14CxReady),
+    './lab/runtime/lab-phase15-cx-encuestas-permiso-bootstrap.js':()=>Boolean(global.ManttoLabPhase15CxEncuestasPermisoReady),
     './lab/runtime/lab-auth.js':()=>Boolean(global.ManttoLabAuth)
   };
 

@@ -150,5 +150,31 @@
     return result;
   }
 
-  return Object.freeze({opciones,dashboard});
+  // ---------------------------------------------------------------------
+  // Detalle: lista de encuestas individuales (sin agregar), para la
+  // pestaña de Encuestas (una fila por encuesta, con todos sus campos).
+  // Mismos filtros que el dashboard de cada area.
+  // ---------------------------------------------------------------------
+  function listarVentaInstalacion(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const q=query||{};
+    const filtros={tipo_encuesta:text(q.tipo_encuesta),vendedor:text(q.vendedor),supervisor:text(q.supervisor)};
+    let rows=db.query('SELECT * FROM cx_venta_instalacion_encuestas ORDER BY id DESC');
+    rows=rows.filter(r=>matches(filtros.tipo_encuesta,r.tipo_encuesta)&&matches(filtros.vendedor,r.vendedor)&&matches(filtros.supervisor,r.supervisor));
+    return{total:rows.length,encuestas:rows};
+  }
+  function listarMantenimiento(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const q=query||{};
+    const filtros={estado:text(q.estado),z_general:text(q.z_general),z_operativa:text(q.z_operativa),z_administrativa:text(q.z_administrativa),superintendente:text(q.superintendente),supervisor_operativo:text(q.supervisor_operativo),categoria:text(q.categoria),prioridad:text(q.prioridad)};
+    let rows=db.query('SELECT * FROM cx_mantenimiento_encuestas ORDER BY id DESC');
+    rows=rows.filter(r=>
+      matches(filtros.estado,r.estado)&&matches(filtros.z_general,r.z_general)&&matches(filtros.z_operativa,r.z_operativa)&&
+      matches(filtros.z_administrativa,r.z_administrativa)&&matches(filtros.superintendente,r.superintendente)&&
+      matches(filtros.supervisor_operativo,r.supervisor_operativo)&&matches(filtros.categoria,r.categoria)&&matches(filtros.prioridad,r.prioridad)
+    );
+    return{total:rows.length,encuestas:rows};
+  }
+
+  return Object.freeze({opciones,dashboard,listarVentaInstalacion,listarMantenimiento});
 });

@@ -2,7 +2,7 @@
 (function initManttoLabCxRoutes(root,factory){const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.ManttoLabCxRoutes=api;})(typeof globalThis!=='undefined'?globalThis:this,function createManttoLabCxRoutes(root){
 'use strict';
 const GROUPS={cx:'CUSTOMER_EXPERIENCE'};
-const PERMS={dashboardRead:['CUSTOMER_EXPERIENCE_DASHBOARD_ACCESO_VISUAL_MODULO.ACCESO_VISUAL']};
+const PERMS={dashboardRead:['CUSTOMER_EXPERIENCE_DASHBOARD_ACCESO_VISUAL_MODULO.ACCESO_VISUAL'],encuestasRead:['CUSTOMER_EXPERIENCE_ENCUESTAS_ACCESO_VISUAL_MODULO.ACCESO_VISUAL']};
 function cxService(){const s=root?.ManttoLabCxService;if(!s)throw new Error('MANTTO_LAB_CX_SERVICE_REQUIRED');return s;}
 function permissionsService(){const s=root?.ManttoLabPermissionsService;if(!s)throw new Error('MANTTO_LAB_PERMISSIONS_SERVICE_REQUIRED');return s;}
 function scopeService(){const s=root?.ManttoLabScopeService;if(!s)throw new Error('MANTTO_LAB_SCOPE_SERVICE_REQUIRED');return s;}
@@ -15,6 +15,8 @@ function register(router){
   if(!router||typeof router.get!=='function')throw new Error('MANTTO_LAB_ROUTER_REQUIRED');if(router.__manttoLabCxV001Routes)return router;router.__manttoLabCxV001Routes=true;
   router.get('/api/customer-experience/opciones',requireAuth,gate(PERMS.dashboardRead,GROUPS.cx),(req,res)=>res.json(wrap(cxService().opciones(userId(req),req.db))));
   router.get('/api/customer-experience/dashboard',requireAuth,gate(PERMS.dashboardRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().dashboard(userId(req),req.query,req.db)}));
+  router.get('/api/customer-experience/venta-instalacion/encuestas',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().listarVentaInstalacion(userId(req),req.query,req.db)}));
+  router.get('/api/customer-experience/mantenimiento/encuestas',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().listarMantenimiento(userId(req),req.query,req.db)}));
   return router;
 }
 return Object.freeze({register,PERMS,GROUPS});
