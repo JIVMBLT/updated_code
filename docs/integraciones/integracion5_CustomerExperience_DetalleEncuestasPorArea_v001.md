@@ -81,7 +81,7 @@ Sí — filtros propios por pestaña (más acotados que los del Dashboard, pensa
 - El agrupamiento de campos de Mantenimiento en 6 secciones (Identificación, NPS y confianza, CSAT, Oportunidades de mejora, Comentarios, Zonas) fue una decisión de organización de Claude para que el detalle sea legible — no se consultó explícitamente con el usuario; si prefiere otro agrupamiento, es un ajuste simple.
 
 ## SHA del commit final
-Pendiente de push (se completa en el mensaje del chat tras publicar).
+`cd240273be52014ee294b82bb4d34ba1139cd2e7`.
 
 ## Estado final
 **COMPLETADA** — código final aplicado y validado (estática + runtime contra datos reales + batería completa), MD de integración (este documento), `docs/integraciones/README.md` actualizado, commit `CLAUDE | INT-5 | Customer Experience | DetalleEncuestasPorArea | v001`.
