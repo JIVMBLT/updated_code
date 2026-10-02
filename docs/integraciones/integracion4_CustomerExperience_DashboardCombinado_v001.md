@@ -92,7 +92,7 @@ Los módulos "Encuestas" y "Visitas" de Customer Experience (siguen como placeho
 - El dashboard no pagina ni cachea — para 102+65 registros no es un problema; si el volumen real crece mucho, convendría revisarlo.
 
 ## SHA del commit final
-Pendiente de push (se completa en el mensaje del chat tras publicar).
+`7c911be9b9742eb5e34f7c89406cbdf975d54a40`.
 
 ## Estado final
 **COMPLETADA** (para el alcance acordado: dashboard + filtros) — código final aplicado y validado (estática + runtime contra datos reales + batería completa), MD de integración (este documento), `docs/integraciones/README.md` actualizado, commit `CLAUDE | INT-4 | Customer Experience | DashboardCombinado | v001`.
