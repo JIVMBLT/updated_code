@@ -1,0 +1,41 @@
+/* [Claude | 2026-10-02 | CLAUDE-MG | LAB DGB - CUSTOMER EXPERIENCE V001] */
+.cx-page{display:flex;flex-direction:column;gap:16px;padding:4px 2px 24px}
+.cx-card{background:#fff;border:1px solid rgba(13,46,110,.14);border-radius:12px;padding:16px}
+.cx-head h1{margin:0;color:#0D2E6E;font-size:20px}
+.cx-head p{margin:4px 0 0;color:#64748B;font-size:13px}
+.cx-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.cx-filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#475569;font-weight:700}
+.cx-filters select{border:1px solid #CBD5E1;border-radius:8px;padding:7px 9px;font-size:13px}
+.cx-subfilters{display:contents}
+.cx-subfilters[hidden]{display:none}
+.cx-actions{margin-top:10px}
+.cx-btn{border:0;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:pointer}
+.cx-btn-soft{background:#EFF6FF;color:#0D2E6E}
+.cx-status{padding:16px;color:#64748B;font-size:13px}
+.cx-empty{color:#94A3B8;font-size:12px;padding:8px 2px}
+
+.cx-area-block{display:flex;flex-direction:column;gap:14px;margin-bottom:6px}
+.cx-area-block h2{margin:4px 0 0;color:#0D2E6E;font-size:16px;border-left:4px solid #1B4FD8;padding-left:10px}
+.cx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.cx-metric-label{margin:0 0 4px;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.03em;font-weight:800}
+.cx-metric-value{margin:0;font-size:24px;font-weight:900;color:#0D2E6E}
+
+.cx-nps-bar{display:flex;height:14px;border-radius:999px;overflow:hidden;background:#F1F5F9;margin-top:6px}
+.cx-nps-seg.promotor{background:#16A34A}
+.cx-nps-seg.pasivo{background:#D97706}
+.cx-nps-seg.detractor{background:#DC2626}
+.cx-nps-legend{display:flex;gap:14px;margin-top:6px;font-size:11px;font-weight:700}
+.cx-nps-legend .promotor{color:#16A34A}
+.cx-nps-legend .pasivo{color:#D97706}
+.cx-nps-legend .detractor{color:#DC2626}
+
+.cx-bar-row{margin-bottom:8px}
+.cx-bar-labels{display:flex;justify-content:space-between;font-size:12px;color:#334155;margin-bottom:3px}
+.cx-bar-track{height:8px;border-radius:999px;background:#F1F5F9;overflow:hidden}
+.cx-bar-fill{height:100%;background:#4338CA;border-radius:999px}
+
+.cx-table-wrap{overflow-x:auto;margin-top:6px}
+.cx-table{border-collapse:collapse;width:100%;font-size:12px}
+.cx-table th{background:#F8FAFC;color:#475569;text-align:left;padding:7px 9px;font-size:10.5px;text-transform:uppercase;font-weight:800;border-bottom:1px solid #E2E8F0}
+.cx-table td{padding:7px 9px;border-bottom:1px solid #F1F5F9;color:#334155}
+.cx-table tr:hover td{background:#F8FAFC}

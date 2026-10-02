@@ -292,6 +292,17 @@
     return true;
   }
 
+  // [Claude | 2026-10-02 | CLAUDE-MG | LAB DGB - CUSTOMER EXPERIENCE V001]
+  function showCxDashboard(){
+    const view=document.getElementById('view-cx-dashboard');
+    if(!view) return false;
+    activateViewById('view-cx-dashboard');
+    setActiveSide('cx-dashboard');
+    updateContext('cx-dashboard','Customer Experience · panel combinado Venta/Instalaciones + Mantenimiento (LAB SQLite)');
+    if(window.ManttoCustomerExperienceDashboard) window.ManttoCustomerExperienceDashboard.init();
+    return true;
+  }
+
 
   function showPortafolio(){
     const view=document.getElementById('view-portafolio');
@@ -903,6 +914,7 @@
     if(route==='resumen' && showResumen()) return;
     if(route==='criticos' && showCriticos()) return;
     if(route==='informes' && showInformes()) return;
+    if(route==='cx-dashboard' && showCxDashboard()) return;
     if(route==='portafolio' && showPortafolio()) return;
     if(route==='proyectos' && showProyectos()) return;
     if(route==='callcenter' && showCallCenter()) return;

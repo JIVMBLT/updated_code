@@ -145,7 +145,8 @@
     instalaciones_documentacion:true,
     instalaciones_carpetas:true,
     instalaciones_cerrados:true,
-    instalaciones_contactos:true
+    instalaciones_contactos:true,
+    cx_dashboard:true
   });
 
   function applyTemporarySidebarPermissions(){

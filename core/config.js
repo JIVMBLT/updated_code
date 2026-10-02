@@ -76,6 +76,7 @@
     './lab/backend/services/lab-criticals.service.js',
     './lab/backend/services/lab-informes.service.js',
     './lab/backend/services/lab-instalaciones-contactos.service.js',
+    './lab/backend/services/lab-cx.service.js',
     './lab/backend/services/lab-portfolio.service.js',
     './lab/backend/services/lab-movements.service.js',
     './lab/backend/services/lab-followup.service.js',
@@ -91,6 +92,7 @@
     './lab/backend/services/lab-logistics.service.js',
     './lab/backend/services/lab-warehouse.service.js',
     './lab/backend/routes/lab-installations-logistics-warehouse.routes.js',
+    './lab/backend/routes/lab-cx.routes.js',
     './lab/runtime/lab-phase9-bootstrap.js',
     './lab/backend/services/lab-backup.service.js',
     './lab/backend/services/lab-jobs.service.js',
@@ -101,6 +103,7 @@
     './lab/runtime/lab-phase11-informes-bootstrap.js',
     './lab/runtime/lab-phase12-contactos-bootstrap.js',
     './lab/runtime/lab-phase13-permisos-director-general-bootstrap.js',
+    './lab/runtime/lab-phase14-cx-bootstrap.js',
     './lab/runtime/lab-auth.js'
   ];
 
@@ -139,6 +142,7 @@
     './lab/backend/services/lab-criticals.service.js':()=>Boolean(global.ManttoLabCriticalsService),
     './lab/backend/services/lab-informes.service.js':()=>Boolean(global.ManttoLabInformesService),
     './lab/backend/services/lab-instalaciones-contactos.service.js':()=>Boolean(global.ManttoLabInstalacionesContactosService),
+    './lab/backend/services/lab-cx.service.js':()=>Boolean(global.ManttoLabCxService),
     './lab/backend/services/lab-portfolio.service.js':()=>Boolean(global.ManttoLabPortfolioService),
     './lab/backend/services/lab-movements.service.js':()=>Boolean(global.ManttoLabMovementsService),
     './lab/backend/services/lab-followup.service.js':()=>Boolean(global.ManttoLabFollowupService),
@@ -154,6 +158,7 @@
     './lab/backend/services/lab-logistics.service.js':()=>Boolean(global.ManttoLabLogisticsService),
     './lab/backend/services/lab-warehouse.service.js':()=>Boolean(global.ManttoLabWarehouseService),
     './lab/backend/routes/lab-installations-logistics-warehouse.routes.js':()=>Boolean(global.ManttoLabPhase9Routes),
+    './lab/backend/routes/lab-cx.routes.js':()=>Boolean(global.ManttoLabCxRoutes),
     './lab/runtime/lab-phase9-bootstrap.js':()=>Boolean(global.ManttoLabPhase9Ready),
     './lab/backend/services/lab-backup.service.js':()=>Boolean(global.ManttoLabBackupService),
     './lab/backend/services/lab-jobs.service.js':()=>Boolean(global.ManttoLabJobsService),
@@ -164,6 +169,7 @@
     './lab/runtime/lab-phase11-informes-bootstrap.js':()=>Boolean(global.ManttoLabPhase11InformesReady),
     './lab/runtime/lab-phase12-contactos-bootstrap.js':()=>Boolean(global.ManttoLabPhase12ContactosReady),
     './lab/runtime/lab-phase13-permisos-director-general-bootstrap.js':()=>Boolean(global.ManttoLabPhase13PermisosReady),
+    './lab/runtime/lab-phase14-cx-bootstrap.js':()=>Boolean(global.ManttoLabPhase14CxReady),
     './lab/runtime/lab-auth.js':()=>Boolean(global.ManttoLabAuth)
   };
 
