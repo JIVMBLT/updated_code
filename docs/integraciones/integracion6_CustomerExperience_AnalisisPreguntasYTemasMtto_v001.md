@@ -86,7 +86,7 @@ Pestaña Venta/Instalaciones de Encuestas, Dashboard CX (INT-4), tabla `cx_mante
 - Las 5 columnas naranjas excluidas del análisis de temas (Proyecto, Medio de encuesta, Encuestador, Tickets Generados, ID de encuesta) no tienen ningún tratamiento especial — si el usuario sí quiere algo para ellas, es un ajuste de alcance a definir.
 
 ## SHA del commit final
-Pendiente de push (se completa en el mensaje del chat tras publicar).
+`2f57761f3d5defca2f5b6e9d64e61ae067d2cc6f`.
 
 ## Estado final
 **COMPLETADA** — código final aplicado y validado (estática + verificación de datos de origen + runtime contra datos reales + batería completa), MD de integración (este documento), `docs/integraciones/README.md` actualizado, commit `CLAUDE | INT-6 | Customer Experience | AnalisisPreguntasYTemasMtto | v001`.
