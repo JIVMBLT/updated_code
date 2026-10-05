@@ -17,7 +17,7 @@
     'ventas-prospeccion':'Prospección', 'ventas-prospeccion-nueva':'Nueva visita', 'ventas-prospeccion-detalle':'Detalle de visita', 'ventas-mapa-prospeccion':'Mapa Prospección', 'ventas-asignacion-redes':'Asignación Redes', 'ventas-asignacion-redes-detalle':'Detalle de Asignación a Redes', 'ventas-asignacion-redes-formulario':'Formulario de Asignación a Redes',
     'almacen-dashboard':'Dashboard Almacén', 'almacen-inventario':'Inventario', 'almacen-stock':'Stock',
     'almacen-prestamos':'Préstamos', 'almacen-resguardos':'Resguardos', 'almacen-auditoria':'Auditoría', 'almacen-carga':'Carga de Información',
-    'cx-dashboard':'Dashboard CX', 'cx-encuestas':'Encuestas', 'cx-visitas':'Visitas',
+    'cx-dashboard':'Dashboard CX', 'cx-encuestas':'Encuestas', 'cx-visitas':'Visitas', 'entregas-control':'Control de Entregas',
     'legal-dashboard':'Dashboard Legal', 'legal-contratos':'Contratos', 'legal-suspendidos':'Suspendidos',
     'soporte-dashboard':'Dashboard de Soporte', 'soporte-solicitudes':'Solicitudes de Soporte', 'soporte-chats':'Chats de Soporte',
     'experimental-atencion-prioritaria':'Atención Prioritaria', 'experimental-resumen-dia':'Resumen del Día',
@@ -311,6 +311,17 @@
     setActiveSide('cx-encuestas');
     updateContext('cx-encuestas','Customer Experience · detalle de encuestas por área (LAB SQLite)');
     if(window.ManttoCustomerExperienceEncuestas) window.ManttoCustomerExperienceEncuestas.init();
+    return true;
+  }
+
+  // [Claude | 2026-10-05 | CLAUDE-MG | LAB DGB - ENTREGAS V001]
+  function showEntregasControl(){
+    const view=document.getElementById('view-entregas-control');
+    if(!view) return false;
+    activateViewById('view-entregas-control');
+    setActiveSide('entregas-control');
+    updateContext('entregas-control','Entregas · control de entregas recurrentes de colaboradores (LAB SQLite)');
+    if(window.ManttoEntregasControl) window.ManttoEntregasControl.init();
     return true;
   }
 
@@ -927,6 +938,7 @@
     if(route==='informes' && showInformes()) return;
     if(route==='cx-dashboard' && showCxDashboard()) return;
     if(route==='cx-encuestas' && showCxEncuestas()) return;
+    if(route==='entregas-control' && showEntregasControl()) return;
     if(route==='portafolio' && showPortafolio()) return;
     if(route==='proyectos' && showProyectos()) return;
     if(route==='callcenter' && showCallCenter()) return;

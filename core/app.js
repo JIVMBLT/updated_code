@@ -147,7 +147,8 @@
     instalaciones_cerrados:true,
     instalaciones_contactos:true,
     cx_dashboard:true,
-    cx_encuestas:true
+    cx_encuestas:true,
+    entregas_control:true
   });
 
   function applyTemporarySidebarPermissions(){
