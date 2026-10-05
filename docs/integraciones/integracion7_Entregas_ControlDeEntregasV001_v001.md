@@ -97,7 +97,7 @@ Todos los módulos existentes (Operación, Instalaciones, Customer Experience, e
 - Al igual que en integraciones anteriores, el archivo vive en IndexedDB local del navegador (vía `ManttoLabBlobStore`) — no hay respaldo en otro lugar; si el usuario borra datos del sitio, los archivos cargados se pierden (mismo comportamiento ya existente para Pendientes/Logística/Ventas, no es una limitación nueva de este módulo).
 
 ## SHA del commit final
-Pendiente de push (se completa en el mensaje del chat tras publicar).
+`049461b02ba1f3109d657b46215a15825e3fa647`.
 
 ## Estado final
 **COMPLETADA** — código final aplicado y validado (estática + runtime contra datos reales con guardias de autorización probados explícitamente + batería completa), MD de integración (este documento), `docs/integraciones/README.md` actualizado, commit `CLAUDE | INT-7 | Entregas | ControlDeEntregasV001 | v001`.
