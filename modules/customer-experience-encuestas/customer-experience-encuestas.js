@@ -547,7 +547,7 @@ const MT_GRUPOS = {
 (function(){
   const API = () => (window.MANTTO_API_BASE || 'http://localhost:3001').replace(/\/$/, '');
 
-  const state = { loaded:false, tab:'venta_instalacion', opciones:null, filtrosVi:{}, filtrosMt:{}, encuestasVi:[], encuestasMt:[] };
+  const state = { loaded:false, tab:'venta_instalacion', opciones:null, filtrosVi:{}, filtrosMt:{}, encuestasVi:[], encuestasMt:[], analisisAbierto:false };
 
   const CE_HTML =
     '<div class="ce-page">' +
@@ -559,6 +559,7 @@ const MT_GRUPOS = {
       '<section class="ce-card">' +
         '<div class="ce-filters" id="ce-filtros"></div>' +
       '</section>' +
+      '<div id="ce-analisis"></div>' +
       '<div id="ce-resultado"><div class="ce-status">Cargando...</div></div>' +
       '<div class="ce-modal-overlay" id="ce-detalle-overlay" hidden>' +
         '<div class="ce-modal" role="dialog" aria-modal="true">' +
@@ -603,7 +604,11 @@ const MT_GRUPOS = {
         selectHtml('ce-mt-superintendente','Superintendente',o.superintendentes,state.filtrosMt.superintendente) +
         selectHtml('ce-mt-categoria','Categoría',o.categorias,state.filtrosMt.categoria);
       [['ce-mt-estado','estado'],['ce-mt-superintendente','superintendente'],['ce-mt-categoria','categoria']].forEach(([id,key])=>{
-        $(id).addEventListener('change', ()=>{ state.filtrosMt[key] = $(id).value; cargarTab(); });
+        $(id).addEventListener('change', ()=>{
+          state.filtrosMt[key] = $(id).value;
+          cargarTab();
+          if(state.analisisAbierto) cargarCuerpoAnalisis();
+        });
       });
     }
   }
@@ -696,10 +701,109 @@ const MT_GRUPOS = {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Análisis (solo pestaña Mantenimiento): preguntas cerradas (% por
+  // respuesta, con drill-down) y temas recurrentes en los comentarios
+  // abiertos (frecuencia de palabras, con drill-down). Clic en una barra
+  // o una palabra abre la lista de encuestas que la mencionan; clic en
+  // una de esas encuestas abre su detalle completo (mismo modal, dos
+  // niveles).
+  // ---------------------------------------------------------------------
+  function mtParams(extra){
+    const params = new URLSearchParams();
+    Object.entries(state.filtrosMt).forEach(([k,v])=>{ if(v) params.set(k,v); });
+    if(extra) Object.entries(extra).forEach(([k,v])=>{ if(v!=null && v!=='') params.set(k,v); });
+    return params.toString();
+  }
+
+  function renderAnalisisPreguntas(data){
+    const bloques = data.preguntas.map(p=>{
+      const barras = p.opciones.map(o=>
+        '<button type="button" class="ce-bar-row ce-drill" data-tipo="pregunta" data-campo="'+esc(p.campo)+'" data-valor="'+esc(o.valor)+'" data-etiqueta="'+esc(p.etiqueta+' · '+o.valor)+'">' +
+          '<div class="ce-bar-labels"><span>'+esc(o.valor)+'</span><span>'+o.cantidad+' · '+o.porcentaje+'%</span></div>' +
+          '<div class="ce-bar-track"><div class="ce-bar-fill" style="width:'+o.porcentaje+'%"></div></div>' +
+        '</button>'
+      ).join('');
+      return '<div class="ce-analisis-bloque"><h4>'+esc(p.etiqueta)+(p.multi?' <span class="ce-multi-tag">selección múltiple</span>':'')+'</h4><p class="ce-analisis-sub">'+p.total_respuestas+' encuesta(s) respondieron</p>'+barras+'</div>';
+    }).join('');
+    return '<div class="ce-analisis-grid">'+bloques+'</div>';
+  }
+
+  function renderAnalisisTemas(data){
+    const bloques = data.campos.map(c=>{
+      if(!c.palabras.length) return '<div class="ce-analisis-bloque"><h4>'+esc(c.etiqueta)+'</h4><p class="ce-analisis-sub">Sin palabras recurrentes (cada comentario es distinto).</p></div>';
+      const chips = c.palabras.map(p=>
+        '<button type="button" class="ce-tema-chip ce-drill" data-tipo="tema" data-campo="'+esc(c.campo)+'" data-valor="'+esc(p.palabra)+'" data-etiqueta="'+esc(c.etiqueta+' · \u201c'+p.palabra+'\u201d')+'">' +
+          esc(p.palabra)+' <span>'+p.menciones+'</span>' +
+        '</button>'
+      ).join('');
+      return '<div class="ce-analisis-bloque"><h4>'+esc(c.etiqueta)+'</h4><p class="ce-analisis-sub">'+c.total_comentarios+' comentario(s) · palabras mencionadas en 2 o más encuestas</p><div class="ce-tema-chips">'+chips+'</div></div>';
+    }).join('');
+    return '<div class="ce-analisis-grid">'+bloques+'</div>';
+  }
+
+  async function cargarAnalisis(){
+    const host = $('ce-analisis');
+    host.innerHTML =
+      '<section class="ce-card">' +
+        '<button type="button" class="ce-analisis-toggle" id="ce-analisis-toggle">' + (state.analisisAbierto?'▾':'▸') + ' Análisis de preguntas cerradas y comentarios</button>' +
+        '<div id="ce-analisis-body"'+(state.analisisAbierto?'':' hidden')+'><div class="ce-status">Cargando análisis...</div></div>' +
+      '</section>';
+    $('ce-analisis-toggle').addEventListener('click', async ()=>{
+      state.analisisAbierto = !state.analisisAbierto;
+      $('ce-analisis-body').hidden = !state.analisisAbierto;
+      $('ce-analisis-toggle').textContent = (state.analisisAbierto?'▾':'▸') + ' Análisis de preguntas cerradas y comentarios';
+      if(state.analisisAbierto) await cargarCuerpoAnalisis();
+    });
+    if(state.analisisAbierto) await cargarCuerpoAnalisis();
+  }
+
+  async function cargarCuerpoAnalisis(){
+    const body = $('ce-analisis-body');
+    body.innerHTML = '<div class="ce-status">Cargando análisis...</div>';
+    try{
+      const [preguntas, temas] = await Promise.all([
+        fetchJson('/api/customer-experience/mantenimiento/analisis-preguntas?'+mtParams()),
+        fetchJson('/api/customer-experience/mantenimiento/analisis-temas?'+mtParams())
+      ]);
+      body.innerHTML =
+        '<h3 class="ce-analisis-titulo">Preguntas cerradas</h3>' + renderAnalisisPreguntas(preguntas) +
+        '<h3 class="ce-analisis-titulo">Temas en comentarios abiertos</h3>' + renderAnalisisTemas(temas);
+      body.querySelectorAll('.ce-drill').forEach(btn=> btn.addEventListener('click', ()=> abrirDrilldownAnalisis(btn.dataset)));
+    }catch(e){
+      body.innerHTML = '<div class="ce-status">Error cargando análisis: '+esc(e.message)+'</div>';
+    }
+  }
+
+  async function abrirDrilldownAnalisis(ds){
+    $('ce-detalle-titulo').textContent = ds.etiqueta;
+    $('ce-detalle-body').innerHTML = '<div class="ce-status">Cargando...</div>';
+    $('ce-detalle-overlay').hidden = false;
+    try{
+      const path = ds.tipo==='pregunta' ? '/api/customer-experience/mantenimiento/analisis-preguntas/detalle' : '/api/customer-experience/mantenimiento/analisis-temas/detalle';
+      const campoParam = ds.tipo==='pregunta' ? 'campo' : 'campo';
+      const valorParam = ds.tipo==='pregunta' ? 'valor' : 'palabra';
+      const data = await fetchJson(path+'?'+mtParams({[campoParam]:ds.campo,[valorParam]:ds.valor}));
+      if(!data.encuestas.length){ $('ce-detalle-body').innerHTML = '<div class="ce-status">Sin encuestas encontradas.</div>'; return; }
+      const items = data.encuestas.map(r=>
+        '<button type="button" class="ce-row ce-row-compact" data-id="'+r.id+'">' +
+          '<div class="ce-row-main"><strong>'+esc(r.proyecto_sitio_del_servicio)+'</strong><span class="ce-row-sub">'+esc(r.nombre)+'</span></div>' +
+          '<span class="ce-nps-badge '+npsBadgeClase(r.indice_de_recomendacion)+'">NPS '+esc(r.indice_de_recomendacion)+'</span>' +
+        '</button>'
+      ).join('');
+      $('ce-detalle-body').innerHTML = '<p class="ce-analisis-sub">'+data.total+' encuesta(s). Clic en una para ver el detalle completo.</p><div class="ce-list">'+items+'</div>';
+      state.encuestasMt = data.encuestas; // para que abrirDetalleMt(id) encuentre la fila
+      $('ce-detalle-body').querySelectorAll('.ce-row').forEach(btn=> btn.addEventListener('click', ()=> abrirDetalleMt(Number(btn.dataset.id))));
+    }catch(e){
+      $('ce-detalle-body').innerHTML = '<div class="ce-status">Error: '+esc(e.message)+'</div>';
+    }
+  }
+
   function cambiarTab(tab){
     state.tab = tab;
     document.querySelectorAll('.ce-tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
     renderFiltros();
+    if(tab==='mantenimiento') cargarAnalisis(); else $('ce-analisis').innerHTML='';
     cargarTab();
   }
 

@@ -163,18 +163,155 @@
     rows=rows.filter(r=>matches(filtros.tipo_encuesta,r.tipo_encuesta)&&matches(filtros.vendedor,r.vendedor)&&matches(filtros.supervisor,r.supervisor));
     return{total:rows.length,encuestas:rows};
   }
-  function listarMantenimiento(userId,query,candidateDb){
-    const db=dbOr(candidateDb);
-    const q=query||{};
-    const filtros={estado:text(q.estado),z_general:text(q.z_general),z_operativa:text(q.z_operativa),z_administrativa:text(q.z_administrativa),superintendente:text(q.superintendente),supervisor_operativo:text(q.supervisor_operativo),categoria:text(q.categoria),prioridad:text(q.prioridad)};
+  function mantenimientoFiltrosFromQuery(q){
+    return{estado:text(q.estado),z_general:text(q.z_general),z_operativa:text(q.z_operativa),z_administrativa:text(q.z_administrativa),superintendente:text(q.superintendente),supervisor_operativo:text(q.supervisor_operativo),categoria:text(q.categoria),prioridad:text(q.prioridad)};
+  }
+  function mantenimientoRowsFiltradas(filtros,db){
     let rows=db.query('SELECT * FROM cx_mantenimiento_encuestas ORDER BY id DESC');
-    rows=rows.filter(r=>
+    return rows.filter(r=>
       matches(filtros.estado,r.estado)&&matches(filtros.z_general,r.z_general)&&matches(filtros.z_operativa,r.z_operativa)&&
       matches(filtros.z_administrativa,r.z_administrativa)&&matches(filtros.superintendente,r.superintendente)&&
       matches(filtros.supervisor_operativo,r.supervisor_operativo)&&matches(filtros.categoria,r.categoria)&&matches(filtros.prioridad,r.prioridad)
     );
+  }
+  function listarMantenimiento(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const rows=mantenimientoRowsFiltradas(mantenimientoFiltrosFromQuery(query||{}),db);
     return{total:rows.length,encuestas:rows};
   }
 
-  return Object.freeze({opciones,dashboard,listarVentaInstalacion,listarMantenimiento});
+  // ---------------------------------------------------------------------
+  // Preguntas cerradas (Respuestas de formulario 1, Mantenimiento): un
+  // conjunto fijo de valores posibles por pregunta, confirmado contra los
+  // datos reales de origen (no un supuesto): NPS crudo, los 6 CSAT, los 6
+  // checklists de "oportunidad de mejora" (seleccion multiple, separados
+  // por coma en la celda) y las 3 preguntas de confianza/valor/riesgo.
+  // ---------------------------------------------------------------------
+  const PREGUNTAS_CERRADAS = [
+    {campo:'1_en_una_escala_del_1_al_10_que_tan_prob',etiqueta:'NPS — ¿Qué tan probable es que recomiendes los servicios de BLT?',multi:false},
+    {campo:'csat_mantenimiento',etiqueta:'CSAT — Mantenimiento preventivo',multi:false},
+    {campo:'csat_atencion_de_fallas',etiqueta:'CSAT — Atención de fallas',multi:false},
+    {campo:'csat_seguimiento_de_supervisor',etiqueta:'CSAT — Seguimiento de supervisor',multi:false},
+    {campo:'csat_cotizaciones_suministros_y_reparaci',etiqueta:'CSAT — Cotizaciones, suministros y reparaciones',multi:false},
+    {campo:'csat_facturacion',etiqueta:'CSAT — Facturación',multi:false},
+    {campo:'csat_atencion_al_cliente',etiqueta:'CSAT — Atención al cliente',multi:false},
+    {campo:'3_1_mantenimiento_preventivo_oportunidad',etiqueta:'3.1 Mantenimiento preventivo — Oportunidad de mejora',multi:true},
+    {campo:'3_2_atencion_de_fallas_oportunidad_de_me',etiqueta:'3.2 Atención de fallas — Oportunidad de mejora',multi:true},
+    {campo:'3_3_seguimiento_de_supervisor_oportunida',etiqueta:'3.3 Seguimiento de supervisor — Oportunidad de mejora',multi:true},
+    {campo:'3_4_cotizaciones_suministros_y_reparacio',etiqueta:'3.4 Cotizaciones, suministros y reparaciones — Oportunidad de mejora',multi:true},
+    {campo:'3_5_facturacion_oportunidad_de_mejora',etiqueta:'3.5 Facturación — Oportunidad de mejora',multi:true},
+    {campo:'3_6_atencion_al_cliente_oportunidad_de_m',etiqueta:'3.6 Atención al cliente — Oportunidad de mejora',multi:true},
+    {campo:'4_tengo_confianza_en_blt_para_la_operaci',etiqueta:'4. Tengo confianza en BLT para la operación de los equipos',multi:false},
+    {campo:'5_el_servicio_recibido_justifica_el_cost',etiqueta:'5. El servicio recibido justifica el costo del mantenimiento',multi:false},
+    {campo:'6_pensando_en_el_futuro_que_tan_probable',etiqueta:'6. ¿Qué tan probable sería considerar un cambio de proveedor?',multi:false}
+  ];
+
+  function opcionesMultiSelect(valor){
+    return text(valor,2000)?String(valor).split(',').map(s=>s.trim()).filter(Boolean):[];
+  }
+  function analisisPreguntaCerrada(def,rows){
+    const conteo={};
+    let totalRespuestas=0;
+    rows.forEach(r=>{
+      const crudo=r[def.campo];
+      if(crudo==null||String(crudo).trim()==='')return;
+      totalRespuestas++;
+      const valores=def.multi?opcionesMultiSelect(crudo):[text(crudo)];
+      valores.forEach(v=>{ if(v)conteo[v]=(conteo[v]||0)+1; });
+    });
+    const opciones=Object.entries(conteo)
+      .map(([valor,cantidad])=>({valor,cantidad,porcentaje:totalRespuestas?Math.round(100*cantidad/totalRespuestas):0}))
+      .sort((a,b)=>b.cantidad-a.cantidad);
+    return{campo:def.campo,etiqueta:def.etiqueta,multi:def.multi,total_respuestas:totalRespuestas,opciones};
+  }
+  function analisisPreguntasCerradas(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const filtros=mantenimientoFiltrosFromQuery(query||{});
+    const rows=mantenimientoRowsFiltradas(filtros,db);
+    return{total_encuestas:rows.length,preguntas:PREGUNTAS_CERRADAS.map(def=>analisisPreguntaCerrada(def,rows))};
+  }
+  function detallePreguntaCerrada(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const q=query||{};
+    const def=PREGUNTAS_CERRADAS.find(p=>p.campo===text(q.campo));
+    if(!def) throw Object.assign(new Error('Pregunta cerrada no reconocida.'),{status:400,code:'LAB_CX_CAMPO_INVALIDO'});
+    const valor=text(q.valor);
+    if(!valor) throw Object.assign(new Error('Falta el valor a buscar.'),{status:400,code:'LAB_CX_VALOR_REQUERIDO'});
+    const filtros=mantenimientoFiltrosFromQuery(q);
+    let rows=mantenimientoRowsFiltradas(filtros,db);
+    rows=rows.filter(r=>{
+      const crudo=r[def.campo];
+      if(crudo==null)return false;
+      return def.multi?opcionesMultiSelect(crudo).includes(valor):text(crudo)===valor;
+    });
+    return{campo:def.campo,etiqueta:def.etiqueta,valor,total:rows.length,encuestas:rows};
+  }
+
+  // ---------------------------------------------------------------------
+  // Campos de texto abierto (narrativos, llenados por el encuestador):
+  // analisis de palabras/temas recurrentes por frecuencia, con el detalle
+  // de que encuestas mencionan cada una. Deliberadamente simple y
+  // transparente (frecuencia de palabras, sin inferencia de IA): cada
+  // conteo es exactamente verificable contra el texto real.
+  // ---------------------------------------------------------------------
+  const CAMPOS_TEMA = [
+    {campo:'aspectos_destacables',etiqueta:'Aspectos destacables'},
+    {campo:'areas_de_oportunidad',etiqueta:'Áreas de oportunidad'},
+    {campo:'temas_operativos',etiqueta:'Temas Operativos'},
+    {campo:'temas_administrativos',etiqueta:'Temas Administrativos'},
+    {campo:'valor_agregado',etiqueta:'Valor Agregado'}
+  ];
+  const STOPWORDS = new Set(['para','esto','esta','este','estos','estas','como','pero','mas','más','con','los','las','del','por','que','una','uno','unos','unas','sus','sin','son','fue','ser','hay','muy','poco','mucho','cuando','donde','tiene','tienen','tener','hace','hacen','entre','desde','sobre','cada','todo','toda','todos','todas','otro','otra','otros','otras','algo','algún','alguna','algunos','algunas','nos','les','etc','tiempo'].map(w=>w.normalize('NFC')));
+  function normalizarPalabra(w){
+    return w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+  }
+  function analisisTemaCampo(def,rows,topN){
+    const conteo={}; // palabra normalizada -> {original, cantidadComentarios:Set(ids)}
+    let totalComentarios=0;
+    rows.forEach(r=>{
+      const texto=r[def.campo];
+      if(texto==null||String(texto).trim()==='')return;
+      totalComentarios++;
+      const vistoEnEsteComentario=new Set();
+      String(texto).split(/[^a-zA-ZÁÉÍÓÚÑáéíóúñ0-9]+/).forEach(palabraOriginal=>{
+        const norm=normalizarPalabra(palabraOriginal);
+        if(norm.length<5||STOPWORDS.has(norm)||/^\d+$/.test(norm))return;
+        if(vistoEnEsteComentario.has(norm))return; // cuenta 1 vez por encuesta, no por repeticion dentro del mismo comentario
+        vistoEnEsteComentario.add(norm);
+        if(!conteo[norm])conteo[norm]={original:palabraOriginal.toLowerCase(),ids:new Set()};
+        conteo[norm].ids.add(r.id);
+      });
+    });
+    const palabras=Object.values(conteo)
+      .map(x=>({palabra:x.original,menciones:x.ids.size,porcentaje:totalComentarios?Math.round(100*x.ids.size/totalComentarios):0,ids:[...x.ids]}))
+      .filter(x=>x.menciones>=2) // ignora palabras que solo aparecen en 1 encuesta (ruido)
+      .sort((a,b)=>b.menciones-a.menciones)
+      .slice(0,topN||15)
+      .map(({ids,...rest})=>rest); // no mandamos los ids en el listado general, solo en el drill-down
+    return{campo:def.campo,etiqueta:def.etiqueta,total_comentarios:totalComentarios,palabras};
+  }
+  function analisisTemas(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const filtros=mantenimientoFiltrosFromQuery(query||{});
+    const rows=mantenimientoRowsFiltradas(filtros,db);
+    return{total_encuestas:rows.length,campos:CAMPOS_TEMA.map(def=>analisisTemaCampo(def,rows,15))};
+  }
+  function detalleTema(userId,query,candidateDb){
+    const db=dbOr(candidateDb);
+    const q=query||{};
+    const def=CAMPOS_TEMA.find(c=>c.campo===text(q.campo));
+    if(!def) throw Object.assign(new Error('Campo de tema no reconocido.'),{status:400,code:'LAB_CX_CAMPO_INVALIDO'});
+    const palabra=normalizarPalabra(text(q.palabra)||'');
+    if(!palabra) throw Object.assign(new Error('Falta la palabra a buscar.'),{status:400,code:'LAB_CX_VALOR_REQUERIDO'});
+    const filtros=mantenimientoFiltrosFromQuery(q);
+    let rows=mantenimientoRowsFiltradas(filtros,db);
+    rows=rows.filter(r=>{
+      const texto=r[def.campo];
+      if(texto==null)return false;
+      return String(texto).split(/[^a-zA-ZÁÉÍÓÚÑáéíóúñ0-9]+/).some(w=>normalizarPalabra(w)===palabra);
+    });
+    return{campo:def.campo,etiqueta:def.etiqueta,palabra:text(q.palabra),total:rows.length,encuestas:rows};
+  }
+
+  return Object.freeze({opciones,dashboard,listarVentaInstalacion,listarMantenimiento,analisisPreguntasCerradas,detallePreguntaCerrada,analisisTemas,detalleTema});
 });

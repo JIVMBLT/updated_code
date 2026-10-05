@@ -9,3 +9,4 @@ Registro de integraciones realizadas bajo la Norma Final de Trabajo (repositorio
 | INT-3 | Instalaciones | AltaMultipleContactos | v001 | COMPLETADA | `integracion3_Instalaciones_AltaMultipleContactos_v001.md` |
 | INT-4 | Customer Experience | DashboardCombinado | v001 | COMPLETADA | `integracion4_CustomerExperience_DashboardCombinado_v001.md` |
 | INT-5 | Customer Experience | DetalleEncuestasPorArea | v001 | COMPLETADA | `integracion5_CustomerExperience_DetalleEncuestasPorArea_v001.md` |
+| INT-6 | Customer Experience | AnalisisPreguntasYTemasMtto | v001 | COMPLETADA | `integracion6_CustomerExperience_AnalisisPreguntasYTemasMtto_v001.md` |

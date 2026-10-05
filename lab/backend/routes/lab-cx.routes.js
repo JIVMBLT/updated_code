@@ -17,6 +17,10 @@ function register(router){
   router.get('/api/customer-experience/dashboard',requireAuth,gate(PERMS.dashboardRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().dashboard(userId(req),req.query,req.db)}));
   router.get('/api/customer-experience/venta-instalacion/encuestas',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().listarVentaInstalacion(userId(req),req.query,req.db)}));
   router.get('/api/customer-experience/mantenimiento/encuestas',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().listarMantenimiento(userId(req),req.query,req.db)}));
+  router.get('/api/customer-experience/mantenimiento/analisis-preguntas',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().analisisPreguntasCerradas(userId(req),req.query,req.db)}));
+  router.get('/api/customer-experience/mantenimiento/analisis-preguntas/detalle',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().detallePreguntaCerrada(userId(req),req.query,req.db)}));
+  router.get('/api/customer-experience/mantenimiento/analisis-temas',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().analisisTemas(userId(req),req.query,req.db)}));
+  router.get('/api/customer-experience/mantenimiento/analisis-temas/detalle',requireAuth,gate(PERMS.encuestasRead,GROUPS.cx),(req,res)=>res.json({ok:true,source:'lab-sqlite',...cxService().detalleTema(userId(req),req.query,req.db)}));
   return router;
 }
 return Object.freeze({register,PERMS,GROUPS});

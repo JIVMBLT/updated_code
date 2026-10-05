@@ -36,3 +36,26 @@
 .ce-detail-row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px solid #F1F5F9;font-size:12.5px}
 .ce-detail-label{color:#64748B;font-weight:700;flex:0 0 42%}
 .ce-detail-value{color:#1E293B;text-align:right;flex:1}
+
+/* [Claude | 2026-10-02 | CLAUDE-MG | LAB DGB - CUSTOMER EXPERIENCE ANALISIS MTTO V001] */
+.ce-analisis-toggle{all:unset;cursor:pointer;color:#0D2E6E;font-weight:800;font-size:13.5px;display:block;margin-bottom:6px}
+.ce-analisis-titulo{margin:14px 0 8px;color:#0D2E6E;font-size:14px;border-bottom:2px solid #EFF6FF;padding-bottom:6px}
+.ce-analisis-titulo:first-child{margin-top:0}
+.ce-analisis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:6px}
+.ce-analisis-bloque{border:1px solid #F1F5F9;border-radius:10px;padding:12px}
+.ce-analisis-bloque h4{margin:0 0 2px;color:#0D2E6E;font-size:12.5px}
+.ce-analisis-sub{margin:0 0 8px;color:#94A3B8;font-size:11px}
+.ce-multi-tag{font-size:10px;font-weight:700;color:#7C3AED;background:#F3E8FF;border-radius:999px;padding:1px 7px;vertical-align:middle}
+
+.ce-bar-row{all:unset;cursor:pointer;display:block;width:100%;box-sizing:border-box;padding:4px 2px;border-radius:6px}
+.ce-bar-row:hover{background:#F8FAFC}
+.ce-bar-labels{display:flex;justify-content:space-between;font-size:11.5px;color:#334155;margin-bottom:3px}
+.ce-bar-track{height:7px;border-radius:999px;background:#F1F5F9;overflow:hidden}
+.ce-bar-fill{height:100%;background:#1B4FD8;border-radius:999px}
+
+.ce-tema-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ce-tema-chip{all:unset;cursor:pointer;background:#EFF6FF;color:#0D2E6E;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700}
+.ce-tema-chip:hover{background:#DBEAFE}
+.ce-tema-chip span{color:#1B4FD8;font-weight:900;margin-left:3px}
+
+.ce-row-compact{padding:9px 12px}
