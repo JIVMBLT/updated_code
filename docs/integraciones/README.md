@@ -11,3 +11,4 @@ Registro de integraciones realizadas bajo la Norma Final de Trabajo (repositorio
 | INT-5 | Customer Experience | DetalleEncuestasPorArea | v001 | COMPLETADA | `integracion5_CustomerExperience_DetalleEncuestasPorArea_v001.md` |
 | INT-6 | Customer Experience | AnalisisPreguntasYTemasMtto | v001 | COMPLETADA | `integracion6_CustomerExperience_AnalisisPreguntasYTemasMtto_v001.md` |
 | INT-7 | Entregas | ControlDeEntregasV001 | v001 | COMPLETADA | `integracion7_Entregas_ControlDeEntregasV001_v001.md` |
+| INT-8 | Instalaciones | ContactosYEnvioBitacora | v001 | COMPLETADA | `integracion8_Instalaciones_ContactosYEnvioBitacora_v001.md` |

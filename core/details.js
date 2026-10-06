@@ -174,6 +174,20 @@
         .mg-bitacora-truncado{font-size:10px;color:#B45309;background:#FFFBEB;border-top:1px solid #FDE68A;padding:6px 12px}
         .mg-bitacora-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-top:1px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:10px;font-weight:700;flex-wrap:wrap}.mg-bitacora-page-actions{display:flex;align-items:center;gap:7px}.mg-bitacora-page-button{border:1px solid #CBD5E1;background:#fff;color:#0D2E6E;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer}.mg-bitacora-page-button:disabled{opacity:.45;cursor:not-allowed}
         @media(max-width:720px){.mg-bitacora-table{display:block;overflow-x:auto}.mg-bitacora-head{align-items:flex-start}}
+        .mg-contactos-panel{background:#fff;border:1px solid rgba(13,46,110,.18);border-radius:12px;overflow:hidden}
+        .mg-contactos-head{padding:10px 14px;background:#EFF6FF;color:#0D2E6E;font-size:13px;font-weight:900}
+        .mg-contactos-cat{padding:8px 14px 2px;font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:.03em}
+        .mg-bitacora-envio-btn{border:1px solid #1B4FD8;background:#EFF6FF;color:#1B4FD8;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:850;cursor:pointer;white-space:nowrap}
+        .mg-bitacora-envio-btn:hover{background:#DBEAFE}
+        .mg-bitacora-envio-info{display:block;margin-top:3px;font-size:10px;color:#64748B}
+        .mg-envio-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px}
+        .mg-envio-modal{background:#fff;border-radius:14px;width:min(520px,100%);max-height:90vh;overflow:auto;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+        .mg-envio-modal h4{margin:0 0 4px;color:#0D2E6E;font-size:16px}.mg-envio-doc{font-size:12px;color:#475569;margin-bottom:12px;word-break:break-all}
+        .mg-envio-cat{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1px solid #E2E8F0;border-radius:9px;margin-bottom:8px;font-size:12.5px;color:#0F172A;cursor:pointer}
+        .mg-envio-cat.off{opacity:.5;cursor:not-allowed}.mg-envio-cat small{display:block;color:#64748B;font-size:11px;margin-top:2px}
+        .mg-envio-msg{margin:10px 0;padding:9px 11px;border-radius:9px;font-size:12px}.mg-envio-msg.error{background:#FEF2F2;color:#B91C1C}.mg-envio-msg.ok{background:#F0FDF4;color:#166534}
+        .mg-envio-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+        .mg-envio-actions button{border:0;border-radius:8px;padding:8px 14px;font-weight:800;font-size:12.5px;cursor:pointer}.mg-envio-send{background:#0D2E6E;color:#fff}.mg-envio-send:disabled{opacity:.5;cursor:wait}.mg-envio-cancel{background:#E2E8F0;color:#0F172A}
         .mg-chart-grid{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr);gap:14px}.mg-chart-card{border:1px solid #E2E8F0;border-radius:12px;padding:14px;background:#fff}.mg-chart-card h4{margin:0 0 12px;color:#0D2E6E;font-size:13px}
         .mg-bar-row{display:grid;grid-template-columns:minmax(90px,160px) 1fr 48px;gap:10px;align-items:center;margin:9px 0}.mg-bar-label{font-size:11px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mg-bar-track{height:16px;border-radius:999px;background:#E9EFF8;overflow:hidden}.mg-bar-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,#1B4FD8,#0D2E6E);min-width:0}.mg-bar-value{text-align:right;font-size:11px;font-weight:800;color:#0D2E6E}
         .mg-project-kpis{display:grid;gap:10px;margin-bottom:10px}.mg-project-kpis.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.mg-project-kpis.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.mg-project-kpi{min-height:104px;border:0;border-radius:15px;padding:13px 11px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;color:#fff;box-shadow:0 9px 20px rgba(13,46,110,.14)}.mg-project-kpi-icon{font-size:22px;line-height:1}.mg-project-kpi span:not(.mg-project-kpi-icon){display:block;font-size:9px;text-transform:uppercase;font-weight:900;letter-spacing:.04em;color:rgba(255,255,255,.94)}.mg-project-kpi strong{display:block;color:#fff;font-size:28px;line-height:1}.mg-project-kpi small{font-size:9px;color:rgba(255,255,255,.76)}.mg-project-kpi-green{background:linear-gradient(135deg,#16A34A,#166534)}.mg-project-kpi-red{background:linear-gradient(135deg,#DC2626,#991B1B)}.mg-project-kpi-amber{background:linear-gradient(135deg,#D97706,#B45309)}.mg-project-kpi-blue{background:linear-gradient(135deg,#0891B2,#0E7490)}.mg-project-kpi-indigo{background:linear-gradient(135deg,#1B4FD8,#0D2E6E)}.mg-project-kpi-cyan{background:linear-gradient(135deg,#0284C7,#0369A1)}.mg-project-kpi-slate{background:linear-gradient(135deg,#64748B,#475569)}.mg-project-kpi-link{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease}.mg-project-kpi-link:hover,.mg-project-kpi-link:focus-visible{transform:translateY(-2px);box-shadow:0 12px 28px rgba(15,23,42,.18);outline:2px solid rgba(27,79,216,.28);outline-offset:2px}.mg-project-dashboard{padding:14px}.mg-project-rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}.mg-project-ring-card{border:1px solid #E2E8F0;border-radius:12px;padding:14px;background:#fff;min-width:0}.mg-project-ring-card h4{margin:0 0 10px;color:#0D2E6E;font-size:13px}.mg-project-ring-layout{display:flex;align-items:center;gap:14px}.mg-project-ring{width:132px;height:132px;border-radius:50%;position:relative;flex:0 0 132px;background:#E2E8F0}.mg-project-ring:after{content:'';position:absolute;inset:25px;border-radius:50%;background:#fff}.mg-project-ring-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;font-size:18px;font-weight:900;color:#0D2E6E}.mg-project-ring-legend{display:grid;gap:6px;min-width:0}.mg-project-ring-item{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:7px;align-items:center;font-size:10px;color:#475569}.mg-project-ring-dot{width:10px;height:10px;border-radius:50%}.mg-project-ring-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mg-project-ring-value{font-weight:800;color:#0D2E6E}.mg-project-equipment-empty{display:none}
@@ -757,10 +771,56 @@
     if(!sincronizacion||!sincronizacion.ultima_sincronizacion){el.textContent='Aún no se ha sincronizado.';return;}
     el.textContent='Última actualización: '+fmtDateTime(sincronizacion.ultima_sincronizacion);
   }
+  // INT-8: contactos del proyecto + envio por correo (simulado en LAB) de documentos de la Bitacora.
+  function renderContactosPanel(panel,data){
+    const box=document.querySelector('.mg-contactos-panel[data-project-id="'+CSS.escape(String(panel.dataset.projectId))+'"]');
+    if(!box)return;
+    if(!Array.isArray(data&&data.contactos)){box.hidden=true;return;}
+    box.hidden=false;
+    const list=data.contactos,body=box.querySelector('.mg-contactos-body');
+    if(!list.length){body.innerHTML='<div class="mg-bitacora-empty">Este proyecto aún no tiene contactos. Se dan de alta en Instalaciones › Base de Datos de Contactos.</div>';return;}
+    const cats=[...new Set(list.map(c=>c.categoria))];
+    body.innerHTML=cats.map(cat=>'<div class="mg-contactos-cat">'+esc(cat)+'</div><div class="mg-table-wrap"><table class="mg-bitacora-table"><thead><tr><th>Nombre</th><th>Puesto</th><th>Correo</th><th>Teléfono</th></tr></thead><tbody>'+list.filter(c=>c.categoria===cat).map(c=>'<tr><td>'+esc(c.nombre)+'</td><td>'+esc(c.puesto)+'</td><td>'+esc(c.correo)+'</td><td>'+esc(c.telefono)+'</td></tr>').join('')+'</tbody></table></div>').join('');
+  }
+  function envioCellHtml(doc){
+    const info=Number(doc.total_envios)>0?'<span class="mg-bitacora-envio-info">Último envío: '+fmtDateTime(doc.ultimo_envio)+' ('+Number(doc.total_envios)+')</span>':'';
+    return '<button type="button" class="mg-bitacora-envio-btn" data-bitacora-enviar="'+esc(doc.id_documento)+'">✉ Enviar</button>'+info;
+  }
+  function openEnvioBitacora(panel,doc){
+    const data=panel._bitacoraData||{},contactos=data.contactos||[],projectId=panel.dataset.projectId;
+    const cats=(Array.isArray(data.categorias_contacto)&&data.categorias_contacto.length?data.categorias_contacto:[...new Set(contactos.map(c=>c.categoria))]);
+    const withMail=cat=>contactos.filter(c=>c.categoria===cat&&String(c.correo||'').trim()).length;
+    const ov=document.createElement('div');ov.className='mg-envio-overlay';
+    ov.innerHTML='<div class="mg-envio-modal" role="dialog" aria-modal="true"><h4>Enviar documento por correo</h4><div class="mg-envio-doc">'+esc(doc.nombre_archivo)+'</div><p style="font-size:12px;color:#475569;margin:0 0 10px">Elige una o varias categorías; se enviará a los contactos de este proyecto que tengan correo registrado.</p>'+
+      cats.map((cat,i)=>{const n=withMail(cat);return '<label class="mg-envio-cat'+(n?'':' off')+'"><input type="checkbox" value="'+esc(cat)+'" '+(n?'':'disabled')+'><span>'+esc(cat)+'<small>'+(n?n+' contacto'+(n===1?'':'s')+' con correo':'Sin contactos con correo')+'</small></span></label>';}).join('')+
+      '<div class="mg-envio-msg" hidden></div><div class="mg-envio-actions"><button type="button" class="mg-envio-cancel">Cerrar</button><button type="button" class="mg-envio-send">Enviar</button></div></div>';
+    document.body.appendChild(ov);
+    const msg=ov.querySelector('.mg-envio-msg'),send=ov.querySelector('.mg-envio-send');
+    const close=()=>ov.remove();
+    ov.querySelector('.mg-envio-cancel').addEventListener('click',close);
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    const show=(text,kind)=>{msg.hidden=false;msg.className='mg-envio-msg '+kind;msg.textContent=text;};
+    send.addEventListener('click',async()=>{
+      const categorias=[...ov.querySelectorAll('input[type=checkbox]:checked')].map(i=>i.value);
+      if(!categorias.length){show('Selecciona al menos una categoría.','error');return;}
+      send.disabled=true;send.textContent='Enviando...';
+      try{
+        const res=await postJson('/api/instalaciones/proyectos/'+encodeURIComponent(projectId)+'/documentos/'+encodeURIComponent(doc.id_documento)+'/enviar',{categorias});
+        const r=res.data||res;
+        show('Envío simulado en Laboratorio (no sale correo real). Destinatarios ('+r.total_destinatarios+'): '+(r.destinatarios||[]).map(d=>d.correo).join(', '),'ok');
+        send.hidden=true;ov.querySelector('.mg-envio-cancel').textContent='Cerrar';
+        loadBitacoraPersisted(panel,projectId);
+      }catch(error){
+        show(error.message||'No fue posible enviar el documento.','error');send.disabled=false;send.textContent='Enviar';
+      }
+    });
+  }
   function renderBitacoraTable(panel,data,pageNumber){
     const body=panel.querySelector('.mg-bitacora-body');
     const documentos=(data&&data.documentos)||[];
     panel._bitacoraData=data;
+    renderContactosPanel(panel,data);
+    const hasEnvio=Array.isArray(data&&data.contactos);
     renderBitacoraLastSync(panel,data&&data.sincronizacion);
     if(!documentos.length){
       body.innerHTML='<div class="mg-bitacora-empty">Todavía no se ha registrado ningún documento. Usa "Actualizar" para sincronizar con Drive.</div>';
@@ -778,15 +838,19 @@
       const evidencia=totalFotos?'<span class="mg-bitacora-photo-evidence" title="'+totalFotos+' imagen'+(totalFotos===1?'':'es')+' de evidencia con la fecha del documento" aria-label="'+totalFotos+' imagen'+(totalFotos===1?'':'es')+' de evidencia fotográfica">📷 '+totalFotos+'</span>':'';
       const nombre=(doc.web_view_link?'<span class="mg-bitacora-doc-link" data-bitacora-link="'+esc(doc.web_view_link)+'">'+bitacoraDocIcon(doc.mime_type)+' '+esc(doc.nombre_archivo)+'</span>':bitacoraDocIcon(doc.mime_type)+' '+esc(doc.nombre_archivo))+evidencia;
       const ruta=doc.ruta_carpeta?esc(doc.ruta_carpeta):'Carpeta raíz';
-      return '<tr class="'+(activo?'':'eliminado')+'"><td>'+nombre+'</td><td class="mg-bitacora-ruta">'+ruta+'</td><td>'+fmtDateTime(doc.fecha_movimiento||doc.fecha_modificacion_drive||doc.fecha_creacion_drive)+'</td><td>'+badge+'</td></tr>';
+      return '<tr class="'+(activo?'':'eliminado')+'"><td>'+nombre+'</td><td class="mg-bitacora-ruta">'+ruta+'</td><td>'+fmtDateTime(doc.fecha_movimiento||doc.fecha_modificacion_drive||doc.fecha_creacion_drive)+'</td><td>'+badge+'</td>'+(hasEnvio?'<td>'+envioCellHtml(doc)+'</td>':'')+'</tr>';
     }).join('');
     const end=Math.min(start+BITACORA_PAGE_SIZE,documentos.length);
     const pagination='<div class="mg-bitacora-pagination"><span>Registros '+(start+1)+'–'+end+' de '+documentos.length+'</span><div class="mg-bitacora-page-actions"><button type="button" class="mg-bitacora-page-button" data-bitacora-page="'+(currentPage-1)+'" '+(currentPage===1?'disabled':'')+'>Anterior</button><span>Página '+currentPage+' de '+totalPages+'</span><button type="button" class="mg-bitacora-page-button" data-bitacora-page="'+(currentPage+1)+'" '+(currentPage===totalPages?'disabled':'')+'>Siguiente</button></div></div>';
-    body.innerHTML='<div class="mg-table-wrap"><table class="mg-bitacora-table"><thead><tr><th>Documento</th><th>Subcarpeta</th><th>Último movimiento</th><th>Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+pagination+
+    body.innerHTML='<div class="mg-table-wrap"><table class="mg-bitacora-table"><thead><tr><th>Documento</th><th>Subcarpeta</th><th>Último movimiento</th><th>Estado</th>'+(hasEnvio?'<th>Correo</th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+pagination+
       (data&&data.sincronizacion&&data.sincronizacion.truncado?'<div class="mg-bitacora-truncado">La carpeta es muy grande: esta sincronización no alcanzó a recorrerla por completo. Vuelve a pulsar "Actualizar".</div>':'');
     body.querySelectorAll('[data-bitacora-link]:not([data-bound])').forEach(el=>{
       el.dataset.bound='1';
       el.addEventListener('click',()=>window.open(el.dataset.bitacoraLink,'_blank','noopener,noreferrer'));
+    });
+    body.querySelectorAll('[data-bitacora-enviar]:not([data-bound])').forEach(btn=>{
+      btn.dataset.bound='1';
+      btn.addEventListener('click',()=>{const doc=documentos.find(d=>String(d.id_documento)===btn.dataset.bitacoraEnviar);if(doc)openEnvioBitacora(panel,doc);});
     });
     body.querySelectorAll('[data-bitacora-page]:not(:disabled)').forEach(button=>{
       button.addEventListener('click',()=>renderBitacoraTable(panel,panel._bitacoraData,Number(button.dataset.bitacoraPage)));
@@ -875,7 +939,8 @@
     const stageBars='<section class="mg-stage-bars"><div class="mg-stage-row"><div class="mg-stage-meta"><span>Avance General</span><strong>'+generalPct+'%</strong></div><div class="mg-stage-track"><div class="mg-stage-fill general" style="width:'+generalPct+'%"></div></div></div>'+phaseBars.map((item,index)=>{const key=['oc','mo','aj'][index];const weight=['40%','40%','20%'][index];const pct=toPct(item.value);return '<div class="mg-stage-row"><div class="mg-stage-meta"><span>'+esc(item.label)+' ('+weight+')</span><strong>'+pct+'%</strong></div><div class="mg-stage-track"><div class="mg-stage-fill '+key+'" style="width:'+pct+'%"></div></div></div>';}).join('')+'</section>';
     const folderManager='<section class="mg-folder-manager" data-project-id="'+esc(proyecto)+'" aria-label="Gestor de la carpeta"><div class="mg-folder-manager-head"><span>Gestor de la carpeta</span><div class="mg-folder-manager-actions"><button type="button" class="mg-folder-oauth-btn mg-folder-oauth-connect" hidden>Conectar Google</button><button type="button" class="mg-folder-oauth-btn disconnect mg-folder-oauth-disconnect" hidden>Desconectar</button><button type="button" class="mg-folder-manager-open" hidden>Abrir en Drive</button></div></div><div class="mg-folder-manager-tabs" role="tablist" aria-label="Vistas de carpeta"><button type="button" class="mg-folder-manager-tab active" data-folder-tab="proyecto">Carpeta del proyecto</button><button type="button" class="mg-folder-manager-tab" data-folder-tab="raiz">Carpeta raíz</button></div><div class="mg-folder-manager-body"><div class="mg-folder-status">Preparando gestor...</div></div></section>';
     const bitacoraObra='<section class="mg-bitacora-panel" data-project-id="'+esc(proyecto)+'" aria-label="Bitácora de Obra" hidden><div class="mg-bitacora-head"><span>Bitácora de Obra</span><div class="mg-bitacora-actions"><span class="mg-bitacora-lastsync">Preparando bitácora...</span><button type="button" class="mg-bitacora-refresh" title="Actualizar bitácora" aria-label="Actualizar bitácora">Actualizar</button></div></div><div class="mg-bitacora-body"><div class="mg-folder-status">Preparando bitácora...</div></div></section>';
-    const coreHtml='<section class="mg-company-block corellian"><div class="mg-company-content mg-corellian-content">'+overview+stageBars+folderManager+bitacoraObra+'<section class="mg-detail-section"><h3>Equipos del proyecto</h3><div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Referencia en sitio</th><th>Estatus</th><th>Fecha visita</th><th>Fin montaje real</th><th>Fin ajuste real</th><th>Avance</th></tr></thead><tbody>'+coreEquipmentRows+'</tbody></table></div></section><div class="mg-chart-grid"><article class="mg-chart-card"><h4>Avance individual por equipo</h4>'+barsHtml(equipmentBars)+'</article></div></div></section>';
+    const contactosObra='<section class="mg-contactos-panel" data-project-id="'+esc(proyecto)+'" aria-label="Contactos del proyecto" hidden><div class="mg-contactos-head">Contactos del proyecto</div><div class="mg-contactos-body"></div></section>';
+    const coreHtml='<section class="mg-company-block corellian"><div class="mg-company-content mg-corellian-content">'+overview+stageBars+folderManager+bitacoraObra+contactosObra+'<section class="mg-detail-section"><h3>Equipos del proyecto</h3><div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Referencia en sitio</th><th>Estatus</th><th>Fecha visita</th><th>Fin montaje real</th><th>Fin ajuste real</th><th>Avance</th></tr></thead><tbody>'+coreEquipmentRows+'</tbody></table></div></section><div class="mg-chart-grid"><article class="mg-chart-card"><h4>Avance individual por equipo</h4>'+barsHtml(equipmentBars)+'</article></div></div></section>';
     const unitedRoot=unitedResponse&&(unitedResponse.data||unitedResponse);
     const unitedSource=String(unitedResponse&&(unitedResponse.origen||unitedResponse.source)||'').trim().toUpperCase();
     const isUnitedPortafolio=unitedSource==='PORTAFOLIO'||unitedSource==='AIVEN-PORTAFOLIO';

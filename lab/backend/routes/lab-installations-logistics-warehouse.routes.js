@@ -32,6 +32,13 @@ function register(router){
  // INSTALACIONES CORELLIAN - local SQLite/IndexedDB.
  router.get('/api/instalaciones/dashboard',requireAuth,gate(PERMS.installationsRead,GROUPS.installations),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().ins.dashboard(userId(req),req.db)}));
  router.get('/api/instalaciones/proyectos',requireAuth,gate(PERMS.installationsRead,GROUPS.installations),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().ins.listProjects(userId(req),req.query,req.db)}));
+ // Alias de lectura que consume la vista de detalle de proyecto (core/details.js):
+ // /api/ins-fl devuelve las filas ins_fl; /api/instalaciones/bitacora/:id devuelve la
+ // Bitacora de Obra con el formato que renderiza el panel. La sincronizacion con Drive
+ // sigue deshabilitada en LAB (local501).
+ router.get('/api/ins-fl',requireAuth,gate(PERMS.installationsRead,GROUPS.installations),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().ins.listProjects(userId(req),req.query,req.db)}));
+ router.get('/api/instalaciones/bitacora/:id',requireAuth,gate(PERMS.installationsDetail,GROUPS.installations),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().ins.bitacora(userId(req),req.params.id,req.db)}));
+ router.post('/api/instalaciones/bitacora/:id/sync',requireAuth,local501);
  router.get('/api/instalaciones/proyectos/:id',requireAuth,gate([...PERMS.installationsRead,...PERMS.installationsDetail],GROUPS.installations),(req,res)=>res.json(wrap(services().ins.detail(userId(req),req.params.id,req.db))));
  router.patch('/api/instalaciones/proyectos/:id',requireAuth,gate(PERMS.installationsEdit,GROUPS.installations),(req,res)=>res.json(wrap(services().ins.update(userId(req),req.params.id,body(req),actor(req),req.db))));
  router.get('/api/instalaciones/carpetas',requireAuth,gate(PERMS.installationsFolders,GROUPS.installations),(req,res)=>res.json({ok:true,source:'lab-sqlite',data:services().ins.listFolders(req.db)}));
@@ -39,6 +46,7 @@ function register(router){
  router.get('/api/instalaciones/proyectos/:id/documentos',requireAuth,gate(PERMS.installationsDocs,GROUPS.installations),(req,res)=>res.json({ok:true,source:'lab-sqlite',data:services().ins.detail(userId(req),req.params.id,req.db).documentos}));
  router.post('/api/instalaciones/proyectos/:id/documentos',requireAuth,gate(PERMS.installationsDocs,GROUPS.installations),async(req,res)=>res.status(201).json(wrap(await services().ins.addDocument(userId(req),req.params.id,body(req),actor(req),req.db))));
  router.get('/api/instalaciones/proyectos/:id/documentos/:idDocumento/acceso',requireAuth,gate(PERMS.installationsDocs,GROUPS.installations),async(req,res)=>res.json(wrap(await services().ins.docAccess(userId(req),req.params.id,req.params.idDocumento,req.db))));
+ router.post('/api/instalaciones/proyectos/:id/documentos/:idDocumento/enviar',requireAuth,gate(PERMS.installationsDocs,GROUPS.installations),(req,res)=>res.json(wrap(services().ins.sendBitacoraDocument(userId(req),req.params.id,req.params.idDocumento,body(req),actor(req),req.db))));
  router.delete('/api/instalaciones/proyectos/:id/documentos/:idDocumento',requireAuth,gate(PERMS.installationsDocs,GROUPS.installations),async(req,res)=>res.json(wrap(await services().ins.removeDocument(userId(req),req.params.id,req.params.idDocumento,actor(req),req.db))));
  router.post('/api/instalaciones/drive/sync',requireAuth,local501);router.post('/api/instalaciones/proyectos/:id/drive/sync',requireAuth,local501);
  // INSTALACIONES > Base de Datos - Formato de Contactos.

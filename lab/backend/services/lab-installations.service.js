@@ -16,7 +16,52 @@
   }
   function assertProject(userId,projectId,candidateDb){const db=dbOr(candidateDb),scope=visibleProjectSql(userId,'f',db),key=text(projectId,255);const row=db.query(`SELECT f.* FROM ins_fl f WHERE f.activo=1 AND (CAST(f.id_ins_fl AS TEXT)=? OR f.id_proyecto=? OR f.proyecto=?) AND ${scope.sql} ORDER BY f.id_ins_fl LIMIT 1`,[key,key,key,...scope.params])[0];if(!row)throw err(404,'Proyecto de Instalaciones no encontrado o fuera de alcance.','LAB_INSTALLATIONS_PROJECT_NOT_FOUND');return row;}
   function listProjects(userId,query,candidateDb){const db=dbOr(candidateDb),scope=visibleProjectSql(userId,'f',db),q=text(query?.q||query?.search,120),status=text(query?.estatus,100),params=[...scope.params],clauses=['f.activo=1',scope.sql];if(q){const like=`%${q}%`;clauses.push('(f.proyecto LIKE ? OR f.id_proyecto LIKE ? OR f.referencia_sitio LIKE ? OR f.cliente LIKE ? OR f.ciudad LIKE ?)');params.push(like,like,like,like,like);}if(status){clauses.push('UPPER(COALESCE(f.estatus,\'\'))=UPPER(?)');params.push(status);}const rows=db.query(`SELECT f.*,us.nombre AS supervisor_nombre,ua.nombre AS asesor_nombre,uad.nombre AS admin_nombre FROM ins_fl f LEFT JOIN usuarios us ON us.id_SB=f.id_sup LEFT JOIN usuarios ua ON ua.id_SB=f.id_asesor LEFT JOIN usuarios uad ON uad.id_SB=f.id_admin WHERE ${clauses.join(' AND ')} ORDER BY f.proyecto,f.id_ins_fl`,params);return{proyectos:rows,data:rows,total:rows.length};}
-  function detail(userId,projectId,candidateDb){const db=dbOr(candidateDb),row=assertProject(userId,projectId,db);const drive=db.query('SELECT ipd.*,c.nombre_carpeta,c.carpeta_id,c.enlace FROM instalaciones_proyecto_drive ipd JOIN instalaciones_drive_carpetas c ON c.id_carpeta=ipd.id_carpeta WHERE ipd.id_proyecto=? AND ipd.activo=1 LIMIT 1',[row.id_proyecto])[0]||null;const users=drive?db.query('SELECT ipu.*,u.nombre,u.iniciales,u.correo FROM instalaciones_proyecto_usuarios ipu JOIN usuarios u ON u.id_SB=ipu.id_usuario WHERE ipu.id_proyecto_drive=? AND ipu.activo=1 ORDER BY ipu.tipo,u.nombre',[drive.id_proyecto_drive]):[];const docs=db.query('SELECT * FROM instalaciones_bitacora_documentos WHERE id_proyecto=? AND estatus=\'activo\' ORDER BY fecha_ultima_deteccion DESC,id_documento DESC',[row.id_proyecto]);const photos=db.query('SELECT * FROM ins_proyecto_fotos WHERE id_ppns=? AND activo=1 LIMIT 1',[row.referencia_sitio||row.id_proyecto])[0]||null;return{proyecto:row,drive,usuarios:users,documentos:docs.map(d=>({...d,access_endpoint:`/api/instalaciones/proyectos/${encodeURIComponent(row.id_proyecto)}/documentos/${d.id_documento}/acceso`})),fotos:photos};}
+  function detail(userId,projectId,candidateDb){
+    const db=dbOr(candidateDb),row=assertProject(userId,projectId,db);
+    const drive=db.query('SELECT ipd.*,c.nombre_carpeta,c.carpeta_id,c.enlace FROM instalaciones_proyecto_drive ipd JOIN instalaciones_drive_carpetas c ON c.id_carpeta=ipd.id_carpeta WHERE ipd.id_proyecto=? AND ipd.activo=1 LIMIT 1',[row.id_proyecto])[0]||null;
+    const users=drive?db.query('SELECT ipu.*,u.nombre,u.iniciales,u.correo FROM instalaciones_proyecto_usuarios ipu JOIN usuarios u ON u.id_SB=ipu.id_usuario WHERE ipu.id_proyecto_drive=? AND ipu.activo=1 ORDER BY ipu.tipo,u.nombre',[drive.id_proyecto_drive]):[];
+    // id_asesor/id_admin son FK a usuarios (igual que id_sup, pero supervisor_fl ya guarda iniciales en texto plano).
+    const nombres=db.query('SELECT (SELECT iniciales FROM usuarios WHERE id_SB=?) AS asesor_iniciales,(SELECT iniciales FROM usuarios WHERE id_SB=?) AS admin_iniciales',[row.id_asesor,row.id_admin])[0]||{};
+    const docs=db.query(`SELECT d.*,
+        (SELECT fecha_envio FROM instalaciones_bitacora_envios e WHERE e.id_documento=d.id_documento ORDER BY e.fecha_envio DESC LIMIT 1) AS ultimo_envio,
+        (SELECT COUNT(*) FROM instalaciones_bitacora_envios e WHERE e.id_documento=d.id_documento) AS total_envios
+      FROM instalaciones_bitacora_documentos d WHERE d.id_proyecto=? AND d.estatus='activo' ORDER BY d.fecha_ultima_deteccion DESC,d.id_documento DESC`,[row.id_proyecto]);
+    const photos=db.query('SELECT * FROM ins_proyecto_fotos WHERE id_ppns=? AND activo=1 LIMIT 1',[row.referencia_sitio||row.id_proyecto])[0]||null;
+    const contactos=db.query('SELECT id_contacto,nombre,puesto,correo,telefono,categoria FROM instalaciones_contactos WHERE id_ins_fl=? AND activo=1 ORDER BY categoria,nombre',[row.id_ins_fl]);
+    return{
+      proyecto:{...row,...nombres},
+      drive,
+      usuarios:users,
+      documentos:docs.map(d=>({...d,access_endpoint:`/api/instalaciones/proyectos/${encodeURIComponent(row.id_proyecto)}/documentos/${d.id_documento}/acceso`})),
+      fotos:photos,
+      contactos
+    };
+  }
+  // Formato que consume el panel "Bitacora de Obra" de core/details.js.
+  function bitacora(userId,projectId,candidateDb){
+    const d=detail(userId,projectId,candidateDb);
+    const documentos=d.documentos.map(x=>({...x,fecha_movimiento:x.fecha_ultima_deteccion||x.fecha_modificacion_drive||x.fecha_creacion_drive}));
+    const ultima=documentos.reduce((m,x)=>(x.fecha_ultima_deteccion&&x.fecha_ultima_deteccion>m?x.fecha_ultima_deteccion:m),'');
+    const cs=root?.ManttoLabInstalacionesContactosService,categorias=(cs&&cs.opciones&&cs.opciones(userId,dbOr(candidateDb)).categorias)||[...new Set(d.contactos.map(c=>c.categoria))];
+    return{id_proyecto:d.proyecto.id_proyecto,documentos,contactos:d.contactos,categorias_contacto:categorias,sincronizacion:{ultima_sincronizacion:ultima||null,truncado:false}};
+  }
+  // Envio (simulado - el LAB no tiene servidor de correo real) de un documento
+  // de la Bitacora de Obra a los contactos de 1 o varias categorias del mismo
+  // proyecto. Queda registrado en instalaciones_bitacora_envios para trazabilidad.
+  function sendBitacoraDocument(userId,projectId,docId,body,actor,candidateDb){
+    const db=dbOr(candidateDb);
+    const project=assertProject(userId,projectId,db);
+    const doc=docFor(userId,projectId,docId,db);
+    const categoriasRaw=Array.isArray(body?.categorias)?body.categorias:(body?.categoria?[body.categoria]:[]);
+    const categorias=[...new Set(categoriasRaw.map(c=>text(c,255)).filter(Boolean))];
+    if(!categorias.length)throw err(400,'Selecciona al menos una categoría de contactos.','LAB_BITACORA_ENVIO_SIN_CATEGORIAS');
+    const ph=categorias.map(()=>'?').join(',');
+    const destinatarios=db.query(`SELECT id_contacto,nombre,correo,categoria FROM instalaciones_contactos WHERE id_ins_fl=? AND activo=1 AND categoria IN (${ph}) AND correo IS NOT NULL AND TRIM(correo)<>'' ORDER BY categoria,nombre`,[project.id_ins_fl,...categorias]);
+    if(!destinatarios.length)throw err(400,'No hay contactos con correo registrado en las categorías seleccionadas para este proyecto.','LAB_BITACORA_ENVIO_SIN_DESTINATARIOS');
+    const aid=actorId(actor),stamp=now();
+    const r=db.run('INSERT INTO instalaciones_bitacora_envios(id_documento,id_proyecto,categorias,destinatarios,total_destinatarios,enviado_por,fecha_envio) VALUES(?,?,?,?,?,?,?)',[doc.id_documento,doc.id_proyecto,JSON.stringify(categorias),JSON.stringify(destinatarios),destinatarios.length,aid,stamp],{persist:false});
+    return{enviado:true,id_envio:r.lastInsertRowId,id_documento:Number(doc.id_documento),nombre_archivo:doc.nombre_archivo,categorias,destinatarios,total_destinatarios:destinatarios.length,fecha_envio:stamp};
+  }
   function update(userId,projectId,body,actor,candidateDb){const db=dbOr(candidateDb),row=assertProject(userId,projectId,db),allowed=['estatus','fecha_visita','comentarios_fl','avance_oc','avance_mo','avance_aj','fecha_cpvp','estatus_produccion','fecha_inicio_montaje','fecha_fin_montaje_planeado','fecha_fin_montaje_modificado','fecha_fin_montaje_real','dias_restantes','estatus_inspeccion_calidad','pendientes_calidad','fecha_entrega_cliente','estatus_equipo_entrega','estado','supervisor_fl','ciudad','condiciones_obra','id_sup','id_asesor','id_admin'];const sets=[],params=[];for(const key of allowed){if(!Object.prototype.hasOwnProperty.call(body||{},key))continue;sets.push(`${key}=?`);params.push(['id_sup','id_asesor','id_admin'].includes(key)?id(body[key]):(body[key]===null?null:text(body[key],5000)));}if(!sets.length)return detail(userId,row.id_proyecto,db);sets.push('updated_at=CURRENT_TIMESTAMP');db.run(`UPDATE ins_fl SET ${sets.join(',')} WHERE id_ins_fl=?`,[...params,row.id_ins_fl],{persist:false});return detail(userId,row.id_proyecto,db);}
   function listFolders(candidateDb){return dbOr(candidateDb).query('SELECT c.*,ipd.id_proyecto,ipd.nombre_proyecto,ipd.id_proyecto_drive FROM instalaciones_drive_carpetas c LEFT JOIN instalaciones_proyecto_drive ipd ON ipd.id_carpeta=c.id_carpeta AND ipd.activo=1 WHERE c.activo=1 ORDER BY c.nombre_carpeta,c.id_carpeta');}
   function ensureFolder(userId,projectId,body,actor,candidateDb){const db=dbOr(candidateDb),project=assertProject(userId,projectId,db),aid=actorId(actor);let link=db.query('SELECT * FROM instalaciones_proyecto_drive WHERE id_proyecto=? AND activo=1 LIMIT 1',[project.id_proyecto])[0];if(link)return detail(userId,project.id_proyecto,db).drive;const folderId=`LAB_FOLDER_${String(project.id_proyecto||project.id_ins_fl).replace(/[^a-z0-9_-]+/gi,'_')}`;let folder=db.query('SELECT * FROM instalaciones_drive_carpetas WHERE carpeta_id=? LIMIT 1',[folderId])[0];if(!folder){const r=db.run('INSERT INTO instalaciones_drive_carpetas(nombre_carpeta,carpeta_id,enlace,activo,fecha_sincronizacion,created_by,updated_by) VALUES(?,?,?,1,CURRENT_TIMESTAMP,?,?)',[text(body?.nombre_carpeta||project.proyecto,255)||`Proyecto ${project.id_proyecto}`,folderId,`lab://instalaciones/${encodeURIComponent(project.id_proyecto)}`,aid,aid],{persist:false});folder=db.query('SELECT * FROM instalaciones_drive_carpetas WHERE id_carpeta=?',[r.lastInsertRowId])[0];}db.run('INSERT INTO instalaciones_proyecto_drive(id_proyecto,nombre_proyecto,id_carpeta,activo,created_by,updated_by) VALUES(?,?,?,1,?,?)',[project.id_proyecto,project.proyecto,folder.id_carpeta,aid,aid],{persist:false});return detail(userId,project.id_proyecto,db).drive;}
@@ -25,5 +70,5 @@
   async function docAccess(userId,projectId,docId,candidateDb){const row=docFor(userId,projectId,docId,candidateDb),key=String(row.drive_file_id||'').startsWith('LAB_BLOB:')?String(row.drive_file_id).slice(9):'';if(!key)throw err(404,'El documento no tiene contenido local LAB.','LAB_LOCAL_BLOB_NOT_FOUND');const access=await root.ManttoLabBlobStore.accessUrl(key);if(!access)throw err(404,'Contenido local no encontrado.','LAB_LOCAL_BLOB_NOT_FOUND');return{...access,id_documento:Number(row.id_documento)};}
   async function removeDocument(userId,projectId,docId,actor,candidateDb){const db=dbOr(candidateDb),row=docFor(userId,projectId,docId,db),key=String(row.drive_file_id||'').startsWith('LAB_BLOB:')?String(row.drive_file_id).slice(9):'';db.run('UPDATE instalaciones_bitacora_documentos SET estatus=\'eliminado\',fecha_baja=CURRENT_TIMESTAMP,fecha_ultima_deteccion=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id_documento=?',[row.id_documento],{persist:false});if(key)await root.ManttoLabBlobStore.remove(key);return{removed:true,id_documento:Number(row.id_documento)};}
   function dashboard(userId,candidateDb){const rows=listProjects(userId,{},candidateDb).proyectos;const by={};for(const r of rows){const k=r.estatus||'SIN ESTATUS';by[k]=(by[k]||0)+1;}return{total_proyectos:rows.length,por_estatus:Object.entries(by).map(([estatus,total])=>({estatus,total})),con_documentos:rows.filter(r=>Number(dbOr(candidateDb).scalar('SELECT COUNT(*) FROM instalaciones_bitacora_documentos WHERE id_proyecto=? AND estatus=\'activo\'',[r.id_proyecto])||0)>0).length};}
-  return Object.freeze({visibleProjectSql,listProjects,detail,update,listFolders,ensureFolder,addDocument,docAccess,removeDocument,dashboard});
+  return Object.freeze({visibleProjectSql,listProjects,detail,update,listFolders,ensureFolder,addDocument,docAccess,removeDocument,sendBitacoraDocument,bitacora,dashboard});
 });
