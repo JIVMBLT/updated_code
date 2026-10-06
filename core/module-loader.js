@@ -195,7 +195,7 @@
     'cx-dashboard':{css:['./modules/customer-experience-dashboard/customer-experience-dashboard.css?v=20261002-cx-dashboard-v001'],js:['./modules/customer-experience-dashboard/customer-experience-dashboard.js?v=20261002-cx-dashboard-v001']},
     'cx-encuestas':{css:['./modules/customer-experience-encuestas/customer-experience-encuestas.css?v=20261002-analisis-mtto-v001'],js:['./modules/customer-experience-encuestas/customer-experience-encuestas.js?v=20261002-analisis-mtto-v001']},
     // [Claude | 2026-10-05 | CLAUDE-MG | LAB DGB - ENTREGAS V001]
-    'entregas-control':{css:['./modules/entregas-control/entregas-control.css?v=20261005-entregas-v001'],js:['./modules/entregas-control/entregas-control.js?v=20261005-entregas-v001']},
+    'entregas-control':{css:['./modules/entregas-control/entregas-control.css?v=20261005-archivo-detalle-v001'],js:['./modules/entregas-control/entregas-control.js?v=20261005-archivo-detalle-v001']},
     // [Claude | 2026-09-19 | CLAUDE-MG | LAB DGB - INSTALACIONES CONTACTOS V001]
     'instalaciones-contactos':{css:['./modules/instalaciones-contactos/instalaciones-contactos.css?v=20260925-alta-multiple-v001'],js:['./modules/instalaciones-contactos/instalaciones-contactos.js?v=20260925-alta-multiple-v001']},
     portafolio:{css:['./modules/portafolio/portafolio.css?v=20260817-lote-cobranza-uni-v001'],js:['./modules/portafolio/portafolio.js?v=20260817-lote-cobranza-uni-v001']},

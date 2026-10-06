@@ -116,11 +116,13 @@
       const filas = data.instancias.map(i=>
         '<tr><td>#'+i.numero_ocurrencia+'</td><td>'+fmtFecha(i.fecha_limite)+'</td><td>'+badge(ESTADO_LABEL[i.estado_entrega],ESTADO_CLASE[i.estado_entrega])+'</td>' +
         '<td>'+(i.fecha_entrega?fmtFecha(i.fecha_entrega):'—')+'</td>' +
-        '<td>'+badge(VALIDACION_LABEL[i.estado_validacion],VALIDACION_CLASE[i.estado_validacion])+'</td></tr>'
+        '<td>'+badge(VALIDACION_LABEL[i.estado_validacion],VALIDACION_CLASE[i.estado_validacion])+'</td>' +
+        '<td>'+(i.nombre_archivo?'<button type="button" class="ec-btn ec-btn-soft ec-btn-sm" data-ver-archivo-detalle="'+i.id_instancia+'">📎 '+esc(i.nombre_archivo)+'</button>':'—')+'</td></tr>'
       ).join('');
       $('ec-detalle-body').innerHTML =
         '<p class="ec-hint">Colaborador: <b>'+esc(data.programada.colaborador_nombre)+'</b> · '+esc(data.programada.descripcion||'Sin descripción')+'</p>' +
-        '<div class="ec-table-wrap"><table class="ec-table"><thead><tr><th>#</th><th>Fecha límite</th><th>Estado</th><th>Entregado</th><th>Validación</th></tr></thead><tbody>'+filas+'</tbody></table></div>';
+        '<div class="ec-table-wrap"><table class="ec-table"><thead><tr><th>#</th><th>Fecha límite</th><th>Estado</th><th>Entregado</th><th>Validación</th><th>Archivo</th></tr></thead><tbody>'+filas+'</tbody></table></div>';
+      $('ec-detalle-body').querySelectorAll('[data-ver-archivo-detalle]').forEach(btn=> btn.addEventListener('click', ()=> verArchivo(Number(btn.dataset.verArchivoDetalle))));
     }catch(e){ $('ec-detalle-body').innerHTML = '<div class="ec-status">Error: '+esc(e.message)+'</div>'; }
   }
 
