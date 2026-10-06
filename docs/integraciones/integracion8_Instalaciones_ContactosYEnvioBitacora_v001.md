@@ -85,7 +85,7 @@ La paginación de la tabla de Bitácora se conserva; solo se agrega una columna.
 - No se llegó a verificar con el bootstrap real en navegador que la migración 017 aplique tras la 016.
 
 ## SHA del commit final
-Ver el commit `CLAUDE | INT-8 | Instalaciones | ContactosYEnvioBitacora | v001` (SHA real se registra en el commit de documentación inmediato posterior).
+`a54060b7ea05605d541a2ba0250e06a93606bf6f` (CLAUDE | INT-8 | Instalaciones | ContactosYEnvioBitacora | v001).
 
 ## Estado final
 **COMPLETADA** en backend y código frontend; validación E2E en navegador pendiente.
