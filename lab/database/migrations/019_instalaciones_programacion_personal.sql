@@ -69,7 +69,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS `instalaciones_programacion_asignaciones__uq_a
 -- ---------------------------------------------------------------------
 -- Catalogo de permisos (mismo esquema que 012/017). Reutiliza la
 -- agrupacion 6 (INSTALACIONES) y las acciones VER=1, CREAR=847,
--- EDITAR=848, DESACTIVAR=849. IDs 9020-9026 / rol_permisos 14956-14959
+-- EDITAR=848, DESACTIVAR=849. IDs 9020-9026; rol_permisos sin id fijo
 -- (maximos previos: modulos 9005, elementos 9012, subelementos 9013,
 -- subelemento_acciones 9014, rol_permisos 14955).
 -- ---------------------------------------------------------------------
@@ -85,13 +85,19 @@ VALUES
  (9024,9022,847,'INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.CREAR',1,'2026-10-07 00:00:00','2026-10-07 00:00:00'),
  (9025,9022,848,'INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.EDITAR',1,'2026-10-07 00:00:00','2026-10-07 00:00:00'),
  (9026,9022,849,'INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.DESACTIVAR',1,'2026-10-07 00:00:00','2026-10-07 00:00:00');
--- Concesion al rol Director General (id_rol=1, usuario LAB R01), igual que 013/015/017.
-INSERT OR IGNORE INTO `rol_permisos` (id_rol_permiso,id_rol,id_subelemento_accion,permitido,created_at,updated_at)
-VALUES
- (14956,1,9023,1,'2026-10-07 00:00:00','2026-10-07 00:00:00'),
- (14957,1,9024,1,'2026-10-07 00:00:00','2026-10-07 00:00:00'),
- (14958,1,9025,1,'2026-10-07 00:00:00','2026-10-07 00:00:00'),
- (14959,1,9026,1,'2026-10-07 00:00:00','2026-10-07 00:00:00');
+-- Concesion al rol canonico DIRECTOR_GENERAL (por codigo, no por id numerico).
+-- VER es obligatorio por norma (lectura universal desde esta misma integracion);
+-- CREAR/EDITAR/DESACTIVAR se conceden explicitamente porque la funcionalidad
+-- los requiere para operar la programacion. Idempotente.
+INSERT INTO `rol_permisos` (id_rol,id_subelemento_accion,permitido,created_at,updated_at)
+SELECT r.id_rol,a.id_subelemento_accion,1,'2026-10-07 00:00:00','2026-10-07 00:00:00'
+FROM `roles` r JOIN `perm_subelemento_acciones` a ON a.id_subelemento_accion IN (9023,9024,9025,9026)
+WHERE r.codigo='DIRECTOR_GENERAL'
+  AND NOT EXISTS (SELECT 1 FROM `rol_permisos` rp WHERE rp.id_rol=r.id_rol AND rp.id_subelemento_accion=a.id_subelemento_accion);
+-- Si existian filas con permitido=0 para esas acciones, se activan.
+UPDATE `rol_permisos` SET permitido=1,updated_at='2026-10-07 00:00:00'
+WHERE id_subelemento_accion IN (9023,9024,9025,9026) AND permitido<>1
+  AND id_rol IN (SELECT id_rol FROM `roles` WHERE codigo='DIRECTOR_GENERAL');
 
 -- =====================================================================
 -- DATOS FICTICIOS (dummy) para ver la programacion en el LAB.

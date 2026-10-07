@@ -100,7 +100,15 @@
   }
 
   // ---------------------------------------------------------------- alcance
+  // Norma: DIRECTOR_GENERAL (codigo canonico) tiene lectura universal; no depende de alcance.
+  function esDirectorGeneral(uid,db){
+    const perm=root.ManttoLabPermissionsService;
+    if(perm&&typeof perm.activeRoles==='function')return perm.activeRoles(uid,db).some(r=>String(r.codigo||'').toUpperCase()==='DIRECTOR_GENERAL');
+    return Number(db.scalar(`SELECT COUNT(*) FROM usuarios u JOIN roles r ON r.id_rol=u.rol_id WHERE u.id_SB=? AND r.codigo='DIRECTOR_GENERAL'`,[uid])||0)>0;
+  }
   function visibleSet(userId,db){
+    const uidN=id(userId,'usuario');
+    if(esDirectorGeneral(uidN,db))return new Set(db.query('SELECT id_ins_fl FROM ins_fl WHERE activo=1').map(r=>Number(r.id_ins_fl)));
     const ins=root.ManttoLabInstallationsService;
     if(!ins||typeof ins.visibleProjectSql!=='function')throw new Error('MANTTO_LAB_INSTALLATIONS_SERVICE_REQUIRED');
     const scope=ins.visibleProjectSql(id(userId,'usuario'),'f',db);

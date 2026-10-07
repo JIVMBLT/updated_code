@@ -102,6 +102,17 @@ const ROOT=path.resolve(__dirname,'..'),read=f=>fs.readFileSync(path.join(ROOT,f
   ok();
   // --- Alcance: usuario inexistente no ve equipos
   assert.throws(()=>P.equipos(999999,{tipo:'MONTADOR'},db),/no existe|inactivo/);
+  // --- Norma Director General: lectura universal por codigo de rol, desde esta integracion
+  const dg=query("SELECT id_rol FROM roles WHERE codigo='DIRECTOR_GENERAL'")[0].id_rol;
+  for(const a of ['VER','CREAR','EDITAR','DESACTIVAR'])assert.equal(scalar("SELECT COUNT(*) FROM rol_permisos rp JOIN perm_subelemento_acciones x ON x.id_subelemento_accion=rp.id_subelemento_accion WHERE rp.id_rol=? AND rp.permitido=1 AND x.codigo_permiso='INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.'||?",[dg,a]),1,'DG '+a);
+  const totalIns=scalar('SELECT COUNT(*) FROM ins_fl WHERE activo=1');
+  const todosEq=P.equipos(910001,{tipo:'MONTADOR'},db);
+  assert.equal(todosEq.total,totalIns,'DG ve todos los equipos activos, sin filtro de alcance');
+  // Un usuario que no es DG no recibe la lectura universal (se rige por su alcance).
+  const noDg=query("SELECT u.id_SB FROM usuarios u JOIN roles r ON r.id_rol=u.rol_id WHERE r.codigo<>'DIRECTOR_GENERAL' AND u.estado=1 LIMIT 40").map(r=>r.id_SB);
+  let restringido=false;for(const u of noDg){try{if(P.equipos(u,{tipo:'MONTADOR'},db).total<totalIns){restringido=true;break;}}catch(_e){restringido=true;break;}}
+  assert(restringido,'existe al menos un usuario no-DG con alcance menor');
+  ok();
   // --- Rutas
   const routes=[];const store={};const router=new Proxy(store,{get:(t,m)=>(String(m).startsWith('__')?t[m]:(p)=>{routes.push(String(m).toUpperCase()+' '+p);}),set:(t,m,v)=>{t[m]=v;return true;}});
   global.ManttoLabInstalacionesContactosService=global.ManttoLabInstalacionesContactosService||{};

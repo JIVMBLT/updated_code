@@ -13,3 +13,4 @@ Registro de integraciones realizadas bajo la Norma Final de Trabajo (repositorio
 | INT-7 | Entregas | ControlDeEntregasV001 | v001 | COMPLETADA | `integracion7_Entregas_ControlDeEntregasV001_v001.md` |
 | INT-8 | Instalaciones | ContactosYEnvioBitacora | v001 | COMPLETADA | `integracion8_Instalaciones_ContactosYEnvioBitacora_v001.md` |
 | INT-9 | Instalaciones | ProgramacionPersonal | v001 | COMPLETADA | `integracion9_Instalaciones_ProgramacionPersonal_v001.md` |
+| INT-9 | Instalaciones | ProgramacionPersonal | v002 | COMPLETADA | `integracion9_Instalaciones_ProgramacionPersonal_v002.md` |
