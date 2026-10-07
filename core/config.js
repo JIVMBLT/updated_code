@@ -109,6 +109,7 @@
     './lab/runtime/lab-phase15-cx-encuestas-permiso-bootstrap.js',
     './lab/runtime/lab-phase16-entregas-bootstrap.js',
     './lab/runtime/lab-phase17-bitacora-envios-bootstrap.js',
+    './lab/runtime/lab-phase18-dummy-proyectos-instalaciones-bootstrap.js',
     './lab/runtime/lab-auth.js'
   ];
 
@@ -180,6 +181,7 @@
     './lab/runtime/lab-phase15-cx-encuestas-permiso-bootstrap.js':()=>Boolean(global.ManttoLabPhase15CxEncuestasPermisoReady),
     './lab/runtime/lab-phase16-entregas-bootstrap.js':()=>Boolean(global.ManttoLabPhase16EntregasReady),
     './lab/runtime/lab-phase17-bitacora-envios-bootstrap.js':()=>Boolean(global.ManttoLabPhase17BitacoraEnviosReady),
+    './lab/runtime/lab-phase18-dummy-proyectos-instalaciones-bootstrap.js':()=>Boolean(global.ManttoLabPhase18DummyProyectosInstalacionesReady),
     './lab/runtime/lab-auth.js':()=>Boolean(global.ManttoLabAuth)
   };
 
