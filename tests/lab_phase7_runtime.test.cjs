@@ -13,6 +13,13 @@ function createAdapter(SQL){
   return{db,query,scalar,run,exec:sql=>db.exec(sql)};
 }
 function user(db,id){return db.query(`SELECT u.id_SB,u.nombre,u.iniciales,u.correo,u.empresa,u.rol_id,r.rol FROM usuarios u LEFT JOIN roles r ON r.id_rol=u.rol_id WHERE u.id_SB=? LIMIT 1`,[id])[0];}
+// Reloj fijo: las fixtures del LAB son de septiembre de 2026 y los servicios calculan ventanas
+// relativas a "hoy"; sin esto la prueba se rompe al avanzar el calendario.
+(function freezeClock(){
+  const FIXED=Date.UTC(2026,8,20,18,0,0),RealDate=Date;
+  class FrozenDate extends RealDate{constructor(...a){if(a.length)super(...a);else super(FIXED);}static now(){return FIXED;}}
+  global.Date=FrozenDate;
+})();
 (async()=>{
   const initSqlJs=require(path.join(ROOT,'lab/vendor/sql.js/1.14.2/sql-wasm.js'));
   const SQL=await initSqlJs({locateFile:()=>path.join(ROOT,'lab/vendor/sql.js/1.14.2/sql-wasm.wasm')});
