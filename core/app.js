@@ -146,6 +146,7 @@
     instalaciones_carpetas:true,
     instalaciones_cerrados:true,
     instalaciones_contactos:true,
+    instalaciones_programacion_personal:true,
     cx_dashboard:true,
     cx_encuestas:true,
     entregas_control:true

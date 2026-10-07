@@ -12,6 +12,10 @@ const PERMS={
  contactosCreate:['INSTALACIONES_CONTACTOS_DIRECTORIO_LISTADO.CREAR'],
  contactosEdit:['INSTALACIONES_CONTACTOS_DIRECTORIO_LISTADO.EDITAR'],
  contactosDelete:['INSTALACIONES_CONTACTOS_DIRECTORIO_LISTADO.DESACTIVAR'],
+ programacionRead:['INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.VER'],
+ programacionCreate:['INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.CREAR'],
+ programacionEdit:['INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.EDITAR'],
+ programacionDelete:['INSTALACIONES_PROGRAMACION_PERSONAL_CALENDARIO_PROGRAMACION.DESACTIVAR'],
  logistics:['LOGISTICA_PRODUCCION_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','LOGISTICA_DASHBOARD_PIPELINE_POR_ESTATUS_ETAPAS.VER'],
  logisticsReport:['LOGISTICA_REPORTE_DETALLE_POR_ESTATUS_DETALLE.VER','LOGISTICA_REPORTE_DETALLE_POR_ESTATUS_TABLA.VER'],
  warehouseDashboard:['ALMACEN_DASHBOARD_ACCESO_VISUAL_MODULO.ACCESO_VISUAL'],
@@ -20,6 +24,7 @@ const PERMS={
 };
 function services(){const s={ins:root?.ManttoLabInstallationsService,log:root?.ManttoLabLogisticsService,wh:root?.ManttoLabWarehouseService,permissions:root?.ManttoLabPermissionsService,scope:root?.ManttoLabScopeService};if(Object.values(s).some(v=>!v))throw new Error('MANTTO_LAB_PHASE9_SERVICES_REQUIRED');return s;}
 function contactosService(){const s=root?.ManttoLabInstalacionesContactosService;if(!s)throw new Error('MANTTO_LAB_INSTALACIONES_CONTACTOS_SERVICE_REQUIRED');return s;}
+function programacionService(){const s=root?.ManttoLabInstalacionesProgramacionService;if(!s)throw new Error('MANTTO_LAB_INSTALACIONES_PROGRAMACION_SERVICE_REQUIRED');return s;}
 function actor(req){return req.actorUser||req.context?.actorUser||req.user||null;}function effective(req){return req.contextUser||req.user||req.context?.contextUser||req.context?.user||null;}function userId(req){return Number(effective(req)?.id_SB||0);}
 function requireAuth(req,res,next){const fn=root?.ManttoLabAuthPermissionRoutes?.requireAuth;if(typeof fn==='function')return fn(req,res,next);if(!actor(req))return res.status(401).json({ok:false,message:'Selecciona una identidad de Laboratorio DGB.',code:'LAB_IDENTITY_REQUIRED'});return next();}
 function group(code,db){return db.query('SELECT id_agrupacion,codigo FROM perm_agrupaciones WHERE activo=1 AND UPPER(TRIM(codigo))=? LIMIT 1',[String(code).toUpperCase()])[0]||null;}
@@ -55,6 +60,20 @@ function register(router){
  router.post('/api/instalaciones/contactos',requireAuth,gate(PERMS.contactosCreate,GROUPS.installations),(req,res)=>res.status(201).json(wrap(contactosService().crear(userId(req),body(req),actor(req),req.db))));
  router.put('/api/instalaciones/contactos/:id',requireAuth,gate(PERMS.contactosEdit,GROUPS.installations),(req,res)=>res.json(wrap(contactosService().editar(userId(req),req.params.id,body(req),actor(req),req.db))));
  router.delete('/api/instalaciones/contactos/:id',requireAuth,gate(PERMS.contactosDelete,GROUPS.installations),(req,res)=>res.json(wrap(contactosService().eliminar(userId(req),req.params.id,actor(req),req.db))));
+ // INSTALACIONES / PROGRAMACION DE PERSONAL (Montadores y Ajustadores).
+ router.get('/api/instalaciones/programacion/opciones',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().opciones(userId(req),req.db))));
+ router.get('/api/instalaciones/programacion/equipos',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().equipos(userId(req),req.query,req.db))));
+ router.get('/api/instalaciones/programacion/personal',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().listarPersonal(userId(req),req.query,req.db))));
+ router.post('/api/instalaciones/programacion/personal',requireAuth,gate(PERMS.programacionCreate,GROUPS.installations),(req,res)=>res.status(201).json(wrap(programacionService().crearPersonal(userId(req),body(req),actor(req),req.db))));
+ router.put('/api/instalaciones/programacion/personal/:tipo/:id',requireAuth,gate(PERMS.programacionEdit,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().editarPersonal(userId(req),req.params.tipo,req.params.id,body(req),actor(req),req.db))));
+ router.delete('/api/instalaciones/programacion/personal/:tipo/:id',requireAuth,gate(PERMS.programacionDelete,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().eliminarPersonal(userId(req),req.params.tipo,req.params.id,actor(req),req.db))));
+ router.get('/api/instalaciones/programacion/calendario',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().calendario(userId(req),req.query,req.db))));
+ router.post('/api/instalaciones/programacion/asignaciones',requireAuth,gate(PERMS.programacionCreate,GROUPS.installations),(req,res)=>res.status(201).json(wrap(programacionService().crearAsignaciones(userId(req),body(req),actor(req),req.db))));
+ router.put('/api/instalaciones/programacion/asignaciones/:id',requireAuth,gate(PERMS.programacionEdit,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().editarAsignacion(userId(req),req.params.id,body(req),actor(req),req.db))));
+ router.delete('/api/instalaciones/programacion/asignaciones/:id',requireAuth,gate(PERMS.programacionDelete,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().eliminarAsignacion(userId(req),req.params.id,actor(req),req.db))));
+ router.get('/api/instalaciones/programacion/historial',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().historial(userId(req),req.query,req.db))));
+ router.get('/api/instalaciones/programacion/disponibilidad',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().disponibilidad(userId(req),req.query,req.db))));
+ router.get('/api/instalaciones/programacion/simulacion',requireAuth,gate(PERMS.programacionRead,GROUPS.installations),(req,res)=>res.json(wrap(programacionService().simulacion(userId(req),req.query,req.db))));
  // PRODUCCION / LOGISTICA.
  router.get('/api/logistica/config',requireAuth,gate(PERMS.logistics,GROUPS.logistics),(req,res)=>res.json({ok:true,source:'lab-sqlite',config:services().log.config(req.db)}));
  router.get('/api/logistica/config/google-sheets/columns',requireAuth,gate(PERMS.logistics,GROUPS.logistics),(req,res)=>res.json({ok:true,source:'lab-sqlite',columns:services().log.config(req.db).columns,google_sheets:false}));

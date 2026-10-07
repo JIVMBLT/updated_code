@@ -198,6 +198,8 @@
     'entregas-control':{css:['./modules/entregas-control/entregas-control.css?v=20261005-archivo-detalle-v001'],js:['./modules/entregas-control/entregas-control.js?v=20261005-archivo-detalle-v001']},
     // [Claude | 2026-09-19 | CLAUDE-MG | LAB DGB - INSTALACIONES CONTACTOS V001]
     'instalaciones-contactos':{css:['./modules/instalaciones-contactos/instalaciones-contactos.css?v=20260925-alta-multiple-v001'],js:['./modules/instalaciones-contactos/instalaciones-contactos.js?v=20260925-alta-multiple-v001']},
+    // [Claude | 2026-10-07 | CLAUDE-MG | LAB DGB - INSTALACIONES PROGRAMACION PERSONAL V001]
+    'instalaciones-programacion-personal':{css:['./modules/instalaciones-programacion-personal/instalaciones-programacion-personal.css?v=20261007-programacion-personal-v001'],js:['./modules/instalaciones-programacion-personal/instalaciones-programacion-personal.js?v=20261007-programacion-personal-v001']},
     portafolio:{css:['./modules/portafolio/portafolio.css?v=20260817-lote-cobranza-uni-v001'],js:['./modules/portafolio/portafolio.js?v=20260817-lote-cobranza-uni-v001']},
     detalle:{css:[],js:[SEGUIMIENTO_ESPECIAL_GLOBAL_JS]},
     'seguimiento-especial':{css:['./modules/seguimiento-especial/seguimiento-especial.css?v=20260908-seguimiento-especial-v002'],js:[SEGUIMIENTO_ESPECIAL_GLOBAL_JS,'./modules/seguimiento-especial/seguimiento-especial.js?v=20260909-seguimiento-especial-cierre-v003']},
