@@ -221,7 +221,22 @@
       await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src+'?v='+version;script.async=false;script.onload=resolve;script.onerror=()=>reject(new Error('LAB_SCRIPT_LOAD_FAILED '+src));(document.head||document.documentElement).appendChild(script);});
     }
     if(global.ManttoLabPhase10Ready)await global.ManttoLabPhase10Ready;
+    await awaitLaterPhases();
     return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;
+  }
+
+  // [CLAUDE | 2026-10-16 | fix] Reparacion interna del LAB — sin MD asociado.
+  // Las fases 11 a 20 aplican migraciones (permisos, catalogo, dummy) DESPUES de la fase 10.
+  // Si la app solo espera a la fase 10, el menu y los permisos se calculan con una base
+  // sin esas migraciones y las secciones nuevas (p. ej. Fotografias) aparecen hasta recargar.
+  // Se espera a todas las fases posteriores; un fallo en una no bloquea el acceso (se registra).
+  const laterPhaseReady=['ManttoLabPhase11InformesReady','ManttoLabPhase12ContactosReady','ManttoLabPhase13PermisosReady','ManttoLabPhase14CxReady','ManttoLabPhase15CxEncuestasPermisoReady','ManttoLabPhase16EntregasReady','ManttoLabPhase17BitacoraEnviosReady','ManttoLabPhase18DummyProyectosInstalacionesReady','ManttoLabPhase19ProgramacionPersonalReady','ManttoLabPhase20FotografiasCatalogoMapaReady'];
+  async function awaitLaterPhases(){
+    const start=Date.now();
+    // lab-auth.js es la ultima dependencia: cuando existe, todas las fases ya fueron declaradas.
+    while(!global.ManttoLabAuth&&Date.now()-start<20000)await new Promise(resolve=>setTimeout(resolve,15));
+    const results=await Promise.allSettled(laterPhaseReady.filter(name=>global[name]).map(name=>global[name]));
+    results.forEach(result=>{if(result.status==='rejected'&&global.console)console.error('LAB_PHASE_READY_FAILED',result.reason);});
   }
 
   // [CLAUDE | 2026-09-15 | fix] Reparación interna del LAB — no es una integración numerada, sin MD asociado.
@@ -245,6 +260,7 @@
       })();
     }).then(async()=>{
       await global.ManttoLabPhase10Ready;
+      await awaitLaterPhases();
       return global.ManttoLabPhase10?.ready?global.ManttoLabPhase10.ready:null;
     });
   }

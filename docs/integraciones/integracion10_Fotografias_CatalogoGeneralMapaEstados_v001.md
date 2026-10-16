@@ -36,8 +36,8 @@ Nuevos:
 Modificados:
 - `modules/ventas-fotos-mapa/ventas-fotos-mapa.js`, `.css` y `.html` (vista de mapa, estado, búsqueda; se retiró el selector desplegable de estado)
 - `core/module-loader.js` (carga `mexico-estados.js` antes del módulo; versiones)
-- `core/config.js` (servicio y bootstrap fase 20)
-- `index.html` (versiones de caché de `config.js`, `module-loader.js`, `router.js` y `app.js`; ver riesgos)
+- `core/config.js` (servicio y bootstrap fase 20; además, reparación posterior: la app espera a las fases 11–20 antes de calcular el menú, para que Fotografías aparezca en la primera carga tras actualizar)
+- `index.html` (versiones de caché de `config.js` (`fotos-mapa-v002`), `module-loader.js`, `router.js` y `app.js`; ver riesgos)
 - `lab/index.html` (scripts del servicio y bootstrap)
 - `lab/backend/routes/lab-sales-collections.routes.js` (3 rutas)
 - `tests/lab_phase10_runtime.test.cjs` (conteo de rutas 313→316; GET 186→189)
