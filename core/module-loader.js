@@ -227,7 +227,7 @@
     'instalaciones-pmm':{css:['./modules/instalaciones-pmm/instalaciones-pmm_cor.css?v=20260907-emojis-limpios-v001'],js:['./modules/instalaciones-pmm/instalaciones-pmm_cor.js?v=20260821-tabla-unificada-v003']},
 
     'ventas-dashboard':{css:['./modules/ventas-dashboard/ventas-dashboard.css?v=20260831-anio-seccion-v003'],js:['./modules/ventas-dashboard/ventas-dashboard-pdf.js?v=20260805-b4-v001','./modules/ventas-dashboard/ventas-dashboard.js?v=20260831-anio-seccion-v003']},
-    'ventas-fotos-mapa':{css:['./modules/ventas-fotos-mapa/ventas-fotos-mapa.css?v=20260726-fix-tabs-estados-v002'],js:['./modules/ventas-fotos-mapa/ventas-fotos-mapa.js?v=20260907-fotos-core-united-7x7-v001']},
+    'ventas-fotos-mapa':{css:['./modules/ventas-fotos-mapa/ventas-fotos-mapa.css?v=20261016-mapa-estados-v001'],js:['./modules/ventas-fotos-mapa/mexico-estados.js?v=20261016-mapa-estados-v001','./modules/ventas-fotos-mapa/ventas-fotos-mapa.js?v=20261016-mapa-estados-v001']},
     'ventas-clientes':{css:['./modules/ventas-clientes/ventas-clientes.css?v=20260729-fase3-v003'],js:['./modules/ventas-clientes/ventas-clientes.js?v=20260828-fase4-frontend-v001']},
     'ventas-clientes-nuevo':{css:['./modules/ventas-clientes-nuevo/ventas-clientes-nuevo.css?v=20260729-v009'],js:['./modules/ventas-clientes-nuevo/ventas-clientes-nuevo.js?v=20260828-fase4-frontend-v001']},
     'ventas-clientes-detalle':{css:['./modules/ventas-clientes-detalle/ventas-clientes-detalle.css?v=20260729-v011',CONTACTO_FORM_CSS],js:[CONTACTO_FORM_JS,'./modules/ventas-clientes-detalle/ventas-clientes-detalle.js?v=20260828-fase4-frontend-v001']},

@@ -77,6 +77,7 @@
     './lab/backend/services/lab-informes.service.js',
     './lab/backend/services/lab-instalaciones-contactos.service.js',
     './lab/backend/services/lab-instalaciones-programacion.service.js',
+    './lab/backend/services/lab-fotografias-catalogo.service.js',
     './lab/backend/services/lab-cx.service.js',
     './lab/backend/services/lab-entregas.service.js',
     './lab/backend/services/lab-portfolio.service.js',
@@ -112,6 +113,7 @@
     './lab/runtime/lab-phase17-bitacora-envios-bootstrap.js',
     './lab/runtime/lab-phase18-dummy-proyectos-instalaciones-bootstrap.js',
     './lab/runtime/lab-phase19-programacion-personal-bootstrap.js',
+    './lab/runtime/lab-phase20-fotografias-catalogo-mapa-bootstrap.js',
     './lab/runtime/lab-auth.js'
   ];
 
@@ -151,6 +153,7 @@
     './lab/backend/services/lab-informes.service.js':()=>Boolean(global.ManttoLabInformesService),
     './lab/backend/services/lab-instalaciones-contactos.service.js':()=>Boolean(global.ManttoLabInstalacionesContactosService),
     './lab/backend/services/lab-instalaciones-programacion.service.js':()=>Boolean(global.ManttoLabInstalacionesProgramacionService),
+    './lab/backend/services/lab-fotografias-catalogo.service.js':()=>Boolean(global.ManttoLabFotografiasCatalogoService),
     './lab/backend/services/lab-cx.service.js':()=>Boolean(global.ManttoLabCxService),
     './lab/backend/services/lab-entregas.service.js':()=>Boolean(global.ManttoLabEntregasService),
     './lab/backend/services/lab-portfolio.service.js':()=>Boolean(global.ManttoLabPortfolioService),
@@ -186,6 +189,7 @@
     './lab/runtime/lab-phase17-bitacora-envios-bootstrap.js':()=>Boolean(global.ManttoLabPhase17BitacoraEnviosReady),
     './lab/runtime/lab-phase18-dummy-proyectos-instalaciones-bootstrap.js':()=>Boolean(global.ManttoLabPhase18DummyProyectosInstalacionesReady),
     './lab/runtime/lab-phase19-programacion-personal-bootstrap.js':()=>Boolean(global.ManttoLabPhase19ProgramacionPersonalReady),
+    './lab/runtime/lab-phase20-fotografias-catalogo-mapa-bootstrap.js':()=>Boolean(global.ManttoLabPhase20FotografiasCatalogoMapaReady),
     './lab/runtime/lab-auth.js':()=>Boolean(global.ManttoLabAuth)
   };
 

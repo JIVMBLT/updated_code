@@ -228,30 +228,97 @@ function syncCarouselProjectLinks(p){
   if(p.canOpenCorellian)addButton('Ir a proyecto CORELLIAN',openCoreProject);
   if(p.canOpenUnited)addButton('Ir a proyecto UNITED',openUnitedProject);
 }
-function populate(){const vals=[...new Set(proyectos.filter(p=>fotos(p).length).map(p=>p.estado).filter(Boolean))].sort();const el=document.getElementById('vfm-estado');if(!el)return;const previous=el.value;el.innerHTML='<option value="">Todos los estados</option>'+vals.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');if(vals.includes(previous))el.value=previous;}
-function render(){
-  const rowsWithPhoto=proyectos.filter(p=>fotos(p).length);
-  const withPhoto=rowsWithPhoto.length;
-  const merged=rowsWithPhoto.filter(p=>coreRows(p).length&&Array.isArray(p.unitedRows)&&p.unitedRows.length).length;
-  const kpis=document.getElementById('vfm-kpis');
-  if(kpis)kpis.innerHTML='<div class="py-card"><div class="label">Proyectos con fotografía</div><div class="value" style="color:var(--accent)">'+withPhoto+'</div></div><div class="py-card"><div class="label">Carretes unidos por equivalencia</div><div class="value">'+merged+'</div></div>';
-  const q=(document.getElementById('vfm-buscar')&&document.getElementById('vfm-buscar').value||'').trim().toUpperCase();
-  const state=document.getElementById('vfm-estado')&&document.getElementById('vfm-estado').value||'';
-  const box=document.getElementById('vfm-galeria');
-  if(!box)return;
-  let rows=rowsWithPhoto.filter(p=>(!state||p.estado===state));
-  if(q)rows=rows.filter(p=>[p.proyecto,p.id,p.coreProjectId,p.unitedProject,p.cliente].some(v=>String(v||'').toUpperCase().includes(q)));
-  rows.sort((a,b)=>String(a.estado||'').localeCompare(String(b.estado||''),'es',{sensitivity:'base'}) || String(a.proyecto).localeCompare(String(b.proyecto),'es',{sensitivity:'base'}));
-  if(!rows.length){box.innerHTML='<div class="py-empty">No hay proyectos con fotografías para los criterios seleccionados.</div>';return;}
-  const grupos=new Map();
-  rows.forEach(p=>{const key=String(p.estado||'Sin estado').trim()||'Sin estado';if(!grupos.has(key))grupos.set(key,[]);grupos.get(key).push(p);});
-  box.innerHTML=[...grupos.entries()].map(([estado,items])=>'<div class="py-foto-grupo"><div class="py-foto-grupo-title">'+esc(estado)+' <span class="count">('+items.length+')</span></div><div class="py-foto-mosaico">'+items.map(p=>{const img=principal(p);return img?'<div class="py-foto-tile" role="button" tabindex="0" data-gallery-key="'+esc(p.galleryKey)+'"><img src="'+esc(img.url)+'" loading="lazy" alt="'+esc(p.proyecto)+'"><div class="nombre">'+esc(p.proyecto)+'</div><div class="n-fotos">'+fotos(p).length+' foto(s)</div>'+'</div>':'';}).join('')+'</div></div>').join('');
+// [Claude | 2026-10-16 | CLAUDE-MG | LAB DGB - FOTOGRAFIAS MAPA POR ESTADOS V001]
+// El Catalogo General abre en un mapa de la Republica por estados; al elegir un estado
+// se lista el mosaico de proyectos con fotografia de ese estado. La busqueda por texto
+// sigue disponible y, si hay texto, filtra sobre todos los estados (o sobre el estado abierto).
+const MX=window.ManttoMexicoEstados||{viewBox:'0 0 793 498',estados:[],creditos:''};
+let estadoSel=null; // id de estado del mapa | '__otros' (estado vacio o no reconocido) | null = mapa
+const normTxt=v=>String(v==null?'':v).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const aliasEstado=(()=>{
+  const m=new Map();
+  MX.estados.forEach(e=>m.set(normTxt(e.name),e.id));
+  [['cdmx','cmx'],['distrito federal','cmx'],['df','cmx'],['ciudad de mexico','cmx'],['mexico city','cmx'],
+   ['edo de mexico','mex'],['edomex','mex'],['estado de mexico','mex'],['mexico','mex'],
+   ['coahuila de zaragoza','coa'],['michoacan de ocampo','mic'],['veracruz de ignacio de la llave','ver'],
+   ['q roo','roo'],['bc','bcn'],['bcs','bcs'],['nl','nle'],['qro','que'],['slp','slp']].forEach(([k,v])=>m.set(k,v));
+  return m;
+})();
+function estadoId(p){return aliasEstado.get(normTxt(p&&p.estado))||null;}
+function nombreEstado(id){const e=MX.estados.find(x=>x.id===id);return e?e.name:(id==='__otros'?'Sin estado reconocido':String(id||''));}
+function populate(){}
+function tilesHtml(items){
+  return items.map(p=>{const img=principal(p);return img?'<div class="py-foto-tile" role="button" tabindex="0" data-gallery-key="'+esc(p.galleryKey)+'"><img src="'+esc(img.url)+'" loading="lazy" alt="'+esc(p.proyecto)+'"><div class="nombre">'+esc(p.proyecto)+'</div><div class="n-fotos">'+fotos(p).length+' foto(s)</div></div>':'';}).join('');
+}
+function bindTiles(box,rows){
   box.querySelectorAll('[data-gallery-key]').forEach(el=>{
     const p=rows.find(x=>String(x.galleryKey)===String(el.dataset.galleryKey));
     if(!p)return;
     el.addEventListener('click',()=>openPhotoCarousel(p));
     el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoCarousel(p);}});
   });
+}
+function renderMapa(box,porEstado,otros,total){
+  const max=Math.max(1,...MX.estados.map(e=>(porEstado.get(e.id)||[]).length));
+  const nivel=n=>n?Math.min(4,Math.max(1,Math.ceil(4*n/max))):0;
+  const paths=MX.estados.map(e=>{const n=(porEstado.get(e.id)||[]).length;
+    return '<path class="vfm-estado" data-estado="'+e.id+'" data-level="'+nivel(n)+'" tabindex="0" role="button" aria-label="'+esc(e.name+': '+n+' proyecto(s) con fotografías')+'" d="'+e.path+'"></path>';}).join('');
+  const ranking=MX.estados.map(e=>({e,n:(porEstado.get(e.id)||[]).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n||a.e.name.localeCompare(b.e.name,'es'));
+  box.innerHTML=
+    '<div class="vfm-mapa-layout">'+
+      '<div class="vfm-mapa-card"><div class="vfm-mapa-titulo">Selecciona un estado <span>· '+total+' proyecto(s) con fotografías</span></div>'+
+        '<div class="vfm-mapa-wrap"><svg class="vfm-mapa" viewBox="'+esc(MX.viewBox)+'" role="group" aria-label="Mapa de la República Mexicana por estados">'+paths+'</svg><div class="vfm-tip" id="vfm-tip" hidden></div></div>'+
+        '<div class="vfm-leyenda"><span>Menos</span><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i><span>Más fotografías</span><em>Sin color = sin fotografías</em></div>'+
+        (MX.creditos?'<div class="vfm-creditos">'+esc(MX.creditos)+'</div>':'')+
+      '</div>'+
+      '<aside class="vfm-ranking"><div class="vfm-mapa-titulo">Estados con fotografías</div>'+
+        (ranking.length?'<ul>'+ranking.map(x=>'<li><button type="button" data-estado-btn="'+x.e.id+'"><span>'+esc(x.e.name)+'</span><b>'+x.n+'</b></button></li>').join('')+'</ul>':'<div class="py-empty">Aún no hay proyectos con fotografías.</div>')+
+        (otros.length?'<button type="button" class="vfm-otros" data-estado-btn="__otros">Sin estado reconocido <b>'+otros.length+'</b></button>':'')+
+      '</aside>'+
+    '</div>';
+  const tip=box.querySelector('#vfm-tip'),wrap=box.querySelector('.vfm-mapa-wrap');
+  box.querySelectorAll('.vfm-estado').forEach(el=>{
+    const id=el.dataset.estado;
+    const show=ev=>{const n=(porEstado.get(id)||[]).length;tip.textContent=nombreEstado(id)+' · '+n+' proyecto(s)';tip.hidden=false;const r=wrap.getBoundingClientRect();tip.style.left=Math.min(r.width-150,Math.max(0,(ev.clientX||r.left+r.width/2)-r.left+12))+'px';tip.style.top=Math.max(0,(ev.clientY||r.top)-r.top-34)+'px';};
+    el.addEventListener('mousemove',show);el.addEventListener('focus',()=>{const b=el.getBoundingClientRect();show({clientX:b.left+b.width/2,clientY:b.top});});
+    el.addEventListener('mouseleave',()=>{tip.hidden=true;});el.addEventListener('blur',()=>{tip.hidden=true;});
+    el.addEventListener('click',()=>seleccionarEstado(id));
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();seleccionarEstado(id);}});
+  });
+  box.querySelectorAll('[data-estado-btn]').forEach(b=>b.addEventListener('click',()=>seleccionarEstado(b.dataset.estadoBtn)));
+}
+function seleccionarEstado(id){estadoSel=id||null;const s=document.getElementById('vfm-buscar');if(s&&!estadoSel)s.value='';render();const v=document.getElementById('vfm-galeria');if(v&&v.scrollIntoView)v.scrollIntoView({block:'start',behavior:'smooth'});}
+function render(){
+  const rowsWithPhoto=proyectos.filter(p=>fotos(p).length);
+  const merged=rowsWithPhoto.filter(p=>coreRows(p).length&&Array.isArray(p.unitedRows)&&p.unitedRows.length).length;
+  const porEstado=new Map(),otros=[];
+  rowsWithPhoto.forEach(p=>{const id=estadoId(p);if(!id){otros.push(p);return;}if(!porEstado.has(id))porEstado.set(id,[]);porEstado.get(id).push(p);});
+  const kpis=document.getElementById('vfm-kpis');
+  if(kpis)kpis.innerHTML='<div class="py-card"><div class="label">Proyectos con fotografía</div><div class="value" style="color:var(--accent)">'+rowsWithPhoto.length+'</div></div><div class="py-card"><div class="label">Estados con fotografías</div><div class="value">'+porEstado.size+'</div></div><div class="py-card"><div class="label">Carretes unidos por equivalencia</div><div class="value">'+merged+'</div></div>';
+  const q=(document.getElementById('vfm-buscar')&&document.getElementById('vfm-buscar').value||'').trim().toUpperCase();
+  const box=document.getElementById('vfm-galeria');
+  if(!box)return;
+  const coincide=p=>[p.proyecto,p.id,p.coreProjectId,p.unitedProject,p.cliente].some(v=>String(v||'').toUpperCase().includes(q));
+  // 1) Sin estado elegido y sin texto: mapa.
+  if(!estadoSel&&!q){renderMapa(box,porEstado,otros,rowsWithPhoto.length);return;}
+  // 2) Estado elegido (con o sin texto): mosaico del estado.
+  if(estadoSel){
+    let rows=estadoSel==='__otros'?otros:(porEstado.get(estadoSel)||[]);
+    if(q)rows=rows.filter(coincide);
+    rows=[...rows].sort((a,b)=>String(a.proyecto).localeCompare(String(b.proyecto),'es',{sensitivity:'base'}));
+    box.innerHTML='<div class="vfm-estado-head"><button type="button" class="py-refresh-btn" data-vfm-back="1">← Mapa de México</button><h2>'+esc(nombreEstado(estadoSel))+'</h2><span class="count">'+rows.length+' proyecto(s) con fotografías'+(q?' · filtrado por búsqueda':'')+'</span></div>'+
+      (rows.length?'<div class="py-foto-mosaico">'+tilesHtml(rows)+'</div>':'<div class="py-empty">No hay proyectos con fotografías '+(q?'para esa búsqueda en ':'en ')+esc(nombreEstado(estadoSel))+'.</div>');
+    const back=box.querySelector('[data-vfm-back]');if(back)back.addEventListener('click',()=>seleccionarEstado(null));
+    bindTiles(box,rows);return;
+  }
+  // 3) Solo texto: resultados en todos los estados, agrupados por estado.
+  const rows=rowsWithPhoto.filter(coincide).sort((a,b)=>String(a.estado||'').localeCompare(String(b.estado||''),'es',{sensitivity:'base'})||String(a.proyecto).localeCompare(String(b.proyecto),'es',{sensitivity:'base'}));
+  if(!rows.length){box.innerHTML='<div class="py-empty">No hay proyectos con fotografías para la búsqueda.</div>';return;}
+  const grupos=new Map();
+  rows.forEach(p=>{const key=String(p.estado||'Sin estado').trim()||'Sin estado';if(!grupos.has(key))grupos.set(key,[]);grupos.get(key).push(p);});
+  box.innerHTML='<div class="vfm-estado-head"><h2>Resultados de la búsqueda</h2><span class="count">'+rows.length+' proyecto(s) · borra el texto para volver al mapa</span></div>'+
+    [...grupos.entries()].map(([estado,items])=>'<div class="py-foto-grupo"><div class="py-foto-grupo-title">'+esc(estado)+' <span class="count">('+items.length+')</span></div><div class="py-foto-mosaico">'+tilesHtml(items)+'</div></div>').join('');
+  bindTiles(box,rows);
 }
 function setStatus(text){const s=document.getElementById('vfm-aiven-status');if(s)s.innerHTML='<span class="py-connection-dot"></span><span>'+esc(text)+'</span>';}
 async function load(){
@@ -289,7 +356,7 @@ async function load(){
   const withPhoto=proyectos.filter(p=>fotos(p).length).length;
   setStatus('Aiven conectado · Catálogo General · '+withPhoto+' proyectos · '+mergeSummary.merged+' carrete(s) unido(s)');
 }
-async function mount(force){const view=document.getElementById('view-ventas-fotos-mapa');if(!view)return false;const contextTitle=document.getElementById('app-context-title');if(contextTitle)contextTitle.textContent='Catálogo General';if(force)view.dataset.ready='0';if(view.dataset.ready!=='1'){const r=await fetch('./modules/ventas-fotos-mapa/ventas-fotos-mapa.html?v=20260908-catalogo-general-v003',{cache:'default'});if(!r.ok)throw new Error('No se pudo cargar Catálogo General.');view.innerHTML=await r.text();view.dataset.ready='1';const search=document.getElementById('vfm-buscar');if(search)search.addEventListener('input',render);const state=document.getElementById('vfm-estado');if(state)state.addEventListener('change',render);await load();}return true;}
+async function mount(force){const view=document.getElementById('view-ventas-fotos-mapa');if(!view)return false;const contextTitle=document.getElementById('app-context-title');if(contextTitle)contextTitle.textContent='Catálogo General';if(force)view.dataset.ready='0';if(view.dataset.ready!=='1'){const r=await fetch('./modules/ventas-fotos-mapa/ventas-fotos-mapa.html?v=20261016-mapa-estados-v001',{cache:'default'});if(!r.ok)throw new Error('No se pudo cargar Catálogo General.');view.innerHTML=await r.text();view.dataset.ready='1';const search=document.getElementById('vfm-buscar');if(search)search.addEventListener('input',render);const state=document.getElementById('vfm-estado');if(state)state.addEventListener('change',render);await load();}return true;}
 const api={init:()=>mount(false),reload:()=>load()};
 window.ManttoVentasFotosMapa=api;
 window.ManttoFotografiasCatalogoGeneral=api;

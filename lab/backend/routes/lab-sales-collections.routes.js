@@ -54,6 +54,14 @@
     if(!router||typeof router.get!=='function')throw new Error('MANTTO_LAB_ROUTER_REQUIRED');
     if(router.__manttoLabPhase8V002Routes)return router;router.__manttoLabPhase8V002Routes=true;
 
+    // Fotografias > Catalogo General (mapa por estados). Solo permiso funcional: las fotos no se filtran por alcance.
+    const FOTOS_GENERAL=Object.freeze(['FOTOGRAFIAS_CATALOGO_GENERAL_ACCESO_VISUAL_MODULO.ACCESO_VISUAL','FOTOGRAFIAS_CATALOGO_GENERAL_GALERIA_PROYECTOS_LISTADO.VER']);
+    const fotosGate=(req,res,next)=>{const uid=userId(req);if(!uid)return res.status(401).json({ok:false,message:'Selecciona una identidad de Laboratorio DGB.',code:'LAB_IDENTITY_REQUIRED'});if(!FOTOS_GENERAL.some(c=>has(req,c)))return res.status(403).json({ok:false,message:'No tienes autorización funcional para esta sección.',code:'LAB_FUNCTIONAL_PERMISSION_DENIED'});return next();};
+    const fotosService=()=>{const s=root?.ManttoLabFotografiasCatalogoService;if(!s)throw new Error('MANTTO_LAB_FOTOGRAFIAS_SERVICE_REQUIRED');return s;};
+    router.get('/api/ventas/fotos-mapa/catalogo-general/fotografias',requireAuth,fotosGate,(req,res)=>res.json(wrap(fotosService().fotografias(userId(req),req.query,req.db))));
+    router.get('/api/ventas/fotos-mapa/catalogo-general/navegacion-corellian',requireAuth,fotosGate,(req,res)=>res.json(wrap(fotosService().navegacionCorellian(userId(req),req.query,req.db))));
+    router.get('/api/ventas/fotos-mapa/catalogo-general/navegacion-united',requireAuth,fotosGate,(req,res)=>res.json(wrap(fotosService().navegacionUnited(userId(req),req.query,req.db))));
+
     // Dashboard Ventas.
     router.get('/api/ventas/dashboard/usuarios',requireAuth,gate('VENTAS_DASHBOARD_SELECTOR_RESPONSABLE_COMERCIAL.VER',SALES_GROUP),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().sales.dashboardUsers(userId(req),req.db)}));
     router.get('/api/ventas/dashboard/kpis',requireAuth,gate('VENTAS_DASHBOARD_KPI_COMERCIALES_INDICADORES.VER',SALES_GROUP),(req,res)=>res.json({ok:true,source:'lab-sqlite',...services().sales.dashboardKpis(userId(req),req.query,req.db)}));
