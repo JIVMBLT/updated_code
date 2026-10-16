@@ -3,7 +3,7 @@
 - Integración: INT-10
 - Versión: v001
 - Repositorio / rama: `JIVMBLT/updated_code` · `main`
-- SHA del commit final: `PENDIENTE-SHA` (se registra en commit posterior de documentación)
+- SHA del commit final: `3f7d0e49d2740937469e482064b4dea673479b87`
 - Estado final: **COMPLETADA**
 
 ## Objetivo solicitado
